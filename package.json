@@ -1,0 +1,12 @@
+{
+  "name": "pastapronto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PastaPronto! - QR-to-kitchen pasta ordering with a kitchen chit display",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "fresh": "node server.js --fresh"
+  },
+  "engines": { "node": ">=18" }
+}

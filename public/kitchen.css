@@ -1,0 +1,242 @@
+/* Kitchen display: dark, dense, readable across the pass.
+   Type is deliberately large - a cook reads this at 6-8 feet, at an angle,
+   sometimes through steam. */
+
+.kds {
+  --kbg: #14171c;
+  --kpanel: #1b1f26;
+  --kchit: #232830;
+  --kchit-hi: #2b313b;
+  --kline: #343b47;
+  --ktext: #f2f5f8;
+  --kmuted: #9aa5b4;
+  --kok: #3ddc84;
+  --kwarn: #ffc542;
+  --klate: #ff5c4d;
+  --krush: #b06bff;
+
+  background: var(--kbg);
+  color: var(--ktext);
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* -------------------------------------------------------------------- topbar */
+
+.kbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 18px;
+  background: var(--kpanel);
+  border-bottom: 1px solid var(--kline);
+  flex: 0 0 auto;
+}
+.kbrand { display: flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.kbrand svg { width: 26px; height: 26px; }
+.kbrand em { font-style: normal; color: #ff7a6b; }
+.kbrand-sub { color: var(--kmuted); font-weight: 650; font-size: 15px; }
+
+.kcounts { display: flex; gap: 8px; }
+.kcount {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: #262c35;
+  font-size: 13px; font-weight: 700; color: var(--kmuted);
+}
+.kcount b { font-size: 18px; color: var(--ktext); font-variant-numeric: tabular-nums; }
+
+.kbtn {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--kline);
+  border-radius: var(--radius-pill);
+  background: #262c35;
+  color: var(--ktext);
+  font-size: 14px;
+  font-weight: 700;
+}
+.kbtn[aria-pressed="true"] { border-color: var(--kok); color: var(--kok); }
+
+.kselect .select {
+  min-height: 42px;
+  padding: 0 14px;
+  background: #262c35;
+  border: 1px solid var(--kline);
+  color: var(--ktext);
+  font-size: 14px;
+  font-weight: 650;
+  border-radius: var(--radius-pill);
+}
+.kclock { font-size: 22px; font-weight: 750; }
+.kds .conn { color: var(--kmuted); }
+
+/* --------------------------------------------------------------------- lanes */
+
+.lanes {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  min-height: 0;
+}
+.lane { display: flex; flex-direction: column; min-height: 0; }
+.lane-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 0 10px;
+  font-size: 15px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--kmuted);
+}
+.lane-count {
+  min-width: 30px; padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: #2b313b; color: var(--ktext);
+  text-align: center; font-variant-numeric: tabular-nums;
+}
+.lane[data-lane="ready"] .lane-head { color: var(--kok); }
+.lane-body { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+.lane-empty { padding: 26px 14px; border: 2px dashed var(--kline); border-radius: var(--radius); color: var(--kmuted); text-align: center; font-weight: 650; }
+
+/* ---------------------------------------------------------------------- chits */
+
+.chit {
+  border: 1px solid var(--kline);
+  border-left: 6px solid var(--kline);
+  border-radius: 12px;
+  background: var(--kchit);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.chit.is-selected { outline: 3px solid var(--krush); outline-offset: 1px; }
+.chit.is-new { animation: chitIn 420ms ease-out; }
+@keyframes chitIn { from { transform: translateY(-8px) scale(0.98); opacity: 0; } }
+
+.chit[data-late="warn"] { border-left-color: var(--kwarn); }
+.chit[data-late="late"] { border-left-color: var(--klate); }
+.chit[data-priority="rush"] { border-left-color: var(--krush); }
+.chit[data-priority="allergy"] { border-left-color: var(--klate); }
+
+.chit-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--kchit-hi);
+  border-bottom: 1px solid var(--kline);
+}
+.chit-key {
+  flex: 0 0 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  background: #12151a;
+  color: var(--kmuted);
+  font-family: var(--mono); font-size: 15px; font-weight: 700;
+}
+.chit-no { font-family: var(--mono); font-size: 27px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+.chit-where { font-size: 16px; font-weight: 750; }
+.chit-meta { font-size: 12px; color: var(--kmuted); font-weight: 650; }
+
+.chit-timer {
+  margin-left: auto;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: #12151a;
+  font-family: var(--mono); font-size: 21px; font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.chit-timer[data-late="warn"] { background: #3d2f0d; color: var(--kwarn); }
+.chit-timer[data-late="late"] { background: #471610; color: var(--klate); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.55; } }
+
+.chit-badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px 0; }
+.badge {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.badge-rush { background: var(--krush); color: #14171c; }
+.badge-allergy { background: var(--klate); color: #fff; }
+.badge-station { background: #2f3742; color: var(--kmuted); }
+.badge-guests { background: #2f3742; color: var(--kmuted); }
+.badge-unverified { background: #3d2f0d; color: var(--kwarn); }
+
+.chit-alert {
+  margin: 8px 12px 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #471610;
+  border: 1px solid var(--klate);
+  color: #ffd9d4;
+  font-size: 14px; font-weight: 750;
+}
+
+/* ------------------------------------------------------------------ chit body */
+
+.chit-lines { list-style: none; margin: 0; padding: 8px 12px 4px; display: flex; flex-direction: column; gap: 8px; }
+.cline { display: flex; gap: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--kline); }
+.cline:last-child { border-bottom: 0; }
+.cline-art { flex: 0 0 34px; height: 34px; opacity: 0.9; }
+.cline-art svg { width: 100%; height: 100%; }
+.cline-who { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--kmuted); }
+.cline-dish { font-size: 18px; font-weight: 750; line-height: 1.2; }
+.cline-add { font-size: 14px; color: #c7d0dc; line-height: 1.4; }
+.cline-note { margin-top: 3px; font-size: 13px; font-weight: 750; color: var(--kwarn); }
+.cline-portion { font-size: 12px; font-weight: 800; color: var(--kmuted); text-transform: uppercase; letter-spacing: .05em; }
+
+.chit-note { margin: 4px 12px 0; padding: 8px 11px; border-radius: 8px; background: #2f3742; font-size: 13px; font-weight: 650; color: #dbe3ec; }
+
+.chit-actions { display: flex; gap: 8px; padding: 12px; }
+.kact {
+  flex: 1 1 auto;
+  min-height: 52px;
+  border: 0;
+  border-radius: 10px;
+  background: #333b47;
+  color: var(--ktext);
+  font-size: 16px;
+  font-weight: 800;
+}
+.kact:hover { filter: brightness(1.15); }
+.kact-primary { background: var(--kok); color: #10231a; }
+.kact-deliver { background: #4da3ff; color: #08213d; }
+.kact-icon { flex: 0 0 52px; font-size: 18px; }
+.kact-danger { background: #4a2420; color: #ffbdb5; }
+
+/* ---------------------------------------------------------------------- foot */
+
+.kfoot {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 20px;
+  padding: 8px 18px;
+  background: var(--kpanel);
+  border-top: 1px solid var(--kline);
+  font-size: 12px; font-weight: 650; color: var(--kmuted);
+}
+.kfoot kbd {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--kline);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #262c35;
+  font-family: var(--mono);
+  color: var(--ktext);
+}
+
+@media (max-width: 1100px) {
+  .lanes { grid-template-columns: 1fr 1fr; }
+  .lane[data-lane="ready"] { grid-column: span 2; }
+}
+@media (max-width: 720px) {
+  .lanes { grid-template-columns: 1fr; overflow-y: auto; }
+  .lane[data-lane="ready"] { grid-column: span 1; }
+  .kfoot { display: none; }
+}
+
+/* A parked ticket stays visible but visibly inactive. */
+.chit.is-held { opacity: 0.62; border-left-color: var(--kmuted); }
+.chit.is-held .chit-timer[data-late="hold"] { background: #2f3742; color: var(--kmuted); animation: none; }
+.badge-held { background: #2f3742; color: var(--kmuted); }

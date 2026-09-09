@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PastaPronto! Expo &amp; Runner Board</title>
+<link rel="stylesheet" href="/shared.css">
+<link rel="stylesheet" href="/kitchen.css">
+<link rel="stylesheet" href="/expo.css">
+</head>
+<body class="kds expo">
+
+<header class="kbar">
+  <div class="kbrand"><span id="brandMark"></span> Pasta<em>Pronto!</em> <span class="kbrand-sub">Expo &amp; Runners</span></div>
+  <div class="grow"></div>
+  <button class="kbtn" id="soundToggle" type="button" aria-pressed="false"><span id="soundIcon">&#128263;</span> Sound</button>
+  <div class="kclock tabnum" id="clock">--:--</div>
+  <span class="conn" id="conn">connecting</span>
+</header>
+
+<main class="expo-main">
+  <section class="expo-ready">
+    <h2 class="lane-head"><span>Run These Now</span><span class="lane-count" id="readyCount">0</span></h2>
+    <div class="expo-grid" id="readyGrid"></div>
+  </section>
+
+  <aside class="expo-next">
+    <h2 class="lane-head"><span>Coming Up</span><span class="lane-count" id="nextCount">0</span></h2>
+    <div class="expo-next-body" id="nextList"></div>
+  </aside>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/app/art.js"></script>
+<script src="/app/client.js"></script>
+<script src="/app/expo.js"></script>
+</body>
+</html>

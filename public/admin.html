@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PastaPronto! Manager</title>
+<link rel="stylesheet" href="/shared.css">
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+
+<header class="appbar no-print">
+  <div class="wrap appbar-inner">
+    <div class="brand"><span class="brand-mark" id="brandMark"></span> Pasta<em>Pronto!</em></div>
+    <span class="pill">Manager</span>
+    <div class="grow"></div>
+    <nav class="adminnav">
+      <a class="btn btn-ghost" href="/kitchen">Kitchen</a>
+      <a class="btn btn-ghost" href="/expo">Expo</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap admin">
+
+  <section class="no-print">
+    <h2 class="sec-title">Today at a glance</h2>
+    <div class="statgrid" id="statgrid"></div>
+    <div class="card" style="margin-top:14px">
+      <div class="row-between">
+        <div>
+          <strong>Demo controls</strong>
+          <p class="muted" style="margin:4px 0 0;font-size:14px">Seed a believable rail of chits, or clear today and start clean.</p>
+        </div>
+        <div class="row">
+          <button class="btn btn-ghost" id="seedBtn" type="button">Seed demo orders</button>
+          <button class="btn btn-ghost" id="resetBtn" type="button">Clear today</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="no-print">
+    <h2 class="sec-title">QR codes</h2>
+    <div class="card stack">
+      <div class="field">
+        <label for="baseUrl">Base address printed into every QR code</label>
+        <input class="input" id="baseUrl" type="text" spellcheck="false">
+        <p class="muted" style="margin:0;font-size:14px" id="baseHint"></p>
+      </div>
+      <div class="row" style="flex-wrap:wrap">
+        <button class="btn btn-primary" id="regenBtn" type="button">Rebuild codes</button>
+        <button class="btn btn-ghost" id="printBtn" type="button">Print table tents</button>
+        <span class="muted" id="qrMeta"></span>
+      </div>
+    </div>
+    <div class="qrgrid" id="qrgrid"></div>
+  </section>
+
+  <section class="tents" id="tents"></section>
+
+  <section class="no-print">
+    <h2 class="sec-title">Menu &amp; cook times</h2>
+    <div class="card" id="menuRef"></div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/app/art.js"></script>
+<script src="/app/qr.js"></script>
+<script src="/app/client.js"></script>
+<script src="/app/admin.js"></script>
+</body>
+</html>

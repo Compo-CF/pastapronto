@@ -1,0 +1,71 @@
+/* Manager screen: metrics, QR generation, printable table tents. */
+
+.admin { display: flex; flex-direction: column; gap: 34px; padding-top: 26px; padding-bottom: 60px; }
+.sec-title { font-size: 15px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tomato); margin: 0 0 12px; }
+.adminnav { display: flex; gap: 8px; }
+.adminnav .btn { min-height: 44px; font-size: 15px; padding: 0 18px; }
+
+/* -------------------------------------------------------------------- stats */
+
+.statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; }
+.stat { padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.stat-label { font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-faint); }
+.stat-value { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 3px; }
+.stat-note { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+.stat.is-good .stat-value { color: var(--basil); }
+.stat.is-bad .stat-value { color: var(--tomato); }
+
+/* ----------------------------------------------------------------- qr cards */
+
+.qrgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; margin-top: 14px; }
+.qrcard {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  text-align: center;
+}
+.qrcard svg { width: 100%; height: auto; max-width: 172px; border-radius: 8px; }
+.qrcard-label { font-size: 18px; font-weight: 800; }
+.qrcard-url { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); word-break: break-all; }
+.qrcard-kind { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--tomato); }
+
+/* -------------------------------------------------------------- menu table */
+
+.mtable { width: 100%; border-collapse: collapse; font-size: 15px; }
+.mtable caption { text-align: left; font-weight: 800; padding: 14px 0 8px; font-size: 16px; }
+.mtable th, .mtable td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+.mtable th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.mtable td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mtable .allerg { font-size: 12px; font-weight: 700; color: var(--tomato-dark); }
+.mtable-wrap { overflow-x: auto; }
+
+/* ------------------------------------------------------------- table tents
+   Hidden on screen, one per page when printed. Fold along the dashed line and
+   stand it on the table. */
+
+.tents { display: none; }
+
+@media print {
+  @page { margin: 12mm; }
+  .no-print, .appbar, .toast { display: none !important; }
+  body { background: #fff; }
+  .admin { padding: 0; gap: 0; }
+  .tents { display: block; }
+  .tent {
+    page-break-after: always;
+    break-after: page;
+    height: 250mm;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10mm;
+    text-align: center;
+  }
+  .tent svg { width: 105mm; height: 105mm; }
+  .tent-brand { font-size: 34pt; font-weight: 800; letter-spacing: -0.03em; }
+  .tent-brand em { font-style: normal; color: #d33f30; }
+  .tent-where { font-size: 26pt; font-weight: 800; }
+  .tent-how { font-size: 13pt; color: #444; max-width: 120mm; line-height: 1.5; }
+  .tent-url { font-family: var(--mono); font-size: 9pt; color: #888; }
+  .tent-fold { width: 100%; border-top: 1px dashed #bbb; margin-top: 8mm; }
+}

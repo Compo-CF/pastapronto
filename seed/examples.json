@@ -1,0 +1,57 @@
+{
+  "memberNumber": "10432",
+  "memberName": "Compofelice",
+  "memberStatus": "verified",
+  "memberTier": "gold",
+  "guestCount": 4,
+  "tag": "table-12",
+  "source": "qr",
+  "avoidAllergens": ["shellfish"],
+  "notes": "Birthday for Mia - candle in the tortellini please",
+  "lines": [
+    {
+      "guestLabel": "Mia (7)",
+      "pasta": "shells",
+      "sauce": "butter",
+      "protein": "none",
+      "toppings": ["parmesan"],
+      "sides": ["breadsticks"],
+      "portion": "kid",
+      "spice": "mild",
+      "notes": "no green stuff please"
+    },
+    {
+      "guestLabel": "Leo (4)",
+      "pasta": "tortellini",
+      "sauce": "marinara",
+      "protein": "meatballs",
+      "toppings": ["mozzarella"],
+      "sides": [],
+      "portion": "kid",
+      "spice": "mild",
+      "notes": ""
+    },
+    {
+      "guestLabel": "Dad",
+      "pasta": "rigatoni",
+      "sauce": "bolognese",
+      "protein": "sausage",
+      "toppings": ["mushrooms", "chili"],
+      "sides": ["garlic_bread"],
+      "portion": "large",
+      "spice": "hot",
+      "notes": ""
+    },
+    {
+      "guestLabel": "Mom",
+      "pasta": "fusilli_gf",
+      "sauce": "pesto",
+      "protein": "chicken",
+      "toppings": ["tomatoes", "spinach"],
+      "sides": [],
+      "portion": "regular",
+      "spice": "mild",
+      "notes": "gluten free - separate water"
+    }
+  ]
+}

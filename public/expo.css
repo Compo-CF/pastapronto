@@ -1,0 +1,67 @@
+/* Runner board. Read from across the room, one decision per card: take it. */
+
+.expo-main {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 14px;
+  padding: 14px 16px;
+  min-height: 0;
+}
+
+.expo-ready, .expo-next { display: flex; flex-direction: column; min-height: 0; }
+.expo-grid {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+.rcard {
+  border: 1px solid var(--kline);
+  border-left: 8px solid var(--kok);
+  border-radius: 14px;
+  background: var(--kchit);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rcard[data-late="warn"] { border-left-color: var(--kwarn); }
+.rcard[data-late="late"] { border-left-color: var(--klate); animation: nudge 1.6s ease-in-out infinite; }
+@keyframes nudge { 50% { transform: translateX(3px); } }
+
+.rcard-top { display: flex; align-items: baseline; gap: 14px; }
+.rcard-no { font-family: var(--mono); font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+.rcard-where { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.rcard-sub { font-size: 14px; color: var(--kmuted); font-weight: 650; }
+.rcard-wait {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 26px; font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.rcard[data-late="warn"] .rcard-wait { color: var(--kwarn); }
+.rcard[data-late="late"] .rcard-wait { color: var(--klate); }
+
+.rcard-items { display: flex; flex-direction: column; gap: 5px; }
+.rcard-item { display: flex; gap: 9px; align-items: center; font-size: 16px; font-weight: 650; }
+.rcard-item svg { width: 26px; height: 26px; flex: 0 0 26px; opacity: .85; }
+.rcard-item b { color: var(--kmuted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+
+.rcard-alert { padding: 8px 12px; border-radius: 8px; background: #471610; border: 1px solid var(--klate); color: #ffd9d4; font-size: 14px; font-weight: 750; }
+.rcard-go { min-height: 62px; border: 0; border-radius: 12px; background: var(--kok); color: #10231a; font-size: 20px; font-weight: 800; }
+.rcard-go:hover { filter: brightness(1.12); }
+
+.expo-next-body { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; }
+.ncard { display: flex; align-items: center; gap: 11px; padding: 11px 13px; border: 1px solid var(--kline); border-radius: 10px; background: var(--kpanel); }
+.ncard-no { font-family: var(--mono); font-size: 20px; font-weight: 800; }
+.ncard-where { font-size: 14px; font-weight: 700; }
+.ncard-eta { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--kmuted); font-variant-numeric: tabular-nums; }
+.ncard-eta.is-over { color: var(--klate); }
+
+@media (max-width: 900px) {
+  .expo-main { grid-template-columns: 1fr; }
+  .expo-next { max-height: 30vh; }
+}

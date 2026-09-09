@@ -1,0 +1,152 @@
+/* Guest-only styles. Everything shared lives in shared.css. */
+
+.modeswitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 15px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.modeswitch[aria-pressed="true"] { border-color: var(--grape); color: var(--grape); background: #f6f2fa; }
+
+/* ---------------------------------------------------------------- welcome */
+
+.hero { text-align: center; padding: 26px 0 10px; }
+.hero-art { width: 172px; height: 172px; margin: 0 auto 6px; }
+.hero h1 { font-size: clamp(36px, 9vw, 58px); line-height: 1; letter-spacing: -0.04em; margin: 0 0 10px; }
+.hero h1 em { font-style: normal; color: var(--tomato); }
+.hero p { font-size: 19px; color: var(--ink-soft); margin: 0 auto; max-width: 30ch; }
+
+.wherecard {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px auto 0;
+  padding: 14px 22px;
+  border-radius: var(--radius-pill);
+  background: var(--basil-wash);
+  color: #1d5c38;
+  font-size: 18px;
+  font-weight: 750;
+}
+.wherecard.is-unknown { background: var(--semolina-wash); color: #7a5000; }
+
+.howto { display: grid; gap: 12px; margin-top: 26px; text-align: left; }
+.howto li { display: flex; gap: 14px; align-items: center; list-style: none; font-size: 17px; font-weight: 600; }
+.howto .n {
+  flex: 0 0 38px; height: 38px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--tomato); color: #fff;
+  font-weight: 800;
+}
+
+/* ------------------------------------------------------------ bowl tabs */
+
+.bowltabs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: thin; }
+.bowltab {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-height: 56px;
+  padding: 8px 16px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 14px;
+  font-weight: 700;
+}
+.bowltab small { color: var(--ink-faint); font-weight: 650; }
+.bowltab[aria-current="true"] { border-color: var(--tomato); background: var(--tomato-wash); }
+.bowltab.is-done small { color: var(--basil); }
+
+.buildsteps { display: flex; gap: 6px; margin: 0 0 18px; }
+.buildstep {
+  flex: 1;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 4px solid var(--line);
+  background: none;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--ink-faint);
+  text-align: center;
+}
+.buildstep.is-done { color: var(--basil); border-bottom-color: var(--basil); }
+.buildstep[aria-current="true"] { color: var(--tomato); border-bottom-color: var(--tomato); }
+
+.moretoggle { margin-top: 14px; }
+.tile-warn { position: absolute; bottom: 6px; left: 6px; right: 6px; font-size: 11px; font-weight: 800; color: var(--tomato-dark); text-transform: uppercase; letter-spacing: .04em; }
+.tile.is-blocked { opacity: .5; }
+
+/* --------------------------------------------------------------- sent screen */
+
+.sentwrap { text-align: center; padding-top: 18px; }
+.eta { font-size: 20px; font-weight: 750; }
+.eta strong { color: var(--tomato); }
+.statusline { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 0; }
+.statusnote { color: var(--ink-soft); font-size: 17px; margin: 6px 0 0; }
+
+.sentbowls { display: grid; gap: 10px; margin-top: 22px; text-align: left; }
+.sentbowl { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+.sentbowl svg { width: 34px; height: 34px; flex: 0 0 34px; }
+
+.ready-banner {
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: var(--basil);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+
+/* -------------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 14px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 650;
+  box-shadow: var(--shadow-lift);
+}
+.toast.is-bad { background: var(--tomato-dark); }
+
+/* ------------------------------------------------------------------ tablet+ */
+
+@media (min-width: 760px) {
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+  .tile { min-height: 150px; }
+  .tile-art { width: 72px; height: 72px; }
+}
+
+/* ------------------------------------------------------- narrow phone chrome
+   On a 375px screen the brand + progress dots + mode switch do not all fit.
+   The dots are decorative (the step kicker already says "Step 2 of 4"), so
+   they are the first thing to go, then the mode switch loses its label. */
+
+@media (max-width: 430px) {
+  .appbar-inner { gap: 8px; }
+  .brand { font-size: 19px; }
+  .brand-mark { width: 28px; height: 28px; }
+  .crumbs { display: none; }
+  .modeswitch { padding: 0 12px; min-height: 40px; }
+}
+
+@media (max-width: 340px) {
+  .modeswitch #modeLabel { display: none; }
+}
