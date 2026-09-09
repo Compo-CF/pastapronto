@@ -1,0 +1,7 @@
+# Normalise to LF in the repository so the tree is identical on Windows, macOS
+# and Linux. Without this, Windows checkouts commit CRLF and every file looks
+# rewritten to everyone else.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
