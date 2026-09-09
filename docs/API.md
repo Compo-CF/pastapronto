@@ -192,8 +192,8 @@ Used by the manager screen to build QR codes that actually resolve from a phone.
 ```json
 { "ok": true,
   "requestBase": "http://localhost:7070",
-  "lanBase": "http://10.23.0.119:7070",
-  "lanAddresses": [ { "iface": "Wi-Fi", "address": "10.23.0.119" } ],
+  "lanBase": "http://192.168.1.50:7070",
+  "lanAddresses": [ { "iface": "Wi-Fi", "address": "192.168.1.50" } ],
   "tags": [ { "id": "table-12", "label": "Table 12", "kind": "table",
               "path": "/t/table-12" } ] }
 ```

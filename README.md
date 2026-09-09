@@ -35,7 +35,7 @@ Clear them from **Manager → Clear today**.
 
 1. Open `/admin` on the machine running the server.
 2. The **Base address** field is pre-filled with the detected LAN address
-   (e.g. `http://10.23.0.119:7070`). A QR pointing at `localhost` only works on
+   (e.g. `http://192.168.1.50:7070`). A QR pointing at `localhost` only works on
    that one computer, so this matters.
 3. **Print table tents** produces one page per table, fold line included.
 4. Any phone on the same wifi can now scan and order.
