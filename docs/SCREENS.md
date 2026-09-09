@@ -1,8 +1,8 @@
 # Screens
 
-## 1. Guest order - `/t/<tag>` (or `/`)
+## 1. Guest order - `index.html?t=<tag>`
 
-Five screens, one state object, delegated events. `public/app/guest.js`.
+Five screens, one state object, delegated events. `app/guest.js`.
 
 ```
  welcome -> member -> guests -> build (x N bowls) -> review -> sent
@@ -64,9 +64,10 @@ segment animating. Live over SSE, scoped to this one ticket:
 | ready | Ready! | green pulsing "Ticket #14 is up!", chime + vibrate |
 | delivered | Buon appetito! | offers another round |
 
-## 2. Kitchen chit rail - `/kitchen`
+## 2. Kitchen chit rail - `kitchen.html`
 
-Dark, dense, readable at 6-8 feet. `public/app/kitchen.js`.
+Dark, dense, readable at 6-8 feet. `app/kitchen.js`. Behind the staff
+passcode gate, like expo and manager.
 
 Three lanes: **New Orders**, **Cooking**, **Ready - Call Runner**. The header
 carries live counts, a station filter, a sound toggle, the clock and a
@@ -122,7 +123,7 @@ cook's finger. Sounds are synthesised, so there are no audio files to ship: a
 two-note rise for a new order, a triple chime for food up, a low double tone
 when a chit goes late.
 
-## 3. Expo / runner board - `/expo`
+## 3. Expo / runner board - `expo.html`
 
 Deliberately narrower than the kitchen screen: a runner carrying four bowls
 needs the ticket number, the destination, what is on the tray, and one button.
@@ -136,7 +137,7 @@ A **Coming Up** sidebar lists cooking orders with a countdown against their
 estimate, flipping to red "over 4:28" when a cook is running behind - so expo
 can warn a table before it complains.
 
-## 4. Manager - `/admin`
+## 4. Manager - `admin.html`
 
 **Today at a glance** - nine stat tiles: orders, covers, open now, average wait
 to accept, average cook time, average runner time, p90 ticket time, on-time
@@ -151,13 +152,16 @@ version and that error-correction level M recovers roughly 15% damage - which
 matters for a card that will eventually collect marinara.
 
 **Print table tents** - one page per tag with the brand, table name, a 105mm
-code, instructions, and a fold line.
+code, instructions, and a fold line. Codes are built from whatever address the
+manager screen was opened at, so printing from the deployed URL prints codes
+that resolve from a phone.
 
 **Menu and cook times** - the full catalog as tables with allergen codes, stage
 times and prices, straight from `lib/menu.js`. This is the chef's reference and
 it cannot drift from what the guest app offers.
 
-**Demo controls** - seed a believable rail, or clear the day.
+**Demo controls** - seed a believable rail (and the member directory), or clear
+the day. Clearing asks for confirmation, because it deletes documents.
 
 ## Accessibility and input
 

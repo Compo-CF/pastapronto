@@ -2,11 +2,16 @@
   "name": "pastapronto",
   "version": "0.1.0",
   "private": true,
-  "description": "PastaPronto! - QR-to-kitchen pasta ordering with a kitchen chit display",
-  "main": "server.js",
+  "description": "PastaPronto! - QR-to-kitchen pasta ordering. Static PWA on GitHub Pages / Firebase Hosting, Firestore backend.",
   "scripts": {
-    "start": "node server.js",
-    "fresh": "node server.js --fresh"
+    "test": "node scripts/selftest.js && node scripts/qr-verify.js",
+    "selftest": "node scripts/selftest.js",
+    "qr": "node scripts/qr-verify.js",
+    "serve": "node scripts/dev-serve.js",
+    "rules": "firebase deploy --only firestore:rules"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module"
 }

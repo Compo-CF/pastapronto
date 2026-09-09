@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d33f30">
+<title>PastaPronto! - Build Your Bowl</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="guest.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PastaPronto">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="wrap appbar-inner">
+    <div class="brand">
+      <span class="brand-mark" id="brandMark"></span>
+      <span>Pasta<em>Pronto!</em></span>
+    </div>
+    <div class="grow"></div>
+    <div class="crumbs" id="crumbs" aria-hidden="true"></div>
+    <button class="modeswitch" id="modeSwitch" type="button" aria-pressed="false">
+      <span aria-hidden="true">&#9881;</span><span id="modeLabel">Simple</span>
+    </button>
+  </div>
+</header>
+
+<main id="stage" class="wrap" tabindex="-1">
+  <div class="step-head">
+    <p class="step-title">Warming the pot&hellip;</p>
+  </div>
+</main>
+
+<div class="footbar" id="footbar" hidden>
+  <div class="wrap footbar-inner" id="footbarInner"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="app/guest.js"></script>
+<script type="module" src="app/pwa.js"></script>
+</body>
+</html>

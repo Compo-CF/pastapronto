@@ -35,7 +35,7 @@ answers "how long has this been *my* problem":
 
 ```jsonc
 {
-  "id": "ord_8Kd2mQx7Vb",          // opaque; a guest cannot guess another ticket
+  "id": "aB3xK9…",                  // the Firestore document id
   "ticketNo": 14,                   // human number, resets each service date
   "claimCode": "RL5F",              // 4 chars, shown to the guest for a server
   "serviceDate": "2026-09-09",      // rolls at 4am so a late shift stays on one date
@@ -170,8 +170,77 @@ Every ingredient in `lib/menu.js` carries:
 
 Allergen ids: `gluten`, `dairy`, `egg`, `tree_nuts`, `shellfish`, `pork`, `soy`.
 
-## Persistence
+## Firestore layout
 
-In-memory `Map`, snapshotted to `data/state.json` with a 400ms debounce, and
-reloaded on boot so a restart mid-service does not lose the rail or restart
-ticket numbering. Correct for one station; see ARCHITECTURE.md for the swap.
+```
+orders/{orderId}          one document per order - the whole chit
+counters/{serviceDate}    { lastTicket, serviceDate } - allocates ticket numbers
+members/{memberNumber}    { name, tier, dietaryNotes, defaultGuests }
+```
+
+Two extra fields exist on the stored document that the pure model does not
+produce:
+
+| Field | Written by | Why |
+| --- | --- | --- |
+| `submittedAtServer` | `serverTimestamp()` | Firestore's own clock. Compared against `submittedAt` to learn a device's clock error, so elapsed timers are right on a tablet with a wrong clock. |
+| `createdBy` | the anonymous auth uid | Which device sent it. Useful for support ("the phone at table 12"). |
+| `demo` | the seeder | Marks demo rows so they are obvious in the console. |
+
+### Queries
+
+Every screen uses exactly one query:
+
+```js
+query(collection(db, 'orders'), where('serviceDate', '==', serviceDate()))
+```
+
+Filtering by status and station, and all sorting, happens in memory. A service
+day is tens to a few hundred documents, so this is cheaper than the alternative
+and needs **no composite indexes** - `firestore.indexes.json` is empty on
+purpose. If a venue ever runs thousands of orders a day, that is the first thing
+to revisit.
+
+### Ticket numbering
+
+`counters/{serviceDate}` holds `lastTicket`. `db.submitOrder()` reads it,
+adds one, and writes both the counter and the new order **in a single
+transaction**, so two phones ordering in the same instant cannot take the same
+number - one transaction simply retries.
+
+### Concurrency
+
+`db.transition()` is also a transaction: it re-reads the order, runs
+`order.transitionPatch()` against the state Firestore currently holds, and
+writes the patch. Two cooks pressing **Accept** on the same chit produce one
+accept and one `ILLEGAL_TRANSITION` - the Firestore equivalent of the HTTP 409
+the Node version returned.
+
+## What the rules enforce
+
+`firestore.rules` requires an auth token for everything (every screen signs in
+anonymously on load), and on top of that:
+
+| Rule | Effect |
+| --- | --- |
+| `validNewOrder()` | a new order must arrive as `queued`, with a 4-6 digit member number, 1-8 guests, 1-8 bowls, a positive ticket number and estimate, and exactly one audit entry |
+| `contentsUnchanged()` | after creation, `ticketNo`, `claimCode`, `memberNumber`, `guestCount`, `lines`, `totalPrice`, `cookEstimateSec`, `submittedAt` and `tag` are **immutable** |
+| `validUpdate()` | status must be a known value, and the `events` array can only grow |
+
+So a client can walk a chit through its lifecycle, but cannot rewrite the food
+or the amount charged after the fact.
+
+**Not** enforced: the rules cannot re-run the pricing or cook-time model, so a
+hand-crafted client could create an order whose price disagrees with its
+contents. Fixing that means moving `buildOrder` behind a Cloud Function.
+
+## Offline behaviour
+
+`initializeFirestore` uses `persistentLocalCache` with
+`persistentMultipleTabManager`, so every device keeps an IndexedDB copy:
+
+- a guest can complete and send an order with no signal; the write queues and
+  syncs when the connection returns
+- the kitchen rail keeps rendering from cache through a dropout, and catches up
+  on reconnect
+- multiple tabs on the same device share one cache without fighting over it

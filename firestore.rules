@@ -1,0 +1,100 @@
+rules_version = '2';
+
+// PastaPronto Firestore security rules.
+//
+// POSTURE (same shape as the tasteoff app, with tighter write validation):
+// every screen signs in anonymously on load, so requiring an auth token blocks
+// drive-by internet traffic while keeping the no-password guest experience. The
+// staff passcode on the kitchen/expo/manager screens is a convenience lock in
+// the UI, NOT security - it ships in app/config.js where anyone can read it.
+//
+// WHAT THIS DOES PROTECT:
+//   - unauthenticated traffic cannot touch anything
+//   - an order's contents, price and ticket number are immutable after it is
+//     created, so a client can advance a chit but cannot rewrite the food or
+//     the amount charged
+//   - new orders must arrive in the 'queued' state with a sane shape
+//   - the audit trail can only grow
+//
+// WHAT IT DOES NOT:
+//   - rules cannot re-run the cook-time or pricing model, so a hand-crafted
+//     client could create an order whose price disagrees with its contents
+//   - any signed-in client can read the whole day's rail
+// Closing both of those properly means moving writes behind Cloud Functions
+// and adding Firebase App Check, which needs the Blaze plan. See README.md.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Member directory: looked up by the guest keypad, seeded by the manager.
+    match /members/{memberNumber} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // Ticket-number allocation, one document per service date.
+    match /counters/{serviceDate} {
+      allow read: if signedIn();
+      allow write: if signedIn()
+        && request.resource.data.lastTicket is int
+        && request.resource.data.lastTicket >= 0;
+    }
+
+    match /orders/{orderId} {
+
+      function statuses() {
+        return ['queued', 'cooking', 'ready', 'delivered', 'held', 'voided'];
+      }
+
+      // A new order must look like a new order.
+      function validNewOrder() {
+        let d = request.resource.data;
+        return d.status == 'queued'
+          && d.ticketNo is int && d.ticketNo > 0
+          && d.serviceDate is string
+          && d.memberNumber is string
+          && d.memberNumber.size() >= 4 && d.memberNumber.size() <= 6
+          && d.guestCount is int && d.guestCount >= 1 && d.guestCount <= 8
+          && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 8
+          && d.totalPrice is number && d.totalPrice >= 0
+          && d.cookEstimateSec is int && d.cookEstimateSec > 0
+          && d.events is list && d.events.size() == 1;
+      }
+
+      // What a chit is allowed to change once it exists: its position in the
+      // lifecycle, the stamps, who touched it, and one more audit entry.
+      function contentsUnchanged() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return after.ticketNo == before.ticketNo
+          && after.claimCode == before.claimCode
+          && after.serviceDate == before.serviceDate
+          && after.memberNumber == before.memberNumber
+          && after.guestCount == before.guestCount
+          && after.lines == before.lines
+          && after.totalPrice == before.totalPrice
+          && after.cookEstimateSec == before.cookEstimateSec
+          && after.submittedAt == before.submittedAt
+          && after.tag == before.tag;
+      }
+
+      function validUpdate() {
+        let after = request.resource.data;
+        return after.status in statuses()
+          && contentsUnchanged()
+          // The audit trail only ever grows.
+          && after.events.size() >= resource.data.events.size();
+      }
+
+      allow read: if signedIn();
+      allow create: if signedIn() && validNewOrder();
+      allow update: if signedIn() && validUpdate();
+      // Deletes are the manager's "clear today" button.
+      allow delete: if signedIn();
+    }
+  }
+}

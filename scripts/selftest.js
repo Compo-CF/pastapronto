@@ -1,17 +1,18 @@
-'use strict';
-
 /**
- * No-framework smoke test for the domain layer. Run: node scripts/selftest.js
- * Exercises the happy path, every illegal transition we care about, and the
- * metrics roll-up. Exits non-zero on the first failure.
+ * Domain self-test. Run: node scripts/selftest.js
+ *
+ * Exercises the order lifecycle, every illegal transition we care about, the
+ * cook-time model and the metrics roll-up. These modules are deliberately
+ * Firebase-free, so this runs with no emulator, no network and no credentials.
  */
-const assert = require('assert');
-const { store, STATUS } = require('../lib/store');
-const cooktime = require('../lib/cooktime');
-const members = require('../lib/members');
+import assert from 'node:assert';
+import { config } from '../app/config.js';
+import * as order from '../app/order.js';
+import * as cooktime from '../app/cooktime.js';
+import * as menu from '../app/menu.js';
 
-// Keep the self-test out of the live service state file.
-store.stateFile = require('path').join(require('os').tmpdir(), 'pastapronto-selftest.json');
+const { STATUS } = order;
+const sla = config.sla;
 
 let passed = 0;
 function test(name, fn) {
@@ -30,112 +31,153 @@ const draft = () => ({
   memberName: 'Compofelice',
   memberStatus: 'verified',
   guestCount: 2,
-  tag: 'table-12',
   lines: [
     { guestLabel: 'Ada', pasta: 'shells', sauce: 'butter', protein: 'none', toppings: ['parmesan'], sides: [], portion: 'kid', spice: 'mild' },
     { guestLabel: 'Sam', pasta: 'penne', sauce: 'arrabbiata', protein: 'chicken', toppings: ['mushrooms', 'chili'], sides: ['garlic_bread'], portion: 'regular', spice: 'hot' },
   ],
 });
 
+let seq = 0;
+const make = (d = draft(), ctx = {}) => ({
+  id: 'ord_test_' + (seq += 1),
+  ...order.buildOrder(d, {
+    ticketNo: seq,
+    claimCode: 'TEST',
+    station: 'PASTA-1',
+    queueDepth: 0,
+    tag: { id: 'table-12', label: 'Table 12', kind: 'table' },
+    serviceDate: '2026-09-09',
+    ...ctx,
+  }),
+});
+
 console.log('\nPastaPronto self-test\n');
 
-test('member lookup resolves a known number', () => {
-  assert.strictEqual(members.lookup('10432').status, 'verified');
-  assert.strictEqual(members.lookup('99999').status, 'unverified');
-  assert.strictEqual(members.lookup('12').status, 'invalid');
+test('draft validation accepts a good order', () => {
+  assert.deepStrictEqual(order.validateDraft(draft(), config), []);
 });
 
-test('submit creates a queued chit with derived fields', () => {
-  const o = store.submit(draft());
+test('buildOrder derives allergens, prices, estimate and audit entry', () => {
+  const o = make();
   assert.strictEqual(o.status, STATUS.QUEUED);
-  assert.ok(o.ticketNo >= 1, 'ticket number assigned');
-  assert.strictEqual(o.claimCode.length, 4);
   assert.strictEqual(o.lines.length, 2);
   assert.ok(o.cookEstimateSec > 0, 'cook estimate computed');
-  assert.ok(o.allergenFlags.includes('gluten'), 'gluten flagged from penne');
-  assert.ok(o.allergenFlags.includes('dairy'), 'dairy flagged from butter');
+  assert.ok(o.allergenFlags.includes('gluten'), 'gluten from penne');
+  assert.ok(o.allergenFlags.includes('dairy'), 'dairy from butter');
   assert.strictEqual(o.tagLabel, 'Table 12');
   assert.ok(o.totalPrice > 0);
+  assert.strictEqual(o.events.length, 1);
+  assert.strictEqual(o.lines[1].dish, 'Penne w/ Arrabbiata + Grilled Chicken');
 });
 
-test('submit rejects a bowl with no sauce', () => {
+test('derived fields ignore anything the client tried to assert', () => {
+  const tampered = draft();
+  tampered.totalPrice = 0.01;
+  tampered.cookEstimateSec = 1;
+  tampered.lines[0].price = 0.01;
+  const o = make(tampered);
+  assert.ok(o.totalPrice > 1, 'price recomputed, not trusted');
+  assert.ok(o.cookEstimateSec > 100, 'estimate recomputed, not trusted');
+  assert.ok(o.lines[0].price > 1, 'line price recomputed');
+});
+
+test('validation rejects a bowl with no sauce', () => {
   const bad = draft();
   delete bad.lines[0].sauce;
-  assert.throws(() => store.submit(bad), (err) => {
-    assert.strictEqual(err.code, 'VALIDATION');
-    assert.ok(err.errors.some((e) => /sauce/i.test(e)), 'error mentions sauce');
-    return true;
-  });
+  const errors = order.validateDraft(bad, config);
+  assert.ok(errors.some((e) => /sauce/i.test(e)), 'error mentions sauce');
 });
 
-test('submit rejects too many toppings', () => {
+test('validation rejects too many toppings', () => {
   const bad = draft();
   bad.lines[0].toppings = ['parmesan', 'broccoli', 'olives', 'basil', 'spinach'];
-  assert.throws(() => store.submit(bad), (err) => err.code === 'VALIDATION');
+  assert.ok(order.validateDraft(bad, config).some((e) => /toppings/i.test(e)));
 });
 
-test('submit rejects a bad member number', () => {
+test('validation rejects a bad member number and guest count', () => {
   const bad = draft();
   bad.memberNumber = 'abc';
-  assert.throws(() => store.submit(bad), (err) => err.code === 'VALIDATION');
+  bad.guestCount = 99;
+  const errors = order.validateDraft(bad, config);
+  assert.ok(errors.some((e) => /Member number/.test(e)));
+  assert.ok(errors.some((e) => /Guest count/.test(e)));
 });
 
 test('happy path runs queued -> cooking -> ready -> delivered', () => {
-  const o = store.submit(draft());
-  assert.deepStrictEqual(store.allowedActions(o).sort(), ['accept', 'hold', 'rush', 'void']);
-  store.transition(o.id, 'accept', { actor: 'cook:marco' });
-  assert.strictEqual(store.get(o.id).status, STATUS.COOKING);
-  assert.strictEqual(store.get(o.id).acceptedBy, 'cook:marco');
-  store.transition(o.id, 'ready', { actor: 'cook:marco' });
-  assert.strictEqual(store.get(o.id).status, STATUS.READY);
-  store.transition(o.id, 'deliver', { actor: 'runner:tess' });
-  assert.strictEqual(store.get(o.id).status, STATUS.DELIVERED);
-  assert.strictEqual(store.get(o.id).events.length, 4, 'audit trail has 4 entries');
+  let o = make();
+  assert.deepStrictEqual(order.allowedActions(o, sla).sort(), ['accept', 'hold', 'rush', 'void']);
+  o = order.applyTransition(o, 'accept', { actor: 'cook:marco', sla });
+  assert.strictEqual(o.status, STATUS.COOKING);
+  assert.strictEqual(o.acceptedBy, 'cook:marco');
+  o = order.applyTransition(o, 'ready', { actor: 'cook:marco', sla });
+  assert.strictEqual(o.status, STATUS.READY);
+  o = order.applyTransition(o, 'deliver', { actor: 'runner:tess', sla });
+  assert.strictEqual(o.status, STATUS.DELIVERED);
+  assert.strictEqual(o.events.length, 4, 'audit trail has four entries');
 });
 
-test('illegal transitions are refused', () => {
-  const o = store.submit(draft());
-  assert.throws(() => store.transition(o.id, 'ready'), (e) => e.code === 'ILLEGAL_TRANSITION');
-  assert.throws(() => store.transition(o.id, 'deliver'), (e) => e.code === 'ILLEGAL_TRANSITION');
-  assert.throws(() => store.transition(o.id, 'nope'), (e) => e.code === 'BAD_ACTION');
-  assert.throws(() => store.transition('ord_missing', 'accept'), (e) => e.code === 'NOT_FOUND');
+test('illegal transitions are refused with the allowed set attached', () => {
+  const o = make();
+  assert.throws(() => order.applyTransition(o, 'ready', { sla }), (e) => {
+    assert.strictEqual(e.code, 'ILLEGAL_TRANSITION');
+    assert.deepStrictEqual(e.allowed.sort(), ['accept', 'hold', 'rush', 'void']);
+    return true;
+  });
+  assert.throws(() => order.applyTransition(o, 'deliver', { sla }), (e) => e.code === 'ILLEGAL_TRANSITION');
+  assert.throws(() => order.applyTransition(o, 'nope', { sla }), (e) => e.code === 'BAD_ACTION');
 });
 
-test('double accept from two screens cannot corrupt a chit', () => {
-  const o = store.submit(draft());
-  store.transition(o.id, 'accept', { actor: 'screen-a' });
-  assert.throws(() => store.transition(o.id, 'accept', { actor: 'screen-b' }), (e) => e.code === 'ILLEGAL_TRANSITION');
-  assert.strictEqual(store.get(o.id).acceptedBy, 'screen-a');
+test('a second accept cannot land on a cooking chit', () => {
+  const o = order.applyTransition(make(), 'accept', { actor: 'screen-a', sla });
+  assert.throws(() => order.applyTransition(o, 'accept', { actor: 'screen-b', sla }), (e) => e.code === 'ILLEGAL_TRANSITION');
+  assert.strictEqual(o.acceptedBy, 'screen-a');
 });
 
 test('undo walks the chit back and clears its stamp', () => {
-  const o = store.submit(draft());
-  store.transition(o.id, 'accept');
-  store.transition(o.id, 'unaccept');
-  assert.strictEqual(store.get(o.id).status, STATUS.QUEUED);
-  assert.strictEqual(store.get(o.id).acceptedAt, null);
+  let o = order.applyTransition(make(), 'accept', { sla });
+  o = order.applyTransition(o, 'unaccept', { sla });
+  assert.strictEqual(o.status, STATUS.QUEUED);
+  assert.strictEqual(o.acceptedAt, null);
+  assert.strictEqual(o.acceptedBy, null);
+});
+
+test('undeliver is offered inside the undo window and withdrawn after', () => {
+  let o = make();
+  o = order.applyTransition(o, 'accept', { sla });
+  o = order.applyTransition(o, 'ready', { sla });
+  o = order.applyTransition(o, 'deliver', { sla });
+  assert.ok(order.allowedActions(o, sla).includes('undeliver'), 'available immediately');
+  const later = Date.now() + (sla.undoWindowSec + 5) * 1000;
+  assert.ok(!order.allowedActions(o, sla, later).includes('undeliver'), 'gone after the window');
 });
 
 test('hold and release park an order without losing it', () => {
-  const o = store.submit(draft());
-  store.transition(o.id, 'hold', { note: 'guest stepped away' });
-  assert.strictEqual(store.get(o.id).status, STATUS.HELD);
-  store.transition(o.id, 'release');
-  assert.strictEqual(store.get(o.id).status, STATUS.QUEUED);
+  let o = order.applyTransition(make(), 'hold', { note: 'guest stepped away', sla });
+  assert.strictEqual(o.status, STATUS.HELD);
+  o = order.applyTransition(o, 'release', { sla });
+  assert.strictEqual(o.status, STATUS.QUEUED);
 });
 
-test('rush raises priority without changing status', () => {
-  const o = store.submit(draft());
-  store.transition(o.id, 'rush', { actor: 'expo' });
-  assert.strictEqual(store.get(o.id).priority, 'rush');
-  assert.strictEqual(store.get(o.id).status, STATUS.QUEUED);
+test('rush raises priority without changing status, and cannot repeat', () => {
+  const o = order.applyTransition(make(), 'rush', { actor: 'expo', sla });
+  assert.strictEqual(o.priority, 'rush');
+  assert.strictEqual(o.status, STATUS.QUEUED);
+  assert.ok(!order.allowedActions(o, sla).includes('rush'), 'already rushed');
 });
 
 test('allergy avoidance flags the chit', () => {
   const d = draft();
   d.avoidAllergens = ['shellfish'];
-  const o = store.submit(d);
-  assert.strictEqual(o.priority, 'allergy');
+  assert.strictEqual(make(d).priority, 'allergy');
+});
+
+test('publicView hides staff and audit detail from the guest', () => {
+  const o = order.applyTransition(make(), 'accept', { actor: 'cook:marco', sla });
+  const pub = order.publicView(o);
+  assert.strictEqual(pub.ticketNo, o.ticketNo);
+  ['acceptedBy', 'station', 'events', 'memberNumber', 'memberTier'].forEach((f) => {
+    assert.ok(!(f in pub), f + ' must not reach the guest');
+  });
 });
 
 test('cook estimate grows with pan loads, not linearly with bowls', () => {
@@ -147,14 +189,36 @@ test('cook estimate grows with pan loads, not linearly with bowls', () => {
   assert.ok(b < a * 6, 'but far less than six times longer');
 });
 
-test('metrics roll up delivered orders', () => {
-  const m = store.metrics();
-  assert.ok(m.counts.total > 0);
-  assert.ok(m.counts.delivered >= 1);
-  assert.ok(m.covers > 0);
+test('station assignment balances load', () => {
+  assert.strictEqual(order.pickStation(config.kitchen.stations, { 'PASTA-1': 4, 'PASTA-2': 1 }), 'PASTA-2');
+});
+
+test('metrics roll up a finished day', () => {
+  const orders = [];
+  for (let i = 0; i < 5; i += 1) {
+    let o = make();
+    const base = Date.now() - (60 - i * 5) * 60000;
+    o.submittedAt = new Date(base).toISOString();
+    o = order.applyTransition(o, 'accept', { sla, now: new Date(base + 45000) });
+    o = order.applyTransition(o, 'ready', { sla, now: new Date(base + 45000 + o.cookEstimateSec * 1000) });
+    o = order.applyTransition(o, 'deliver', { sla, now: new Date(base + 45000 + o.cookEstimateSec * 1000 + 30000) });
+    orders.push(o);
+  }
+  const m = order.metrics(orders, sla);
+  assert.strictEqual(m.counts.total, 5);
+  assert.strictEqual(m.counts.delivered, 5);
+  assert.strictEqual(m.covers, 10);
+  assert.strictEqual(m.bowls, 10);
   assert.ok(m.revenue > 0);
-  assert.ok(m.timings.avgCookSec >= 0);
-  assert.ok(m.onTimePct === null || (m.onTimePct >= 0 && m.onTimePct <= 100));
+  assert.strictEqual(m.timings.avgQueueSec, 45);
+  assert.strictEqual(m.timings.avgRunnerSec, 30);
+  assert.strictEqual(m.onTimePct, 100, 'cooked exactly to estimate counts as on time');
+});
+
+test('menu catalog exposes every group the screens render', () => {
+  const c = menu.catalog();
+  ['allergens', 'pastas', 'sauces', 'proteins', 'toppings', 'sides', 'portions', 'spice']
+    .forEach((k) => assert.ok(Array.isArray(c[k]) && c[k].length, k + ' present'));
 });
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

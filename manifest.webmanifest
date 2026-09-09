@@ -1,0 +1,14 @@
+{
+  "name": "PastaPronto!",
+  "short_name": "PastaPronto",
+  "description": "Build your bowl. We cook it now.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdf8f0",
+  "theme_color": "#d33f30",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

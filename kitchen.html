@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#d33f30">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PastaPronto! Kitchen Display</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="kitchen.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PastaPronto">
+</head>
+<body class="kds">
+
+<header class="kbar">
+  <div class="kbrand"><span id="brandMark"></span> Pasta<em>Pronto!</em> <span class="kbrand-sub">Kitchen</span></div>
+
+  <div class="kcounts" id="counts"></div>
+
+  <div class="grow"></div>
+
+  <label class="kselect">
+    <span class="sr-only">Station</span>
+    <select id="stationFilter" class="select">
+      <option value="">All stations</option>
+    </select>
+  </label>
+
+  <button class="kbtn" id="soundToggle" type="button" aria-pressed="false" title="Alert sounds">
+    <span id="soundIcon">&#128263;</span> Sound
+  </button>
+
+  <div class="kclock tabnum" id="clock">--:--</div>
+  <span class="conn" id="conn">connecting</span>
+</header>
+
+<main class="lanes" id="lanes">
+  <section class="lane" data-lane="queued">
+    <h2 class="lane-head"><span>New Orders</span><span class="lane-count" id="count-queued">0</span></h2>
+    <div class="lane-body" id="lane-queued"></div>
+  </section>
+  <section class="lane" data-lane="cooking">
+    <h2 class="lane-head"><span>Cooking</span><span class="lane-count" id="count-cooking">0</span></h2>
+    <div class="lane-body" id="lane-cooking"></div>
+  </section>
+  <section class="lane" data-lane="ready">
+    <h2 class="lane-head"><span>Ready &middot; Call Runner</span><span class="lane-count" id="count-ready">0</span></h2>
+    <div class="lane-body" id="lane-ready"></div>
+  </section>
+</main>
+
+<footer class="kfoot">
+  <span><kbd>1</kbd>&hellip;<kbd>9</kbd> bump chit forward</span>
+  <span><kbd>Shift</kbd>+<kbd>1</kbd>&hellip;<kbd>9</kbd> undo</span>
+  <span><kbd>H</kbd> hold &middot; <kbd>R</kbd> rush (with a chit selected)</span>
+  <span><kbd>S</kbd> sound</span>
+  <span class="grow"></span>
+  <span id="heldNote"></span>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="app/kitchen.js"></script>
+<script type="module" src="app/pwa.js"></script>
+</body>
+</html>

@@ -1,7 +1,5 @@
-'use strict';
-
 /**
- * Independent verification of public/app/qr.js.
+ * Independent verification of app/qr.js.
  *
  * Rather than trusting the encoder, this re-reads the finished matrix the way a
  * scanner would: it checks every function pattern against the spec, decodes the
@@ -11,8 +9,7 @@
  *
  * Run: node scripts/qr-verify.js
  */
-require('../public/app/qr.js');
-const QR = global.QR;
+import * as QR from '../app/qr.js';
 
 let failures = 0;
 function check(name, fn) {
@@ -307,10 +304,15 @@ function roundTrip(text) {
 
 console.log('\nQR encoder verification (scanner-style round trip)\n');
 
+// The URLs we actually print. A static host cannot route /t/<tag>, so the table
+// travels as a query parameter - and the GitHub Pages subpath makes these
+// noticeably longer than the old localhost ones, which is exactly why the
+// version-selection tests below matter.
 const realUrls = [
-  'http://192.168.1.50:7070/t/table-12',
-  'http://10.0.0.7:7070/t/pool-bar',
-  'http://localhost:7070/t/takeout',
+  'https://compo-cf.github.io/pastapronto/?t=table-12',
+  'https://compo-cf.github.io/pastapronto/?t=takeout',
+  'https://pastapronto.web.app/?t=pool-bar',
+  'http://192.168.1.50:5173/?t=table-01',
 ];
 
 realUrls.forEach((url) => {
@@ -346,7 +348,7 @@ check('multi-byte UTF-8 survives the round trip', () => {
 });
 
 check('mask choice minimises the penalty score', () => {
-  const qr = QR.encode('http://192.168.1.50:7070/t/table-12');
+  const qr = QR.encode('https://compo-cf.github.io/pastapronto/?t=table-12');
   assert(qr.mask >= 0 && qr.mask <= 7, 'mask in range');
   assert(typeof qr.penalty === 'number' && qr.penalty > 0, 'penalty computed');
 });
@@ -358,7 +360,7 @@ check('oversized payload is rejected loudly', () => {
 });
 
 check('SVG output is well formed', () => {
-  const svg = QR.toSvg('http://192.168.1.50:7070/t/table-12', { size: 240 });
+  const svg = QR.toSvg('https://compo-cf.github.io/pastapronto/?t=table-12', { size: 240 });
   assert(svg.startsWith('<svg') && svg.endsWith('</svg>'), 'svg element');
   assert(/viewBox="0 0 (\d+) \1"/.test(svg), 'square viewBox');
   assert(svg.includes('width="240"'), 'honours size option');
@@ -367,7 +369,7 @@ check('SVG output is well formed', () => {
 });
 
 /** Print the smallest code as ASCII so a human can eyeball the corners. */
-const demo = QR.encode('http://192.168.1.50:7070/t/table-12');
+const demo = QR.encode('https://compo-cf.github.io/pastapronto/?t=table-12');
 console.log('\n  version ' + demo.version + ', ' + demo.size + 'x' + demo.size +
   ' modules, mask ' + demo.mask + ', penalty ' + demo.penalty + '\n');
 let art = '';

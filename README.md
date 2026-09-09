@@ -1,102 +1,164 @@
 # PastaPronto!
 
 QR-to-kitchen pasta ordering. A guest scans the code on their table, builds a
-bowl per person from a limited ingredient set, and sends it straight to a chit
-on the cook's screen with live timers, an accept button, and a call-runner
-button.
+bowl per person from a limited ingredient set, and it lands as a chit on the
+cook's screen with live timers, an accept button, and a call-runner button.
 
 Simple enough that a six-year-old can drive it unaided; detailed enough that an
-adult can filter allergens, set spice, add per-bowl notes, and that a manager
+adult can filter allergens, set spice and add per-bowl notes, and that a manager
 can read cook-time SLAs off the same data.
 
-## Run it
+**Static site + Firestore. No server, no build step.** Same stack as
+[tasteoffjudging.com](https://tasteoffjudging.com): the four screens are plain
+HTML/CSS/ES modules, and everything live goes through Firestore.
 
-No dependencies, no build step. Node 18 or newer.
+## Screens
 
-```bash
-node server.js
-```
-
-Then open:
-
-| Screen | URL | Who uses it |
+| Screen | File | Who uses it |
 | --- | --- | --- |
-| Guest order | `/t/table-12` | the guest, from a QR scan |
-| Kitchen chit rail | `/kitchen` | the cook |
-| Expo / runner board | `/expo` | expo and runners |
-| Manager + QR codes | `/admin` | manager |
+| Guest order | `index.html?t=table-12` | the guest, from a QR scan |
+| Kitchen chit rail | `kitchen.html` | the cook |
+| Expo / runner board | `expo.html` | expo and runners |
+| Manager + QR codes | `admin.html` | manager |
 
-Start with a clean service: `node server.js --fresh`
+The kitchen, expo and manager screens sit behind a staff passcode
+(`config.kitchen.staffPasscode`, default `2468`). That is a convenience lock,
+not security - see **Security posture** below.
 
-The first boot seeds a believable rail of chits so no screen is ever blank.
-Clear them from **Manager → Clear today**.
+## First-time setup
 
-## Make the QR codes actually work
-
-1. Open `/admin` on the machine running the server.
-2. The **Base address** field is pre-filled with the detected LAN address
-   (e.g. `http://192.168.1.50:7070`). A QR pointing at `localhost` only works on
-   that one computer, so this matters.
-3. **Print table tents** produces one page per table, fold line included.
-4. Any phone on the same wifi can now scan and order.
-
-## Test it
+One human step, because it opens a browser:
 
 ```bash
-node scripts/selftest.js
+firebase login
 ```
 
-Covers the order lifecycle, every illegal transition, the double-accept race,
-undo, allergy flagging, cook-time batching, and the metrics roll-up.
+Then create the project, wire the config and deploy the rules:
 
 ```bash
-node scripts/qr-verify.js
+bash scripts/setup-firebase.sh
 ```
 
-Verifies the hand-written QR encoder the way a scanner would: checks every
-function pattern against ISO/IEC 18004, decodes the format information through
-its BCH code, strips the mask, de-interleaves the blocks, runs a Reed-Solomon
-syndrome check, and parses the payload back to the original URL - across all
-ten supported versions.
+That creates a **new, separate** Firebase project (deliberately not the
+tasteoff one), creates Firestore, registers a web app, writes
+`app/firebase-config.js`, points `.firebaserc` at it, and deploys
+`firestore.rules`.
+
+Two things it cannot do for you, both one click in the console:
+
+1. **Enable Anonymous sign-in** - Authentication → Sign-in method → Anonymous.
+   Every screen signs in silently; the rules require it.
+2. Choose where to host (below).
+
+Finally open `admin.html` and press **Seed demo orders** to fill the rail and
+the member directory.
+
+## Run it locally
+
+```bash
+node scripts/dev-serve.js
+```
+
+Serves the repo at <http://localhost:5173> (ES modules and service workers need
+`http://`, not `file://`). It talks to the real Firestore project.
+
+To work against the emulators instead, set `projectId` to something starting
+with `demo-` in `app/firebase-config.js` and run `firebase emulators:start`
+— `app/db.js` auto-connects on localhost for `demo-` projects only, so a
+production deploy can never fall into that branch. (The emulator suite needs
+Java installed.)
+
+## Deploying
+
+**Firebase Hosting** - works with this repo private:
+
+```bash
+firebase deploy --only hosting
+```
+
+Gives you `https://<project-id>.web.app`.
+
+**GitHub Pages** - what tasteoff uses, but note Pages only serves **public**
+repos on a free plan. This repo is currently private, so either make it public
+or use Firebase Hosting:
+
+```bash
+gh repo edit --visibility public      # only if you want the Pages route
+gh api -X POST repos/:owner/:repo/pages -f source[branch]=main -f source[path]=/
+```
+
+Gives you `https://<user>.github.io/pastapronto/`.
+
+Either way, open `admin.html` on the deployed URL and press **Rebuild codes** so
+the printed QR codes point at the live address rather than localhost.
+
+## Tests
+
+```bash
+npm test
+```
+
+- `scripts/selftest.js` (19 checks) - order lifecycle, every illegal
+  transition, the double-accept race, undo windows, allergy flagging,
+  tamper-resistance of derived fields, cook-time batching, metrics roll-up.
+  Runs with no network, no emulator and no credentials, because the domain
+  modules are deliberately Firebase-free.
+- `scripts/qr-verify.js` (9 checks) - verifies the hand-written QR encoder the
+  way a scanner reads it: every function pattern against ISO/IEC 18004, format
+  info through its BCH code, mask stripped, blocks de-interleaved, a
+  Reed-Solomon syndrome check, and the payload parsed back - across all ten
+  supported versions.
 
 ## Layout
 
 ```
-server.js              HTTP + static + screen routes
-lib/
-  config.js            every tunable: SLAs, stations, table tags, hours
-  menu.js              the whole menu as data (ingredients, allergens, times)
-  cooktime.js          the cook-time model, documented and arguable
-  members.js           member-number lookup (swap for the real POS here)
-  store.js             orders, the state machine, metrics, persistence
-  bus.js               pub/sub feeding Server-Sent Events
-  api.js               REST routes
-  http.js, ids.js      helpers
-  seed.js              demo data
-public/
-  index.html   guest.css   app/guest.js      guest ordering wizard
-  kitchen.html kitchen.css app/kitchen.js    chit rail
-  expo.html    expo.css    app/expo.js       runner board
-  admin.html   admin.css   app/admin.js      manager + QR printing
-  shared.css                                 design tokens
-  app/art.js                                 inline SVG glyph set
-  app/qr.js                                  QR encoder (no dependencies)
-  app/client.js                              API, SSE, formatting, chimes
-docs/                  architecture, data model, API, screen specs
+index.html  kitchen.html  expo.html  admin.html     the four screens
+shared.css  guest.css  kitchen.css  expo.css  admin.css
+manifest.webmanifest  sw.js  icon.svg              PWA shell
+firestore.rules  firebase.json  .firebaserc        Firebase config
+app/
+  config.js          every tunable: SLAs, stations, table tags, passcode
+  menu.js            the whole menu as data (ingredients, allergens, times)
+  cooktime.js        the cook-time model, documented and arguable
+  order.js           lifecycle, validation, derived fields, metrics (pure)
+  db.js              the only file that knows Firestore exists
+  firebase-config.js generated by scripts/setup-firebase.sh
+  guest.js  kitchen.js  expo.js  admin.js           screen logic
+  art.js             inline SVG glyph set
+  qr.js              QR encoder, no dependencies
+  ui.js              formatting, storage, chimes, clock-skew correction
+  seed.js            demo data
+  pwa.js             service worker registration
+scripts/             setup, dev server, tests
+docs/                architecture, data model, screens, deploy notes
 ```
 
-## Documentation
+## Security posture
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - data flow and design decisions
-- [docs/DATA-MODEL.md](docs/DATA-MODEL.md) - the order object and lifecycle
-- [docs/API.md](docs/API.md) - every endpoint with examples
-- [docs/SCREENS.md](docs/SCREENS.md) - each screen, its states, its keyboard
+Every screen signs in anonymously, and `firestore.rules` requires an auth
+token, which blocks drive-by internet traffic. On top of that the rules make an
+order's **contents, price and ticket number immutable after creation** - a
+client can advance a chit through the lifecycle but cannot rewrite the food or
+the amount charged.
 
-## What is deliberately not built
+What is *not* covered:
 
-State lives in memory with a JSON snapshot at `data/state.json`. That is
-correct for a single pasta station and wrong for a chain: swap `lib/store.js`
-for a real database and `lib/bus.js` for Redis pub/sub, and nothing else moves.
-There is no payment capture (charges post to the member number), no staff
-authentication on `/kitchen` (put it behind the venue's network or an
-auth proxy), and no printer integration.
+- Rules cannot re-run the pricing or cook-time model, so a hand-crafted client
+  could create an order whose price disagrees with its contents.
+- Any signed-in client can read the whole day's rail.
+- The staff passcode ships in `app/config.js`. Anyone can read it.
+
+Closing those properly means moving writes behind Cloud Functions and adding
+Firebase App Check, which needs the Blaze plan. The same caveat applies to the
+tasteoff app.
+
+## History
+
+Commit `36fb976` and earlier are a Node/Express-style implementation of the same
+app (an HTTP server, in-memory store and Server-Sent Events). The domain logic
+carried over almost unchanged; `app/db.js` replaced the server. The old
+`server.js`, `lib/` and `public/` trees are superseded - remove them with:
+
+```bash
+git rm -r lib public seed server.js
+```

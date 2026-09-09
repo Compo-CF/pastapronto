@@ -4,132 +4,148 @@
 
 ```
    [ printed QR tent ]
-      table-12
+      ?t=table-12
           |  phone camera
           v
-   GET /t/table-12  ------------------>  server.js
-          |                                 |
-          |  GET /api/bootstrap?tag=table-12
-          |  (menu, limits, SLAs, tag label, server clock)
+   index.html?t=table-12   (a static file - GitHub Pages / Firebase Hosting)
+          |
+          |  app/config.js + app/menu.js  ->  the old GET /api/bootstrap,
+          |                                   now assembled on the device
           v
-   +---------------------+
-   |  Guest app          |   POST /api/members/lookup
-   |  public/app/guest.js|   POST /api/estimate     (price + cook time)
-   +---------------------+   POST /api/orders       (submit)
-          |                                 |
-          |                                 v
-          |                          lib/store.js
-          |                        validate -> assign
-          |                        ticket no, station,
-          |                        cook estimate, price
-          |                                 |
-          |                                 v
-          |                            lib/bus.js
-          |                        publish order.created
-          |                        /                   \
-          |          GET /api/stream?order=<id>     GET /api/stream
-          |          (this ticket only)             (whole rail)
-          v                  |                            |
-   live status track         |                            v
-   "cooking" -> "ready"  <---+                    +------------------+
-                                                  | Kitchen  /kitchen|
-                                                  | Expo     /expo   |
-                                                  | Manager  /admin  |
-                                                  +------------------+
-                                                          |
-                                        POST /api/orders/<id>/transition
-                                        { action: accept | ready | deliver
-                                          | hold | release | rush | void
-                                          | unaccept | unready | undeliver }
-                                                          |
-                                                          v
-                                                  lib/store.js
-                                             state machine gate, audit
-                                             entry, publish order.updated
-                                                          |
-                                        broadcast back to every screen
+   +----------------------+
+   |  Guest app           |  db.lookupMember()  -> members/{number}
+   |  app/guest.js        |  app/cooktime.js    -> price + cook time
+   +----------------------+  db.submitOrder()   -> transaction
+          |                                  |
+          |                                  v
+          |                     Firestore transaction
+          |                   read counters/{date}, +1 ticket,
+          |                   write orders/{id} with derived
+          |                   fields from app/order.js
+          |                                  |
+          |            +---------------------+---------------------+
+          |            |                                           |
+          |   onSnapshot(doc)                          onSnapshot(query)
+          |   one ticket only                          whole service day
+          v            |                                           |
+   live status track   |                                    +------------------+
+   queued -> ready  <--+                                    | Kitchen  kitchen |
+                                                            | Expo     expo    |
+                                                            | Manager  admin   |
+                                                            +------------------+
+                                                                     |
+                                                          db.transition()
+                                                                     |
+                                                     Firestore transaction:
+                                                   read the doc, run the state
+                                                   machine against *current*
+                                                   server state, write the patch
+                                                                     |
+                                             every listener updates in ~200ms
 ```
 
-The loop closes: a cook pressing **Accept** changes the guest's phone within
-a few hundred milliseconds, over the same event stream that redraws the other
-kitchen screens. Nobody polls, nobody refreshes.
+The loop closes without a server: a cook pressing **Accept** changes the
+guest's phone in a few hundred milliseconds, over the same Firestore listener
+that redraws the other kitchen screens.
+
+## What replaced what
+
+| Was (Node) | Now |
+| --- | --- |
+| `server.js` HTTP server | nothing - static files |
+| `GET /api/bootstrap` | `app/config.js` + `app/menu.js`, read on the device |
+| `GET /api/stream` (SSE) | `onSnapshot` listeners |
+| `POST /api/orders` | `db.submitOrder()` in a Firestore transaction |
+| `POST /api/orders/:id/transition` | `db.transition()` in a transaction |
+| HTTP `409 Conflict` | transaction re-read plus `ILLEGAL_TRANSITION` |
+| `lib/store.js` in-memory Map | the `orders` collection |
+| `data/state.json` snapshot | Firestore, plus an IndexedDB cache per device |
+| `GET /api/metrics` | `order.metrics()` over the live snapshot |
+| no auth on `/kitchen` | anonymous auth, rules, and a staff passcode gate |
 
 ## Why these choices
 
-**Zero dependencies, no build step.** A pasta station cannot wait on an npm
-install or a broken toolchain during service. `node server.js` is the whole
-deployment. It also means the QR encoder and the SVG glyph set are written out
-in `public/app/` rather than pulled from a CDN, so the app works on a venue
-network with no internet.
+**The domain layer has no Firebase import.** `app/menu.js`, `app/cooktime.js`
+and `app/order.js` are pure functions over plain objects. That is what lets
+`scripts/selftest.js` run the entire state machine under Node with no emulator,
+no network and no credentials - 19 checks in about a second. `app/db.js` is the
+only file that knows Firestore exists.
 
-**Server-Sent Events, not WebSockets.** The traffic is one-directional
-(server tells screens what changed) and SSE reconnects by itself, which matters
-on hotel wifi. Actions travel as ordinary POSTs, so every mutation gets a real
-HTTP status code a client can reason about.
+**Transactions, not last-write-wins.** `db.transition()` re-reads the order
+inside a transaction and runs `order.transitionPatch()` against the *current*
+server state. Two screens racing on the same chit produce one winner and one
+`ILLEGAL_TRANSITION`; the loser re-syncs from its listener instead of clobbering
+the winner. Ticket numbering works the same way against `counters/{date}`, so
+two phones ordering in the same instant cannot collide on a number.
 
-**Guests get a filtered stream.** `/api/stream?order=<id>` only forwards events
-for that one ticket, and shapes them through `publicOrder()`, which strips
-staff names, station, member tier, and the audit log. A guest watching their
-pasta cannot enumerate the room.
+**Derived fields are computed, never trusted.** Prices, cook times, allergen
+sets and dish text are recomputed in `order.buildOrder()` from the ingredient
+ids. A client that posts `totalPrice: 0.01` gets the real price stored. There is
+a test for exactly that.
 
-**The menu is data, not markup.** `lib/menu.js` is the single source for the
-guest tiles, the chit lines, the printed menu reference, the allergen roll-up,
-and the cook-time model. Adding a sauce is one line and no UI edits.
+**One listener per screen, filtered in memory.** Every screen subscribes to
+`orders where serviceDate == today` and does its own filtering and sorting. A
+service day is tens to a few hundred documents, so this is cheap - and it means
+no composite indexes to deploy and keep in sync, which is why
+`firestore.indexes.json` is empty on purpose.
 
-**The state machine is a table.** `TRANSITIONS` in `lib/store.js` declares
-which actions are legal from which statuses. Buttons are generated from
-`allowedActions(order)`, so the UI cannot offer an illegal move, and the
-server re-checks anyway - two cooks double-tapping **Accept** produces one
-accept and one honest 409.
+**Offline-first.** `persistentLocalCache` with multi-tab support means a guest
+on bad hotel wifi can still send an order - the write queues and syncs - and the
+kitchen rail survives a blip. Firestore handles the queue; there is no
+hand-rolled retry anywhere in this codebase.
 
-**Every action is reversible.** Undo paths (`unaccept`, `unready`,
-`undeliver`) are first-class transitions, not mutations, so a mis-tap during a
-rush is recoverable and still appears in the audit trail. Nothing in the
-kitchen needs a confirmation dialog.
+**Clock skew is corrected from data we already write.** Each order carries both
+`submittedAt` (an ISO string from the ordering device) and `submittedAtServer`
+(Firestore's `serverTimestamp()`). The gap between them is that device's clock
+error, so `ui.noteClockSkew()` learns it from the first resolved pair and
+corrects every elapsed timer on the screen. A tablet with a wrong clock still
+shows the right cook time.
 
 **Timers tick without re-rendering.** The kitchen updates only the timer text
-and colour band each second. Re-rendering a chit under a cook's finger would
-move the button they were reaching for.
+and colour band each second. Re-rendering a chit would move the button a cook
+was reaching for.
 
-**Clocks are server-corrected.** Every API response carries `serverTime`; the
-client stores the offset and computes elapsed time from it. A tablet with a
-wrong clock still shows the right cook time.
+**Relative asset paths everywhere.** GitHub Pages serves from a `/pastapronto/`
+subpath, so an absolute `/shared.css` would 404. Every link, script and the
+service worker registration use relative URLs, which is also what lets the same
+files run from Firebase Hosting at a domain root.
 
-## Two audiences, one app
+## The QR routing change
 
-The guest app runs in `simple` or `pro` mode, toggled in the header and
-remembered per device.
+A static host has no request routing, so the old `/t/table-12` path cannot
+resolve. Tables now travel as a query parameter:
 
-| | simple (default) | pro |
-| --- | --- | --- |
-| Tile sets | kid-friendly subset, "Show all N" reveals the rest | everything |
-| Steps per bowl | 4 taps, auto-advancing | same, plus detail panel |
-| Spice, notes, per-bowl names | hidden | shown |
-| Allergen avoidance | one-line prompt | full chip filter |
-| Tile metadata | price only | price, cook time, GF, spicy |
+```
+https://compo-cf.github.io/pastapronto/?t=table-12
+```
 
-Allergen conflicts never silently hide a choice. The tile stays visible,
-disabled, and captioned with what it contains, so a parent can see *why* the
-thing their child wants is unavailable.
+`app/guest.js` reads `?t=`, and still honours a legacy `/t/<tag>` path if an old
+link turns up. The manager screen builds codes from whatever address the page
+itself was opened at, which is by definition an address a phone can reach.
+
+These URLs are longer than the old localhost ones, which pushes the codes from
+QR version 3 to version 4 (33x33 modules). `scripts/qr-verify.js` tests the real
+deployed URLs for exactly that reason.
 
 ## Failure behaviour
 
 | Failure | What happens |
 | --- | --- |
-| SSE drops | client reconnects with backoff; kitchen also polls every 60s so the rail can never silently freeze |
-| Server restarts | `data/state.json` restores orders and ticket numbers |
-| Two screens act on one chit | first wins; second gets 409 and re-syncs |
-| Guest submits an invalid bowl | 422 with plain-English messages shown verbatim |
-| Unknown member number | accepted as `unverified`, flagged on the chit - a child mistyping a digit still gets fed |
-| Unknown table code | order still accepted, `tagLabel` falls back, guest warned to ask a server |
-| `/api/estimate` unreachable | review screen falls back to a locally computed subtotal |
+| Connection drops | Firestore retries and resyncs itself; the header dot shows `offline` |
+| Two screens act on one chit | first wins; second gets `ILLEGAL_TRANSITION` and re-syncs |
+| Guest submits an invalid bowl | `VALIDATION` error, plain-English messages shown verbatim |
+| Guest offline at send | the write queues in IndexedDB and syncs when signal returns |
+| Unknown member number | accepted as `unverified` and badged on the chit - a child mistyping a digit still gets fed |
+| Unknown table code | order still accepted, `tagLabel` falls back, guest told to ask a server |
+| Firebase not configured | every screen says so plainly instead of white-screening |
+| Service worker fails | caught and logged; the app works without it |
 
-## Where to swap in real infrastructure
+## Where to go next
 
-| Concern | File | Replace with |
-| --- | --- | --- |
-| Orders, tickets | `lib/store.js` | Postgres; keep `TRANSITIONS` as the gate |
-| Fan-out | `lib/bus.js` | Redis pub/sub for multi-node |
-| Members | `lib/members.js` | POS / CRM lookup; the return shape is the contract |
-| Menu | `lib/menu.js` | menu service, same field names |
-| Payment | not present | charge posts against `memberNumber` today |
+| Concern | How |
+| --- | --- |
+| Price integrity | move `buildOrder` into a Cloud Function (Blaze plan) |
+| Guests can read the rail | split staff reads behind custom claims or Functions |
+| Bot traffic | Firebase App Check |
+| Real member directory | replace `members/{number}` with a POS sync; `db.lookupMember()` is the seam |
+| Payment | charges post against `memberNumber` today; nothing is captured |
