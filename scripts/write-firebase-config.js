@@ -5,7 +5,7 @@
  * re-sync the config:
  *   node scripts/write-firebase-config.js <project-id>
  */
-import { execFileSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,12 +16,22 @@ if (!projectId) {
   process.exit(1);
 }
 
+if (!/^[a-z][a-z0-9-]{3,62}$/.test(projectId)) {
+  console.error('Refusing to run: "' + projectId + '" is not a valid Firebase project id.');
+  process.exit(1);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function firebase(args) {
-  return execFileSync(process.platform === 'win32' ? 'firebase.cmd' : 'firebase', args, {
+  // The CLI is firebase.cmd on Windows, which Node cannot execFile directly
+  // (EINVAL), so this goes through a shell. Every argument is either a literal
+  // from this file or the validated project id below - nothing unescaped from
+  // an untrusted source reaches the command line.
+  return execSync(['firebase', ...args].join(' '), {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'inherit'],
   });
 }
 
