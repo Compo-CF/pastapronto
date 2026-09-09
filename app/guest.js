@@ -386,7 +386,7 @@ import {
     return html`${raw(portions)}${raw(extras)}`;
   }
 
-  var estimate = { cookEstimateSec: 0, promiseSec: 0, subtotal: 0 };
+  var estimate = { queueDepth: 0, cookEstimateSec: 0, promiseSec: 0, subtotal: 0 };
 
   function screenReview() {
     var bowls = state.bowls.map(function (bowl, i) {
@@ -506,6 +506,7 @@ import {
       // Offline: quote the cook time alone rather than blocking the review.
     }
     estimate = {
+      queueDepth: depth,
       cookEstimateSec: cooktime.orderCookSec(state.bowls),
       promiseSec: cooktime.promiseSec(state.bowls, depth),
       subtotal: state.bowls.reduce(function (a, b) { return a + menuPriceFor(b); }, 0),
@@ -850,7 +851,12 @@ import {
           avoidAllergens: state.avoid,
           notes: state.orderNotes,
           lines: state.bowls,
-        }, { tagId: state.boot.tag ? state.boot.tag.id : null });
+        }, {
+          tagId: state.boot.tag ? state.boot.tag.id : null,
+          // Reuse the depth the review screen already measured, so placing the
+          // order needs no read of its own.
+          queueDepth: estimate.queueDepth || 0,
+        });
 
         state.busy = false;
         state.order = order.publicView(created);

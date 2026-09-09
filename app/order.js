@@ -293,12 +293,19 @@ export function metrics(orders, sla) {
   };
 }
 
-/** Round-robin station pick, given how many orders each station already has. */
-export function pickStation(stations, counts) {
+/**
+ * Which station cooks this ticket.
+ *
+ * Derived from the ticket number rather than from a live count of each
+ * station's load. That trades a little cleverness for two real wins: it needs
+ * no database read on the path that places an order, and it is deterministic,
+ * so it can be computed inside the same transaction that allocates the number.
+ * With a monotonic ticket sequence this is exact round-robin anyway.
+ */
+export function stationForTicket(ticketNo, stations, autoAssign = true) {
   if (!stations.length) return null;
-  return stations
-    .map((s) => ({ id: s.id, load: counts[s.id] || 0 }))
-    .sort((a, b) => a.load - b.load)[0].id;
+  if (!autoAssign) return stations[0].id;
+  return stations[(Math.max(1, ticketNo) - 1) % stations.length].id;
 }
 
 /** Short claim code shown to the guest so a server can find their ticket. */

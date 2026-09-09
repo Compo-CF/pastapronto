@@ -26,7 +26,7 @@ import {
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   connectFirestoreEmulator,
-  collection, doc, getDoc, getDocs, setDoc, deleteDoc,
+  collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
   onSnapshot, query, where, runTransaction, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -150,7 +150,7 @@ export async function lookupMember(raw) {
  * transaction, so two phones ordering at the same instant cannot collide on a
  * number - one of them simply retries and takes the next.
  */
-export async function submitOrder(draft, { tagId } = {}) {
+export async function submitOrder(draft, { tagId, queueDepth = 0 } = {}) {
   await ready();
 
   const errors = order.validateDraft(draft, config);
@@ -160,22 +160,13 @@ export async function submitOrder(draft, { tagId } = {}) {
 
   const date = serviceDate();
   const tag = tagId ? tagById(tagId) : null;
-
-  // Station load and queue depth come from what is already on the rail.
-  const live = await getDocs(query(ordersCol, where('serviceDate', '==', date)));
-  const stationLoad = {};
-  let queueDepth = 0;
-  live.forEach((snap) => {
-    const o = snap.data();
-    if (['queued', 'cooking'].includes(o.status)) {
-      stationLoad[o.station] = (stationLoad[o.station] || 0) + 1;
-      queueDepth += 1;
-    }
-  });
-
   const ref = doc(ordersCol);
   const counterRef = doc(db, 'counters', date);
 
+  // Note there is no read outside the transaction. Station assignment is
+  // derived from the ticket number, and the queue depth used for the guest's
+  // promise is passed in by whoever already had it on screen. Placing an order
+  // is the one path that must never stall, and every read is a chance to.
   const created = await runTransaction(db, async (tx) => {
     const counterSnap = await tx.get(counterRef);
     const lastTicket = counterSnap.exists() ? (counterSnap.data().lastTicket || 0) : 0;
@@ -184,7 +175,9 @@ export async function submitOrder(draft, { tagId } = {}) {
     const built = order.buildOrder(draft, {
       ticketNo,
       claimCode: order.claimCode(),
-      station: order.pickStation(config.kitchen.stations, stationLoad),
+      station: order.stationForTicket(
+        ticketNo, config.kitchen.stations, config.kitchen.autoAssignStations,
+      ),
       queueDepth,
       tag,
       serviceDate: date,
@@ -273,11 +266,39 @@ export async function getOrder(orderId) {
   return snap.exists() ? toOrder(snap) : null;
 }
 
-/** One-shot read of a service day, for metrics. */
-export async function getDay(date = serviceDate()) {
-  await ready();
-  const snap = await getDocs(query(ordersCol, where('serviceDate', '==', date)));
-  return snap.docs.map(toOrder);
+/**
+ * One read of a service day.
+ *
+ * Uses the first snapshot from a listener rather than getDocs(). Observed on a
+ * live project: getDocs() on this query stalled indefinitely while the
+ * identical query delivered 13 documents through onSnapshot in 3ms. Listeners
+ * are the transport that reliably works, so everything reads through them, and
+ * a timeout means a stall degrades to an empty result instead of a hang.
+ */
+export function getDay(date = serviceDate()) {
+  return new Promise((resolve, reject) => {
+    let unsub = null;
+    let done = false;
+    let timer = null;
+
+    const finish = (fn, value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      // The callback can fire before onSnapshot() has returned its unsubscribe.
+      if (unsub) unsub();
+      else queueMicrotask(() => { if (unsub) unsub(); });
+      fn(value);
+    };
+
+    timer = setTimeout(() => finish(resolve, []), 8000);
+
+    unsub = onSnapshot(
+      query(ordersCol, where('serviceDate', '==', date)),
+      (snap) => finish(resolve, snap.docs.map(toOrder)),
+      (err) => finish(reject, err),
+    );
+  });
 }
 
 // --------------------------------------------------------------- admin tools
@@ -295,9 +316,17 @@ export async function seedMembers(members) {
 }
 
 /**
- * Write a batch of demo orders straight in, backdated so the kitchen rail opens
- * with a believable mix. Bypasses submitOrder because these need timestamps in
- * the past and specific statuses.
+ * Write the demo rail.
+ *
+ * These orders need to end up mid-cook, plated or delivered, but the security
+ * rules deliberately refuse a client that tries to *create* an order in any
+ * state but `queued` - otherwise anyone could inject a delivered order with a
+ * price they made up. So the seeder does what real service does: create each
+ * order as queued, then advance it with updates the rules allow (contents
+ * unchanged, audit trail only growing).
+ *
+ * A backdated `submittedAt` has to be set at create time, because the rules
+ * make it immutable afterwards.
  */
 export async function seedOrders(built) {
   await ready();
@@ -307,21 +336,54 @@ export async function seedOrders(built) {
   const maxTicket = built.reduce((a, o) => Math.max(a, o.ticketNo), 0);
   await setDoc(doc(db, 'counters', date), { lastTicket: maxTicket, serviceDate: date }, { merge: true });
 
-  await Promise.all(built.map((o) => {
+  let written = 0;
+  for (const target of built) {
     const ref = doc(ordersCol);
-    return setDoc(ref, { ...o, serviceDate: date, createdBy: uid(), demo: true });
-  }));
-  return built.length;
+    try {
+      // Phase 1 - create it the way a guest would.
+      await setDoc(ref, {
+        ...target,
+        status: 'queued',
+        acceptedAt: null, readyAt: null, deliveredAt: null,
+        acceptedBy: null, readyBy: null, deliveredBy: null,
+        events: [target.events[0]],
+        serviceDate: date,
+        createdBy: uid(),
+        demo: true,
+      });
+
+      // Phase 2 - walk it to its demo state, if it is not simply queued.
+      if (target.status !== 'queued' || target.events.length > 1) {
+        await updateDoc(ref, {
+          status: target.status,
+          acceptedAt: target.acceptedAt || null,
+          readyAt: target.readyAt || null,
+          deliveredAt: target.deliveredAt || null,
+          acceptedBy: target.acceptedBy || null,
+          readyBy: target.readyBy || null,
+          deliveredBy: target.deliveredBy || null,
+          priority: target.priority,
+          events: target.events,
+        });
+      }
+      written += 1;
+    } catch (err) {
+      // Name the ticket rather than failing anonymously - a rules rejection
+      // here is a real signal, not noise to swallow.
+      throw new Error('Seeding ticket #' + target.ticketNo + ' failed: ' + (err.code || err.message));
+    }
+  }
+  return written;
 }
 
 /** Delete today's orders and reset ticket numbering. Manager screen only. */
 export async function resetDay() {
   await ready();
   const date = serviceDate();
-  const snap = await getDocs(query(ordersCol, where('serviceDate', '==', date)));
-  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  const todays = await getDay(date);
+  await Promise.all(todays.map((o) => deleteDoc(doc(db, 'orders', o.id))));
   await setDoc(doc(db, 'counters', date), { lastTicket: 0, serviceDate: date }, { merge: true });
-  return snap.size;
+  return todays.length;
 }
 
 export { db, auth };

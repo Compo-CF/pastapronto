@@ -189,8 +189,22 @@ test('cook estimate grows with pan loads, not linearly with bowls', () => {
   assert.ok(b < a * 6, 'but far less than six times longer');
 });
 
-test('station assignment balances load', () => {
-  assert.strictEqual(order.pickStation(config.kitchen.stations, { 'PASTA-1': 4, 'PASTA-2': 1 }), 'PASTA-2');
+test('station assignment round-robins by ticket number', () => {
+  const st = config.kitchen.stations;
+  assert.strictEqual(order.stationForTicket(1, st), 'PASTA-1');
+  assert.strictEqual(order.stationForTicket(2, st), 'PASTA-2');
+  assert.strictEqual(order.stationForTicket(3, st), 'PASTA-1');
+  assert.strictEqual(order.stationForTicket(4, st), 'PASTA-2');
+  // Even distribution over a service, and no reliance on a live read.
+  const counts = {};
+  for (let n = 1; n <= 100; n += 1) {
+    const id = order.stationForTicket(n, st);
+    counts[id] = (counts[id] || 0) + 1;
+  }
+  assert.strictEqual(counts['PASTA-1'], 50);
+  assert.strictEqual(counts['PASTA-2'], 50);
+  // Pinning everything to one station is still honoured.
+  assert.strictEqual(order.stationForTicket(7, st, false), 'PASTA-1');
 });
 
 test('metrics roll up a finished day', () => {
