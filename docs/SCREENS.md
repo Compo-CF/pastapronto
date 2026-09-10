@@ -35,9 +35,14 @@ mode an allergen chip panel appears; in simple mode a single link,
 A bowl tab strip across the top (per-guest, marked *building* / *ready*) and a
 five-step underline: Pasta, Sauce, Protein, Toppings, Size.
 
-Tapping a choice **advances automatically** - one tap per step, four taps per
-bowl, no Next button to hunt for. Toppings are multi-select and capped at 4
-with a friendly toast, so **Next** is explicit there.
+Single-choice steps (pasta, protein, size) **advance automatically** - one tap
+and you are on the next step, no Next button to hunt for.
+
+Sauce and toppings are multi-select, so **Next** is explicit there. A bowl takes
+up to three sauces; the sub-heading changes from "Pick one, or tap two to mix
+them" to "Mixing 2 sauces - tap Next when you are happy", and Next stays
+disabled until at least one is chosen. Two sauces cost the slowest of them plus
+20s of handling, not the sum, so a half-and-half bowl is not over-quoted.
 
 Simple mode shows the kid subset (5 pastas, 4 sauces, 4 toppings) with a
 **Show all N choices** button. Pro mode shows everything plus cook times, GF
@@ -45,12 +50,18 @@ and spicy markers, and a detail panel for name, spice level and bowl notes.
 
 Any tile clashing with an avoided allergen stays visible but disabled and
 captioned "has Dairy" - a parent can see why the thing their kid wants is out.
+An ingredient the kitchen has 86'd behaves the same way, captioned **sold out**,
+and updates live if it goes out mid-build.
 
 ### review
-One card per bowl with its pasta glyph, dish line, extras, price, and a
-**Change** button. An allergen roll-up for the whole order, then bowls, guests,
-table, server-computed cook time and total. **Send to the kitchen** is green
-and full-width.
+One card per bowl with its pasta glyph, dish line, extras and a **Change**
+button. An allergen roll-up for the whole order, then bowls, guests, table and
+the cook time - which sits where a total would on a till receipt, because
+nothing here is priced. **Send to the kitchen** is green and full-width.
+
+If an ingredient was 86'd while the guest sat on this screen, Send is refused
+with the ingredient named ("Bowl 1: Marinara just sold out - please pick
+something else") and no ticket is created.
 
 ### sent
 Ticket number at display size, a 4-character claim code for staff, and a
@@ -139,10 +150,10 @@ can warn a table before it complains.
 
 ## 4. Manager - `admin.html`
 
-**Today at a glance** - nine stat tiles: orders, covers, open now, average wait
-to accept, average cook time, average runner time, p90 ticket time, on-time
-percentage (green at 90 or above, red below 75), and revenue. Refreshes on
-every order event.
+**Today at a glance** - eight stat tiles: orders, covers, open now, average wait
+to accept, average cook time, average runner time, p90 ticket time and on-time
+percentage (green at 90 or above, red below 75). No revenue tile: the app never
+handles money. Refreshes on every order event.
 
 **QR codes** - a base-address field pre-filled with the detected LAN address,
 because a QR pointing at localhost is useless on a phone. Codes are generated
@@ -156,9 +167,13 @@ code, instructions, and a fold line. Codes are built from whatever address the
 manager screen was opened at, so printing from the deployed URL prints codes
 that resolve from a phone.
 
-**Menu and cook times** - the full catalog as tables with allergen codes, stage
-times and prices, straight from `lib/menu.js`. This is the chef's reference and
-it cannot drift from what the guest app offers.
+**Menu, cook times and the 86 list** - the full catalog as tables with allergen
+codes and stage times, straight from `app/menu.js`, so the chef's reference
+cannot drift from what the guest app offers. Each row carries an **86** switch:
+flip it and the ingredient shows as sold out on every guest phone, with a
+summary strip above listing everything currently off.
+
+Boil times shown are for parcooked pasta - finish-to-order, not from-dry.
 
 **Demo controls** - seed a believable rail (and the member directory), or clear
 the day. Clearing asks for confirmation, because it deletes documents.

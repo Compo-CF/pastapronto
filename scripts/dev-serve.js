@@ -51,7 +51,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log('');
-  console.log('  PastaPronto! (static) served from ' + ROOT);
+  console.log('  PastaPresto! (static) served from ' + ROOT);
   console.log('  ------------------------------------------');
   console.log('  Guest     http://localhost:' + PORT + '/?t=table-12');
   console.log('  Kitchen   http://localhost:' + PORT + '/kitchen.html');

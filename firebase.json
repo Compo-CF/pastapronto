@@ -3,37 +3,74 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "hosting": {
-    "public": ".",
-    "ignore": [
-      "firebase.json",
-      "firestore.rules",
-      "firestore.indexes.json",
-      ".firebaserc",
-      "**/.*",
-      "**/node_modules/**",
-      "scripts/**",
-      "docs/**",
-      "lib/**",
-      "seed/**",
-      "package.json",
-      "package-lock.json",
-      "README.md",
-      "public/**",
-      "server.js",
-      "data/**",
-      "*.log"
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(js|css|html)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      }
-    ]
-  }
+  "hosting": [
+    {
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        "firestore.rules",
+        "firestore.indexes.json",
+        ".firebaserc",
+        "**/.*",
+        "**/node_modules/**",
+        "scripts/**",
+        "docs/**",
+        "lib/**",
+        "seed/**",
+        "package.json",
+        "package-lock.json",
+        "README.md",
+        "public/**",
+        "server.js",
+        "data/**",
+        "*.log"
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(js|css|html)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ],
+      "site": "pastapresto"
+    },
+    {
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        "firestore.rules",
+        "firestore.indexes.json",
+        ".firebaserc",
+        "**/.*",
+        "**/node_modules/**",
+        "scripts/**",
+        "docs/**",
+        "lib/**",
+        "seed/**",
+        "package.json",
+        "package-lock.json",
+        "README.md",
+        "public/**",
+        "server.js",
+        "data/**",
+        "*.log"
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(js|css|html)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ],
+      "site": "pastapronto-260909"
+    }
+  ]
 }

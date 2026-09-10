@@ -240,3 +240,15 @@
 .chit.is-held { opacity: 0.62; border-left-color: var(--kmuted); }
 .chit.is-held .chit-timer[data-late="hold"] { background: #2f3742; color: var(--kmuted); animation: none; }
 .badge-held { background: #2f3742; color: var(--kmuted); }
+
+/* What the kitchen has run out of. Set by the manager, read here. */
+.k86 {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: #471610;
+  color: #ffd9d4;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.k86:empty { display: none; }

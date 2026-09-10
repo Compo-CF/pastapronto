@@ -1,6 +1,6 @@
 {
-  "name": "PastaPronto!",
-  "short_name": "PastaPronto",
+  "name": "PastaPresto!",
+  "short_name": "PastaPresto",
   "description": "Build your bowl. We cook it now.",
   "start_url": "./index.html",
   "scope": "./",

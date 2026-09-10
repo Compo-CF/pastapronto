@@ -5,10 +5,9 @@
  */
 export const config = {
   venue: {
-    name: 'PastaPronto!',
+    name: 'PastaPresto!',
     tagline: 'Build your bowl. We cook it now.',
     memberLabel: 'Member Number',
-    currency: 'USD',
   },
 
   service: {
@@ -44,6 +43,9 @@ export const config = {
   order: {
     maxGuests: 8,
     maxToppingsPerBowl: 4,
+    // A bowl can be half-and-half, or a three-way. More than this and the
+    // pan stops tasting like anything.
+    maxSaucesPerBowl: 3,
     maxSidesPerBowl: 2,
     allowUnverifiedMembers: true,
     memberNumberPattern: /^[0-9]{4,6}$/,

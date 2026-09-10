@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Creates a NEW, separate Firebase project for PastaPronto and wires it up.
+# Creates a NEW, separate Firebase project for PastaPresto and wires it up.
 # Deliberately separate from the tasteoff project (judging-app-dd929) so the two
 # apps never share a Firestore database, rules, or quota.
 #
@@ -14,12 +14,12 @@
 # taken, pass your own.
 set -euo pipefail
 
-PROJECT_ID="${1:-pastapronto-$(date +%y%m%d)}"
+PROJECT_ID="${1:-pastapresto-$(date +%y%m%d)}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 echo
-echo "PastaPronto Firebase setup"
+echo "PastaPresto Firebase setup"
 echo "=========================="
 echo "  project id : $PROJECT_ID"
 echo
@@ -30,7 +30,7 @@ if ! firebase login:list 2>/dev/null | grep -q "@"; then
 fi
 
 echo "[1/6] Creating the project..."
-firebase projects:create "$PROJECT_ID" --display-name "PastaPronto" || {
+firebase projects:create "$PROJECT_ID" --display-name "PastaPresto" || {
   echo "      (project may already exist - continuing)"
 }
 
@@ -68,7 +68,7 @@ else
 fi
 
 echo "[3/6] Registering the web app..."
-firebase apps:create WEB "PastaPronto Web" --project "$PROJECT_ID" 2>/dev/null || {
+firebase apps:create WEB "PastaPresto Web" --project "$PROJECT_ID" 2>/dev/null || {
   echo "      (web app may already exist - continuing)"
 }
 

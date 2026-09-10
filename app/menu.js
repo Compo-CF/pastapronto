@@ -10,6 +10,10 @@
  *   allergens  subset of ALLERGENS ids
  *   kid        true if it shows in the short "kid mode" tile set
  *   *Sec       contribution to the cook clock (see ./cooktime.js)
+ *
+ * Boil times assume the pasta is PARCOOKED and held - these are finish-to-order
+ * times, not from-dry times. Nothing here is priced: charges post against the
+ * member number through the club's own system, so the app never quotes money.
  */
 
 const ALLERGENS = [
@@ -23,14 +27,14 @@ const ALLERGENS = [
 ];
 
 const PASTAS = [
-  { id: 'spaghetti',  name: 'Spaghetti',           shape: 'strands', boilSec: 480, allergens: ['gluten'], kid: true },
-  { id: 'penne',      name: 'Penne',               shape: 'tube',    boilSec: 600, allergens: ['gluten'], kid: true },
-  { id: 'rigatoni',   name: 'Rigatoni',            shape: 'ridged',  boilSec: 660, allergens: ['gluten'], kid: false },
-  { id: 'fettuccine', name: 'Fettuccine',          shape: 'ribbon',  boilSec: 420, allergens: ['gluten', 'egg'], kid: false },
-  { id: 'farfalle',   name: 'Bow Ties',            shape: 'bowtie',  boilSec: 540, allergens: ['gluten'], kid: true },
-  { id: 'shells',     name: 'Shells',              shape: 'shell',   boilSec: 600, allergens: ['gluten'], kid: true },
-  { id: 'tortellini', name: 'Cheese Tortellini',   shape: 'ring',    boilSec: 240, allergens: ['gluten', 'dairy', 'egg'], kid: true },
-  { id: 'fusilli_gf', name: 'Gluten-Free Fusilli', shape: 'spiral',  boilSec: 540, allergens: [], glutenFree: true, kid: false },
+  { id: 'spaghetti',  name: 'Spaghetti',           shape: 'strands', boilSec: 240, allergens: ['gluten'], kid: true },
+  { id: 'penne',      name: 'Penne',               shape: 'tube',    boilSec: 300, allergens: ['gluten'], kid: true },
+  { id: 'rigatoni',   name: 'Rigatoni',            shape: 'ridged',  boilSec: 330, allergens: ['gluten'], kid: false },
+  { id: 'fettuccine', name: 'Fettuccine',          shape: 'ribbon',  boilSec: 210, allergens: ['gluten', 'egg'], kid: false },
+  { id: 'farfalle',   name: 'Bow Ties',            shape: 'bowtie',  boilSec: 270, allergens: ['gluten'], kid: true },
+  { id: 'shells',     name: 'Shells',              shape: 'shell',   boilSec: 300, allergens: ['gluten'], kid: true },
+  { id: 'tortellini', name: 'Cheese Tortellini',   shape: 'ring',    boilSec: 120, allergens: ['gluten', 'dairy', 'egg'], kid: true },
+  { id: 'fusilli_gf', name: 'Gluten-Free Fusilli', shape: 'spiral',  boilSec: 270, allergens: [], glutenFree: true, kid: false },
 ];
 
 const SAUCES = [
@@ -45,37 +49,37 @@ const SAUCES = [
 ];
 
 const PROTEINS = [
-  { id: 'none',      name: 'No Protein',      icon: 'none',     addSec: 0,   price: 0,   allergens: [], kid: true },
-  { id: 'chicken',   name: 'Grilled Chicken', icon: 'chicken',  addSec: 60,  price: 4.0, allergens: [], kid: true },
-  { id: 'meatballs', name: 'Meatballs',       icon: 'meatball', addSec: 90,  price: 4.5, allergens: ['gluten', 'egg'], kid: true },
-  { id: 'sausage',   name: 'Italian Sausage', icon: 'sausage',  addSec: 90,  price: 4.5, allergens: ['pork'], kid: false },
-  { id: 'shrimp',    name: 'Shrimp',          icon: 'shrimp',   addSec: 150, price: 6.0, allergens: ['shellfish'], kid: false },
-  { id: 'beans',     name: 'White Beans',     icon: 'beans',    addSec: 45,  price: 2.5, allergens: [], kid: false },
+  { id: 'none',      name: 'No Protein',      icon: 'none',     addSec: 0,   allergens: [], kid: true },
+  { id: 'chicken',   name: 'Grilled Chicken', icon: 'chicken',  addSec: 60, allergens: [], kid: true },
+  { id: 'meatballs', name: 'Meatballs',       icon: 'meatball', addSec: 90, allergens: ['gluten', 'egg'], kid: true },
+  { id: 'sausage',   name: 'Italian Sausage', icon: 'sausage',  addSec: 90, allergens: ['pork'], kid: false },
+  { id: 'shrimp',    name: 'Shrimp',          icon: 'shrimp',   addSec: 150, allergens: ['shellfish'], kid: false },
+  { id: 'beans',     name: 'White Beans',     icon: 'beans',    addSec: 45, allergens: [], kid: false },
 ];
 
 const TOPPINGS = [
-  { id: 'parmesan',   name: 'Parmesan',        icon: 'cheese',   addSec: 0,  price: 0,   allergens: ['dairy'], kid: true },
-  { id: 'mozzarella', name: 'Mozzarella',      icon: 'mozz',     addSec: 20, price: 1.5, allergens: ['dairy'], kid: true },
-  { id: 'broccoli',   name: 'Broccoli',        icon: 'broccoli', addSec: 45, price: 1.5, allergens: [], kid: true },
-  { id: 'mushrooms',  name: 'Mushrooms',       icon: 'mushroom', addSec: 45, price: 1.5, allergens: [], kid: false },
-  { id: 'peppers',    name: 'Sweet Peppers',   icon: 'pepper',   addSec: 45, price: 1.5, allergens: [], kid: false },
-  { id: 'spinach',    name: 'Spinach',         icon: 'spinach',  addSec: 20, price: 1.5, allergens: [], kid: false },
-  { id: 'tomatoes',   name: 'Cherry Tomatoes', icon: 'tomato',   addSec: 15, price: 1.5, allergens: [], kid: true },
-  { id: 'olives',     name: 'Olives',          icon: 'olive',    addSec: 0,  price: 1.5, allergens: [], kid: false },
-  { id: 'basil',      name: 'Fresh Basil',     icon: 'herb',     addSec: 0,  price: 0,   allergens: [], kid: false },
-  { id: 'chili',      name: 'Chili Flakes',    icon: 'chili',    addSec: 0,  price: 0,   allergens: [], spicy: true, kid: false },
+  { id: 'parmesan',   name: 'Parmesan',        icon: 'cheese',   addSec: 0,   allergens: ['dairy'], kid: true },
+  { id: 'mozzarella', name: 'Mozzarella',      icon: 'mozz',     addSec: 20, allergens: ['dairy'], kid: true },
+  { id: 'broccoli',   name: 'Broccoli',        icon: 'broccoli', addSec: 45, allergens: [], kid: true },
+  { id: 'mushrooms',  name: 'Mushrooms',       icon: 'mushroom', addSec: 45, allergens: [], kid: false },
+  { id: 'peppers',    name: 'Sweet Peppers',   icon: 'pepper',   addSec: 45, allergens: [], kid: false },
+  { id: 'spinach',    name: 'Spinach',         icon: 'spinach',  addSec: 20, allergens: [], kid: false },
+  { id: 'tomatoes',   name: 'Cherry Tomatoes', icon: 'tomato',   addSec: 15, allergens: [], kid: true },
+  { id: 'olives',     name: 'Olives',          icon: 'olive',    addSec: 0, allergens: [], kid: false },
+  { id: 'basil',      name: 'Fresh Basil',     icon: 'herb',     addSec: 0,   allergens: [], kid: false },
+  { id: 'chili',      name: 'Chili Flakes',    icon: 'chili',    addSec: 0,   allergens: [], spicy: true, kid: false },
 ];
 
 const SIDES = [
-  { id: 'garlic_bread', name: 'Garlic Bread', icon: 'bread',  cookSec: 90, price: 4.0, allergens: ['gluten', 'dairy'], kid: true },
-  { id: 'side_salad',   name: 'Side Salad',   icon: 'salad',  cookSec: 0,  price: 5.0, allergens: [], kid: true },
-  { id: 'breadsticks',  name: 'Breadsticks',  icon: 'sticks', cookSec: 75, price: 3.5, allergens: ['gluten'], kid: true },
+  { id: 'garlic_bread', name: 'Garlic Bread', icon: 'bread',  cookSec: 90, allergens: ['gluten', 'dairy'], kid: true },
+  { id: 'side_salad',   name: 'Side Salad',   icon: 'salad',  cookSec: 0, allergens: [], kid: true },
+  { id: 'breadsticks',  name: 'Breadsticks',  icon: 'sticks', cookSec: 75, allergens: ['gluten'], kid: true },
 ];
 
 const PORTIONS = [
-  { id: 'kid',     name: 'Kid Size', factor: 0.6, extraSec: 0,  price: 7.5,  kid: true },
-  { id: 'regular', name: 'Regular',  factor: 1.0, extraSec: 0,  price: 12.5, kid: true },
-  { id: 'large',   name: 'Large',    factor: 1.4, extraSec: 45, price: 16.0, kid: false },
+  { id: 'kid',     name: 'Kid Size', factor: 0.6, extraSec: 0,  kid: true },
+  { id: 'regular', name: 'Regular',  factor: 1.0, extraSec: 0, kid: true },
+  { id: 'large',   name: 'Large',    factor: 1.4, extraSec: 45, kid: false },
 ];
 
 const SPICE_LEVELS = [
@@ -89,6 +93,20 @@ const GROUPS = {
   toppings: TOPPINGS, sides: SIDES, portions: PORTIONS,
 };
 
+/**
+ * A bowl's sauces, always as an array.
+ *
+ * Bowls used to carry a single `sauce` string. Orders already on the rail when
+ * a new build deploys still look like that, so every read goes through here
+ * rather than assuming the new shape and blowing up the kitchen display
+ * mid-service.
+ */
+export function saucesOf(line) {
+  if (Array.isArray(line.sauces)) return line.sauces;
+  if (line.sauce) return [line.sauce];
+  return [];
+}
+
 /** Look up one ingredient in a group. Returns null rather than throwing. */
 function find(group, id) {
   const list = GROUPS[group];
@@ -96,37 +114,38 @@ function find(group, id) {
   return list.find((x) => x.id === id) || null;
 }
 
+/**
+ * Find an ingredient by id without knowing its group. Used to turn a list of
+ * 86'd ids back into names a guest can read.
+ */
+export function findAnywhere(id) {
+  for (const group of Object.keys(GROUPS)) {
+    const hit = find(group, id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /** Every allergen implied by a built bowl, de-duplicated. */
 function allergensFor(line) {
   const out = new Set();
   const add = (item) => { if (item) (item.allergens || []).forEach((a) => out.add(a)); };
   add(find('pastas', line.pasta));
-  add(find('sauces', line.sauce));
+  saucesOf(line).forEach((id) => add(find('sauces', id)));
   add(find('proteins', line.protein));
   (line.toppings || []).forEach((t) => add(find('toppings', t)));
   (line.sides || []).forEach((s) => add(find('sides', s)));
   return [...out];
 }
 
-/** Menu price for one bowl, in whole currency units. */
-function priceFor(line) {
-  const portion = find('portions', line.portion) || find('portions', 'regular');
-  let total = portion.price;
-  const protein = find('proteins', line.protein);
-  if (protein) total += protein.price;
-  (line.toppings || []).forEach((t) => { const x = find('toppings', t); if (x) total += x.price; });
-  (line.sides || []).forEach((s) => { const x = find('sides', s); if (x) total += x.price; });
-  return Math.round(total * 100) / 100;
-}
-
 /** Human one-liner used on chits and review screens. */
 function describe(line) {
   const parts = [];
   const pasta = find('pastas', line.pasta);
-  const sauce = find('sauces', line.sauce);
+  const sauces = saucesOf(line).map((id) => find('sauces', id)).filter(Boolean);
   const protein = find('proteins', line.protein);
   if (pasta) parts.push(pasta.name);
-  if (sauce) parts.push('w/ ' + sauce.name);
+  if (sauces.length) parts.push('w/ ' + sauces.map((x) => x.name).join(' + '));
   if (protein && protein.id !== 'none') parts.push('+ ' + protein.name);
   return parts.join(' ');
 }
@@ -135,7 +154,12 @@ function describe(line) {
 function validateLine(line, limits) {
   const errors = [];
   if (!find('pastas', line.pasta)) errors.push('Pick a pasta shape.');
-  if (!find('sauces', line.sauce)) errors.push('Pick a sauce.');
+  const sauces = saucesOf(line);
+  if (sauces.length === 0) errors.push('Pick at least one sauce.');
+  if (sauces.some((id) => !find('sauces', id))) errors.push('That sauce is not on the menu.');
+  if (limits.maxSaucesPerBowl && sauces.length > limits.maxSaucesPerBowl) {
+    errors.push('Up to ' + limits.maxSaucesPerBowl + ' sauces per bowl.');
+  }
   if (line.protein && !find('proteins', line.protein)) errors.push('That protein is not on the menu.');
   if (!find('portions', line.portion)) errors.push('Pick a portion size.');
   const toppings = line.toppings || [];
@@ -154,7 +178,7 @@ function validateLine(line, limits) {
 
 export {
   ALLERGENS, PASTAS, SAUCES, PROTEINS, TOPPINGS, SIDES, PORTIONS, SPICE_LEVELS,
-  find, allergensFor, priceFor, describe, validateLine,
+  find, allergensFor, describe, validateLine,
 };
 
 /** The whole menu in one object, for screens that render every group. */

@@ -1,5 +1,5 @@
 /**
- * PastaPronto service worker.
+ * PastaPresto service worker.
  *
  * Network-first with a cache fallback, deliberately: a venue that just deployed
  * a menu change must see it on the next load, and cache-first would serve them
@@ -9,7 +9,7 @@
  * Only same-origin GETs are touched. Firestore traffic is left alone - it has
  * its own IndexedDB persistence and its own retry logic.
  */
-const CACHE = 'pastapronto-v1';
+const CACHE = 'pastapresto-v1';
 
 const SHELL = [
   './',

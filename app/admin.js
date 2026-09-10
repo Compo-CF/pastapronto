@@ -13,7 +13,7 @@ import * as seed from './seed.js';
 import { art } from './art.js';
 import * as QR from './qr.js';
 import {
-  html, raw, mmss, money, escapeHtml, remember, recall, toast, requireStaff,
+  html, raw, mmss, escapeHtml, remember, recall, toast, requireStaff,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
@@ -21,7 +21,7 @@ const CATALOG = menu.catalog();
 (function () {
   'use strict';
 
-  var state = { base: '', orders: [] };
+  var state = { base: '', orders: [], unavailable: [] };
 
   var el = {
     statgrid: document.getElementById('statgrid'),
@@ -50,7 +50,6 @@ const CATALOG = menu.catalog();
       { label: 'On time', value: onTime == null ? '--' : onTime + '%',
         note: 'within ' + config.sla.cookLateFactor + 'x estimate',
         good: onTime != null && onTime >= 90, bad: onTime != null && onTime < 75 },
-      { label: 'Revenue', value: money(m.revenue), note: 'member charges' },
     ];
 
     el.statgrid.innerHTML = cards.map(function (c) {
@@ -104,7 +103,7 @@ const CATALOG = menu.catalog();
         return '';
       }
       return html`<div class="tent">
-        <div class="tent-brand">Pasta<em>Pronto!</em></div>
+        <div class="tent-brand">Pasta<em>Presto!</em></div>
         <div class="tent-where">${tag.label}</div>
         ${raw(svg)}
         <div class="tent-how">Point your phone camera at the code to build your own pasta bowl.
@@ -129,12 +128,26 @@ const CATALOG = menu.catalog();
     }).join(' ');
   }
 
+    /**
+   * The 86 switch. Named after the line-cook shorthand for "we are out of it".
+   * Living in the menu table means a manager toggles an ingredient in the same
+   * place they read its cook time, rather than hunting a separate screen.
+   */
+  function eightySixToggle(item) {
+    var off = state.unavailable.indexOf(item.id) !== -1;
+    return '<button class="eighty-six' + (off ? ' is-off' : '') + '" type="button"' +
+      ' data-act="toggle86" data-id="' + escapeHtml(item.id) + '"' +
+      ' aria-pressed="' + (off ? 'true' : 'false') + '"' +
+      ' title="' + (off ? 'Put back on the menu' : '86 this - hide it from guests') + '">' +
+      (off ? '86' : 'on') + '</button>';
+  }
+
   function menuTable(caption, items, secField, secLabel) {
     return html`<table class="mtable">
       <caption>${caption}</caption>
       <thead><tr>
         <th>Item</th><th>Allergens</th>
-        <th class="num">${secLabel}</th><th class="num">Price</th><th>Kid menu</th>
+        <th class="num">${secLabel}</th><th>Kid menu</th><th class="num">86</th>
       </tr></thead>
       <tbody>
         ${items.map(function (i) {
@@ -142,12 +155,32 @@ const CATALOG = menu.catalog();
             <td>${i.name}</td>
             <td class="allerg">${allergenCodes(i)}</td>
             <td class="num">${i[secField] != null ? mmss(i[secField]) : '-'}</td>
-            <td class="num">${i.price ? money(i.price) : '-'}</td>
             <td>${i.kid ? 'yes' : ''}</td>
+            <td class="num">${raw(eightySixToggle(i))}</td>
           </tr>`;
         })}
       </tbody>
     </table>`;
+  }
+
+  function render86Summary() {
+    var el86 = document.getElementById('summary86');
+    if (!el86) return;
+    if (!state.unavailable.length) {
+      el86.className = 'notice';
+      el86.style.background = '#f4ece0';
+      el86.style.color = '#6b6058';
+      el86.textContent = 'Everything is on. Use the 86 column below to take an ingredient off the menu.';
+      return;
+    }
+    var names = state.unavailable.map(function (id) {
+      var item = menu.findAnywhere(id);
+      return item ? item.name : id;
+    });
+    el86.className = 'notice notice-warn';
+    el86.style.background = '';
+    el86.style.color = '';
+    el86.textContent = '86 right now (' + names.length + '): ' + names.join(', ');
   }
 
   function renderMenu() {
@@ -167,6 +200,27 @@ const CATALOG = menu.catalog();
   }
 
   // -------------------------------------------------------------------- events
+
+  /**
+   * 86 switches are rendered inside the menu tables, which are rebuilt whenever
+   * the list changes, so the handler is delegated rather than bound per button.
+   */
+  document.addEventListener('click', async function (e) {
+    var btn = e.target.closest('[data-act="toggle86"]');
+    if (!btn) return;
+    e.preventDefault();
+    var id = btn.dataset.id;
+    var next = state.unavailable.indexOf(id) === -1
+      ? state.unavailable.concat([id])
+      : state.unavailable.filter(function (x) { return x !== id; });
+    var item = menu.findAnywhere(id);
+    try {
+      await db.setUnavailable(next);
+      toast((item ? item.name : id) + (next.indexOf(id) !== -1 ? ' is 86 - guests will see it sold out' : ' is back on the menu'));
+    } catch (err) {
+      toast('Could not update the 86 list: ' + err.message, true);
+    }
+  });
 
   document.getElementById('regenBtn').addEventListener('click', function () {
     state.base = el.baseUrl.value.trim();
@@ -232,6 +286,14 @@ const CATALOG = menu.catalog();
     }
 
     await db.ready();
+
+    // The 86 list is shared state: another manager (or the cook) toggling
+    // something shows up here without a refresh.
+    db.watchAvailability(function (list) {
+      state.unavailable = list;
+      renderMenu();
+      render86Summary();
+    });
 
     // The manager screen watches the same live feed as the kitchen, so the
     // numbers move as service happens.

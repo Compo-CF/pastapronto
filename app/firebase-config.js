@@ -1,5 +1,5 @@
 /**
- * Firebase web config for PastaPronto.
+ * Firebase web config for PastaPresto.
  *
  * These values are NOT secret - Firebase web config is designed to ship to the
  * browser, and every visitor can read it. What protects your data is

@@ -10,13 +10,13 @@
  *            a compact review, for adults and staff taking an order
  */
 import { config, tagById, isOpen } from './config.js';
-import { catalog as menuCatalog, priceFor as menuPriceFor } from './menu.js';
+import { catalog as menuCatalog, saucesOf } from './menu.js';
 import * as cooktime from './cooktime.js';
 import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
 import {
-  html, raw, money, humanMins, escapeHtml,
+  html, raw, humanMins, escapeHtml,
   remember, recall, chime, unlockAudio, toast, now,
 } from './ui.js';
 
@@ -25,7 +25,7 @@ import {
 
   var BUILD_STEPS = [
     { id: 'pasta', label: 'Pasta', group: 'pastas', title: 'Pick your pasta', sub: 'Tap the shape you want.' },
-    { id: 'sauce', label: 'Sauce', group: 'sauces', title: 'Now the sauce', sub: 'One sauce per bowl.' },
+    { id: 'sauces', label: 'Sauce', group: 'sauces', title: 'Now the sauce', sub: '', multi: true },
     { id: 'protein', label: 'Protein', group: 'proteins', title: 'Add a protein?', sub: 'Or skip it - totally fine.' },
     { id: 'toppings', label: 'Toppings', group: 'toppings', title: 'Toppings!', sub: '' },
     { id: 'finish', label: 'Size', group: 'portions', title: 'How big?', sub: '' },
@@ -51,6 +51,7 @@ import {
     buildStep: 0,
     showAll: false,
     avoid: [],
+    unavailable: [],
     orderNotes: '',
     order: null,
     busy: false,
@@ -77,7 +78,7 @@ import {
   function newBowl(index) {
     return {
       guestLabel: 'Guest ' + (index + 1),
-      pasta: null, sauce: null, protein: 'none',
+      pasta: null, sauces: [], protein: 'none',
       toppings: [], sides: [], portion: null,
       spice: 'mild', notes: '',
     };
@@ -88,7 +89,7 @@ import {
   }
 
   function bowlComplete(bowl) {
-    return Boolean(bowl && bowl.pasta && bowl.sauce && bowl.portion);
+    return Boolean(bowl && bowl.pasta && bowl.sauces.length > 0 && bowl.portion);
   }
 
   function allBowlsComplete() {
@@ -134,16 +135,19 @@ import {
    * disabled with the reason printed on the tile - never silently hidden.
    */
   function tile(entry, opts) {
+    var soldOut = state.unavailable.indexOf(entry.id) !== -1;
     var clash = conflicts(entry);
-    var blocked = clash.length > 0;
+    var blocked = soldOut || clash.length > 0;
+    // Never silently hide a choice. A child who wants shrimp should see that
+    // shrimp exists and is sold out, not wonder where it went.
+    var reason = soldOut
+      ? 'sold out'
+      : (clash.length ? 'has ' + clash.map(allergenName).join(', ') : '');
     var meta = [];
     if (state.mode === 'pro') {
-      if (entry.price) meta.push('+' + money(entry.price).replace('$', '$'));
       if (entry.boilSec) meta.push(Math.round(entry.boilSec / 60) + ' min');
       if (entry.glutenFree) meta.push('GF');
       if (entry.spicy) meta.push('spicy');
-    } else if (entry.price) {
-      meta.push('+' + money(entry.price));
     }
 
     return html`<button class="tile ${opts.multi ? 'is-multi' : ''} ${blocked ? 'is-blocked' : ''}"
@@ -154,7 +158,7 @@ import {
       <span class="tile-art">${raw(art(entry.shape || entry.icon || 'none'))}</span>
       <span class="tile-label">${entry.name}</span>
       ${raw(meta.length && !blocked ? '<span class="tile-meta">' + escapeHtml(meta.join(' \u00b7 ')) + '</span>' : '')}
-      ${raw(blocked ? '<span class="tile-warn" id="clash-' + entry.id + '">has ' + escapeHtml(clash.map(allergenName).join(', ')) + '</span>' : '')}
+      ${raw(reason ? '<span class="tile-warn" id="clash-' + entry.id + '">' + escapeHtml(reason) + '</span>' : '')}
     </button>`;
   }
 
@@ -322,7 +326,9 @@ import {
     var body;
     if (step.id === 'toppings') body = buildToppings(bowl);
     else if (step.id === 'finish') body = buildFinish(bowl);
-    else {
+    else if (step.id === 'sauces') {
+      body = tileGrid('sauces', { act: 'toggleSauce', value: bowl.sauces, multi: true });
+    } else {
       body = tileGrid(step.group, {
         act: 'pick', value: bowl[step.id], multi: false,
       });
@@ -330,6 +336,11 @@ import {
 
     var sub = step.sub;
     if (step.id === 'toppings') sub = 'Pick up to ' + state.boot.limits.maxToppingsPerBowl + '. Or none at all.';
+    if (step.id === 'sauces') {
+      sub = bowl.sauces.length > 1
+        ? 'Mixing ' + bowl.sauces.length + ' sauces - tap Next when you are happy.'
+        : 'Pick one, or tap two to mix them.';
+    }
 
     return html`
       <div class="bowltabs">${tabs}</div>
@@ -386,7 +397,7 @@ import {
     return html`${raw(portions)}${raw(extras)}`;
   }
 
-  var estimate = { queueDepth: 0, cookEstimateSec: 0, promiseSec: 0, subtotal: 0 };
+  var estimate = { queueDepth: 0, cookEstimateSec: 0, promiseSec: 0 };
 
   function screenReview() {
     var bowls = state.bowls.map(function (bowl, i) {
@@ -414,8 +425,7 @@ import {
           <div class="bowl-extras">${extras.filter(Boolean).join(' \u00b7 ')}</div>
         </div>
         <div style="text-align:right">
-          <div class="bowl-price">${money(bowlPrice(bowl))}</div>
-          <button class="btn btn-ghost" style="min-height:40px;padding:0 14px;font-size:14px;margin-top:8px"
+          <button class="btn btn-ghost" style="min-height:40px;padding:0 14px;font-size:14px"
             type="button" data-act="editBowl" data-id="${i}">Change</button>
         </div>
       </div>`;
@@ -460,9 +470,8 @@ import {
           <div class="summary-line"><span>Bowls</span><span>${state.bowls.length}</span></div>
           <div class="summary-line"><span>Guests</span><span>${state.guestCount}</span></div>
           <div class="summary-line"><span>Where</span><span>${state.boot.tag ? state.boot.tag.label : 'Takeout'}</span></div>
-          <div class="summary-line"><span>Cook time</span><span>${humanMins(estimate.cookEstimateSec)}</span></div>
-          <div class="summary-total"><span>Total</span><span>${money(estimate.subtotal)}</span></div>
-          <p class="muted" style="margin:0;font-size:14px">Charged to ${state.boot.venue.memberLabel.toLowerCase()} ${state.memberDigits}</p>
+          <div class="summary-total"><span>Cook time</span><span>${humanMins(estimate.cookEstimateSec)}</span></div>
+          <p class="muted" style="margin:0;font-size:14px">On ${state.boot.venue.memberLabel.toLowerCase()} ${state.memberDigits}</p>
         </div>
         ${raw(notesField)}
       </div>`;
@@ -470,30 +479,19 @@ import {
 
   function dishText(bowl) {
     var pasta = item('pastas', bowl.pasta);
-    var sauce = item('sauces', bowl.sauce);
+    var sauces = saucesOf(bowl).map(function (id) { return item('sauces', id); }).filter(Boolean);
     var protein = item('proteins', bowl.protein);
     var parts = [];
     if (pasta) parts.push(pasta.name);
-    if (sauce) parts.push('w/ ' + sauce.name);
+    if (sauces.length) parts.push('w/ ' + sauces.map(function (x) { return x.name; }).join(' + '));
     if (protein && protein.id !== 'none') parts.push('+ ' + protein.name);
     return parts.join(' ');
   }
 
-  function bowlPrice(bowl) {
-    var total = 0;
-    var portion = item('portions', bowl.portion);
-    if (portion) total += portion.price;
-    var protein = item('proteins', bowl.protein);
-    if (protein) total += protein.price;
-    bowl.toppings.forEach(function (t) { var x = item('toppings', t); if (x) total += x.price; });
-    bowl.sides.forEach(function (s) { var x = item('sides', s); if (x) total += x.price; });
-    return total;
-  }
-
   /**
-   * Price and time the order. This used to be a server round trip; the model
-   * lives in cooktime.js so it now runs on the device, and the only thing we
-   * still need from Firestore is how deep the queue is right now.
+   * Time the order. This used to be a server round trip; the model lives in
+   * cooktime.js so it now runs on the device, and the only thing we still need
+   * from Firestore is how deep the queue is right now.
    */
   async function refreshEstimate() {
     var depth = 0;
@@ -509,7 +507,6 @@ import {
       queueDepth: depth,
       cookEstimateSec: cooktime.orderCookSec(state.bowls),
       promiseSec: cooktime.promiseSec(state.bowls, depth),
-      subtotal: state.bowls.reduce(function (a, b) { return a + menuPriceFor(b); }, 0),
     };
   }
 
@@ -585,7 +582,7 @@ import {
         <div class="card">
           <div class="summary-line"><span>Table</span><span>${order.tagLabel}</span></div>
           <div class="summary-line"><span>Guests</span><span>${order.guestCount}</span></div>
-          <div class="summary-total"><span>Total</span><span>${money(order.totalPrice)}</span></div>
+          <div class="summary-line"><span>Bowls</span><span>${order.lines.length}</span></div>
         </div>
       </div>`;
   }
@@ -613,7 +610,10 @@ import {
     } else if (s === 'build') {
       var bowl = currentBowl();
       var step = BUILD_STEPS[state.buildStep];
-      var chosen = step.id === 'toppings' ? true : step.id === 'finish' ? Boolean(bowl.portion) : Boolean(bowl[step.id]);
+      var chosen = step.id === 'toppings' ? true
+        : step.id === 'finish' ? Boolean(bowl.portion)
+        : step.id === 'sauces' ? bowl.sauces.length > 0
+        : Boolean(bowl[step.id]);
       var lastStep = state.buildStep === BUILD_STEPS.length - 1;
       var lastBowl = state.activeBowl === state.bowls.length - 1;
       var label = !lastStep ? 'Next' : lastBowl ? 'Review order' : 'Next bowl';
@@ -667,7 +667,7 @@ import {
     if (!opts.keepScroll) window.scrollTo(0, 0);
   }
 
-  var GROUP_FIELD = { pastas: 'pasta', sauces: 'sauce', proteins: 'protein', portions: 'portion' };
+  var GROUP_FIELD = { pastas: 'pasta', proteins: 'protein', portions: 'portion' };
 
   /** Move forward through steps, then bowls, then to review. */
   function advance() {
@@ -768,6 +768,22 @@ import {
       state.showAll = false;
       // Tapping a choice moves you on - fewer buttons for a child to hunt for.
       advance();
+    },
+
+    toggleSauce: function (el) {
+      var bowl = currentBowl();
+      var id = el.dataset.id;
+      var i = bowl.sauces.indexOf(id);
+      if (i !== -1) {
+        bowl.sauces.splice(i, 1);
+      } else if (bowl.sauces.length >= state.boot.limits.maxSaucesPerBowl) {
+        toast('Up to ' + state.boot.limits.maxSaucesPerBowl + ' sauces in one bowl. Tap one to swap it.');
+        return;
+      } else {
+        bowl.sauces.push(id);
+      }
+      state.showAll = false;
+      render({ keepScroll: true });
     },
 
     toggleTopping: function (el) {
@@ -974,6 +990,7 @@ import {
       venue: config.venue,
       limits: {
         maxGuests: config.order.maxGuests,
+        maxSaucesPerBowl: config.order.maxSaucesPerBowl,
         maxToppingsPerBowl: config.order.maxToppingsPerBowl,
         maxSidesPerBowl: config.order.maxSidesPerBowl,
       },
@@ -1001,6 +1018,14 @@ import {
       toast('We cannot reach the kitchen right now - ask your server.', true);
       return;
     }
+
+    // Live 86 list. If the kitchen runs out of shrimp while a guest is mid-build
+    // the tile greys out under them, and submitOrder re-checks anyway.
+    db.watchAvailability(function (list) {
+      var was = state.unavailable.join(',');
+      state.unavailable = list;
+      if (was !== list.join(',') && state.screen === 'build') render({ keepScroll: true });
+    });
 
     if (state.boot.tagUnknown) {
       toast('That table code is not one of ours - a server can sort it out.', true);

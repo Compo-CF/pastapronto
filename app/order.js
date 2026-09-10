@@ -66,8 +66,14 @@ export function allowedActions(order, sla, now = Date.now()) {
     .map(([action]) => action);
 }
 
-/** Validate a guest draft. Returns plain-English problems, safe to display. */
-export function validateDraft(draft, cfg) {
+/**
+ * Validate a guest draft. Returns plain-English problems, safe to display.
+ *
+ * `unavailable` is the list of 86'd ingredient ids. It is checked here rather
+ * than only in the UI so an order cannot slip through from a stale tab that
+ * still shows something the kitchen has run out of.
+ */
+export function validateDraft(draft, cfg, unavailable = []) {
   const errors = [];
   const memberNumber = String(draft.memberNumber || '').trim();
   if (!cfg.order.memberNumberPattern.test(memberNumber)) {
@@ -83,6 +89,21 @@ export function validateDraft(draft, cfg) {
   if (lines.length === 0) errors.push('Add at least one bowl to the order.');
   lines.forEach((line, i) => {
     menu.validateLine(line, cfg.order).forEach((e) => errors.push(`Bowl ${i + 1}: ${e}`));
+
+    if (unavailable.length) {
+      const chosen = [
+        line.pasta,
+        ...menu.saucesOf(line),
+        line.protein,
+        ...(line.toppings || []),
+        ...(line.sides || []),
+      ].filter(Boolean);
+      const gone = [...new Set(chosen.filter((id) => unavailable.includes(id)))];
+      gone.forEach((id) => {
+        const item = menu.findAnywhere(id);
+        errors.push(`Bowl ${i + 1}: ${item ? item.name : id} just sold out - please pick something else.`);
+      });
+    }
   });
 
   return errors;
@@ -91,10 +112,10 @@ export function validateDraft(draft, cfg) {
 /**
  * Turn a validated draft into a complete order document.
  *
- * Derived fields (allergens, cook seconds, prices, dish text, estimates) are
- * computed here rather than trusted from whatever the form posted, so a
- * tampered client cannot invent a price or a cook time that the kitchen and
- * the metrics then believe.
+ * Derived fields (allergens, cook seconds, dish text, estimates) are computed
+ * here rather than trusted from whatever the form posted, so a tampered client
+ * cannot invent a cook time that the kitchen and the metrics then believe.
+ * Nothing is priced - charges post against the member number elsewhere.
  *
  * @param {object} draft     guest input
  * @param {object} ctx       { ticketNo, claimCode, station, queueDepth, tag, serviceDate, now }
@@ -106,7 +127,7 @@ export function buildOrder(draft, ctx) {
     lineId: 'ln' + String(i + 1).padStart(2, '0'),
     guestLabel: String(line.guestLabel || `Guest ${i + 1}`).slice(0, 24),
     pasta: line.pasta,
-    sauce: line.sauce,
+    sauces: menu.saucesOf(line),
     protein: line.protein || 'none',
     toppings: line.toppings || [],
     sides: line.sides || [],
@@ -115,7 +136,6 @@ export function buildOrder(draft, ctx) {
     notes: String(line.notes || '').slice(0, 140),
     allergens: menu.allergensFor(line),
     cookSec: cooktime.bowlCookSec(line),
-    price: menu.priceFor(line),
     dish: menu.describe(line),
   }));
 
@@ -157,7 +177,6 @@ export function buildOrder(draft, ctx) {
     cookEstimateSec,
     promiseSec: promise,
     promisedReadyAt: new Date((ctx.now || new Date()).getTime() + promise * 1000).toISOString(),
-    totalPrice: Math.round(lines.reduce((a, l) => a + l.price, 0) * 100) / 100,
 
     events: [{ at: nowIso, action: 'submit', from: null, to: STATUS.QUEUED, actor: 'guest', note: '' }],
   };
@@ -225,11 +244,11 @@ export function publicView(order) {
     cookEstimateSec: order.cookEstimateSec,
     promiseSec: order.promiseSec,
     promisedReadyAt: order.promisedReadyAt,
-    totalPrice: order.totalPrice,
     lines: (order.lines || []).map((l) => ({
       lineId: l.lineId, guestLabel: l.guestLabel, dish: l.dish,
+      sauces: menu.saucesOf(l),
       toppings: l.toppings, sides: l.sides, portion: l.portion,
-      spice: l.spice, notes: l.notes, price: l.price,
+      spice: l.spice, notes: l.notes,
     })),
   };
 }
@@ -280,7 +299,6 @@ export function metrics(orders, sla) {
     },
     covers: alive.reduce((a, o) => a + o.guestCount, 0),
     bowls: alive.reduce((a, o) => a + o.lines.length, 0),
-    revenue: Math.round(alive.reduce((a, o) => a + o.totalPrice, 0) * 100) / 100,
     timings: {
       avgQueueSec: average(queueWaits),
       avgCookSec: average(cookTimes),

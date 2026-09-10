@@ -1,4 +1,4 @@
-# PastaPronto!
+# PastaPresto!
 
 QR-to-kitchen pasta ordering. A guest scans the code on their table, builds a
 bowl per person from a limited ingredient set, and it lands as a chit on the
@@ -12,14 +12,19 @@ can read cook-time SLAs off the same data.
 [tasteoffjudging.com](https://tasteoffjudging.com): the four screens are plain
 HTML/CSS/ES modules, and everything live goes through Firestore.
 
-## Screens
+**Live:** <https://pastapresto.web.app>
 
-| Screen | File | Who uses it |
+| Screen | URL | Who uses it |
 | --- | --- | --- |
-| Guest order | `index.html?t=table-12` | the guest, from a QR scan |
-| Kitchen chit rail | `kitchen.html` | the cook |
-| Expo / runner board | `expo.html` | expo and runners |
-| Manager + QR codes | `admin.html` | manager |
+| Guest order | [`/?t=table-12`](https://pastapresto.web.app/?t=table-12) | the guest, from a QR scan |
+| Kitchen chit rail | [`/kitchen.html`](https://pastapresto.web.app/kitchen.html) | the cook |
+| Expo / runner board | [`/expo.html`](https://pastapresto.web.app/expo.html) | expo and runners |
+| Manager, QR codes, 86 list | [`/admin.html`](https://pastapresto.web.app/admin.html) | manager |
+
+The older `pastapronto-260909.web.app` host still serves the same build, so any
+table tent printed before the rename keeps working. The Firebase **project id**
+cannot be renamed, which is why it still reads `pastapronto`; likewise the
+GitHub repo name is unchanged on purpose.
 
 The kitchen, expo and manager screens sit behind a staff passcode
 (`config.kitchen.staffPasscode`, default `2468`). That is a convenience lock,
@@ -52,6 +57,26 @@ Two things it cannot do for you, both one click in the console:
 
 Finally open `admin.html` and press **Seed demo orders** to fill the rail and
 the member directory.
+
+## Running out of something (86)
+
+The manager screen's menu tables carry an **86** switch per ingredient ("86" is
+the line-cook shorthand for "we are out of it"). Flipping one writes to
+`config/availability`, which every guest phone and the kitchen rail watch:
+
+- the tile greys out on every guest's phone within a moment, captioned **sold
+  out** - disabled but still visible, so a child can see *why* the thing they
+  wanted is unavailable rather than wondering where it went
+- the kitchen footer shows the current 86 list
+- an order is re-checked at submit, so a phone that has been sitting on the
+  review screen cannot slip through an ingredient that ran out meanwhile
+
+## A note on money
+
+There is none. Nothing in the app is priced - charges post against the member
+number through the club's own system. The guest sees a cook time where a total
+would normally go, and the manager screen reports covers and timings rather
+than revenue.
 
 ## Run it locally
 

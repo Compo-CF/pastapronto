@@ -71,7 +71,7 @@ answers "how long has this been *my* problem":
       "lineId": "ln01",
       "guestLabel": "Ada",           // free text, or "Guest 1"
       "pasta": "shells",
-      "sauce": "marinara",
+      "sauces": ["marinara", "alfredo"],   // 1..maxSaucesPerBowl
       "protein": "meatballs",        // "none" is a real value, not null
       "toppings": ["parmesan", "broccoli"],
       "sides": [],
@@ -79,9 +79,8 @@ answers "how long has this been *my* problem":
       "spice": "mild",               // mild | medium | hot
       "notes": "sauce on the side",
       "allergens": ["gluten", "dairy", "egg"],   // derived
-      "cookSec": 630,                             // derived
-      "price": 9.0,                               // derived
-      "dish": "Shells w/ Marinara + Meatballs"    // derived, for chits
+      "cookSec": 430,                             // derived
+      "dish": "Shells w/ Marinara + Alfredo + Meatballs"  // derived, for chits
     }
   ],
 
@@ -89,10 +88,9 @@ answers "how long has this been *my* problem":
   "avoidAllergens": ["shellfish"],               // what the guest asked to avoid
   "notes": "birthday - candle please",
 
-  "cookEstimateSec": 1130,          // from ACCEPT; what the kitchen SLA grades
-  "promiseSec": 1355,               // what the guest was told (adds queue drag)
-  "promisedReadyAt": "2026-09-09T21:06:53.902Z",
-  "totalPrice": 33.5,
+  "cookEstimateSec": 630,           // from ACCEPT; what the kitchen SLA grades
+  "promiseSec": 855,                // what the guest was told (adds queue drag)
+  "promisedReadyAt": "2026-09-10T21:06:53.902Z",
 
   "events": [                       // append-only audit trail
     { "at": "...", "action": "submit", "from": null,     "to": "queued",  "actor": "guest",      "note": "" },
@@ -101,9 +99,17 @@ answers "how long has this been *my* problem":
 }
 ```
 
-Derived fields (`allergens`, `cookSec`, `price`, `dish`, `allergenFlags`,
-`cookEstimateSec`, `promiseSec`, `totalPrice`) are computed server-side at
-submit. The client never gets to assert a price or a cook time.
+Derived fields (`allergens`, `cookSec`, `dish`, `allergenFlags`,
+`cookEstimateSec`, `promiseSec`) are recomputed from the ingredient ids in
+`order.buildOrder()`. The client never gets to assert a cook time.
+
+**Nothing is priced.** Charges post against the member number through the
+club's own system; the app quotes cook time instead of money, and no price
+field exists on an order or in the metrics.
+
+Bowls used to carry a single `sauce` string. `menu.saucesOf(line)` normalises
+both shapes, so orders already on the rail when a new build deploys keep
+rendering.
 
 ## Cook-time model
 
@@ -132,16 +138,23 @@ batchPenaltySec  120
 platePerBowlSec  20
 ```
 
-One bowl of rigatoni bolognese comes out at 12:50; six of them at 16:30, not
-the 75:00 a naive sum would predict. Full curve for that bowl:
+Boil times are for **parcooked** pasta - blanched ahead and held, so these are
+finish-to-order times, not from-dry. That is why spaghetti is 4:00 and not 8:00.
+
+A bowl may carry up to `maxSaucesPerBowl` (3) sauces. They share the pan, so
+the cost is the slowest sauce plus `extraSaucePenaltySec` (20s) for each extra
+one - not the sum, which would badly over-quote a half-and-half bowl.
+
+One bowl of rigatoni bolognese comes out at 7:20; six of them at 11:00, not the
+42:00 a naive sum would predict. Full curve for that bowl:
 
 | Bowls | Estimate | Naive sum |
 | --- | --- | --- |
-| 1 | 12:50 | 12:30 |
-| 3 | 13:30 | 37:30 |
-| 4 | 15:50 | 50:00 |
-| 6 | 16:30 | 75:00 |
-| 8 | 19:10 | 100:00 |
+| 1 | 7:20 | 7:00 |
+| 3 | 8:00 | 21:00 |
+| 4 | 10:20 | 28:00 |
+| 6 | 11:00 | 42:00 |
+| 8 | 13:40 | 56:00 |
 
 The jump at four bowls is the second pan load. `scripts/selftest.js` asserts
 this stays sub-linear.
@@ -176,7 +189,21 @@ Allergen ids: `gluten`, `dairy`, `egg`, `tree_nuts`, `shellfish`, `pork`, `soy`.
 orders/{orderId}          one document per order - the whole chit
 counters/{serviceDate}    { lastTicket, serviceDate } - allocates ticket numbers
 members/{memberNumber}    { name, tier, dietaryNotes, defaultGuests }
+config/availability       { unavailable: [ingredientId] } - the 86 list
 ```
+
+### The 86 list
+
+`config/availability` holds the ids the kitchen has run out of ("86" is the
+line-cook shorthand). The manager screen writes it; every guest phone and the
+kitchen rail watch it, so toggling shrimp off greys the tile out everywhere
+within a moment.
+
+An 86'd choice is shown **disabled and captioned "sold out"**, never hidden - a
+child who wants shrimp should see that shrimp exists and is out, not wonder
+where it went. `order.validateDraft()` re-checks the list at submit, so a phone
+that has had the review screen open for ten minutes cannot slip an order past
+for something that ran out meanwhile.
 
 Two extra fields exist on the stored document that the pure model does not
 produce:

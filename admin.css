@@ -69,3 +69,29 @@
   .tent-url { font-family: var(--mono); font-size: 9pt; color: #888; }
   .tent-fold { width: 100%; border-top: 1px dashed #bbb; margin-top: 8mm; }
 }
+
+/* --------------------------------------------------------------- 86 switch
+   "86" is line-cook shorthand for "we are out of it". The switch sits in the
+   menu table so a manager toggles an ingredient in the same place they read
+   its cook time. */
+
+.eighty-six {
+  min-width: 46px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--basil);
+}
+.eighty-six:hover { border-color: var(--basil); }
+.eighty-six.is-off {
+  border-color: var(--tomato);
+  background: var(--tomato-wash);
+  color: var(--tomato-dark);
+}
+.eighty-six.is-off:hover { border-color: var(--tomato-dark); }

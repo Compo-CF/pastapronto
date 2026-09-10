@@ -32,8 +32,8 @@ const draft = () => ({
   memberStatus: 'verified',
   guestCount: 2,
   lines: [
-    { guestLabel: 'Ada', pasta: 'shells', sauce: 'butter', protein: 'none', toppings: ['parmesan'], sides: [], portion: 'kid', spice: 'mild' },
-    { guestLabel: 'Sam', pasta: 'penne', sauce: 'arrabbiata', protein: 'chicken', toppings: ['mushrooms', 'chili'], sides: ['garlic_bread'], portion: 'regular', spice: 'hot' },
+    { guestLabel: 'Ada', pasta: 'shells', sauces: ['butter'], protein: 'none', toppings: ['parmesan'], sides: [], portion: 'kid', spice: 'mild' },
+    { guestLabel: 'Sam', pasta: 'penne', sauces: ['arrabbiata', 'marinara'], protein: 'chicken', toppings: ['mushrooms', 'chili'], sides: ['garlic_bread'], portion: 'regular', spice: 'hot' },
   ],
 });
 
@@ -51,13 +51,13 @@ const make = (d = draft(), ctx = {}) => ({
   }),
 });
 
-console.log('\nPastaPronto self-test\n');
+console.log('\nPastaPresto self-test\n');
 
 test('draft validation accepts a good order', () => {
   assert.deepStrictEqual(order.validateDraft(draft(), config), []);
 });
 
-test('buildOrder derives allergens, prices, estimate and audit entry', () => {
+test('buildOrder derives allergens, cook time and audit entry', () => {
   const o = make();
   assert.strictEqual(o.status, STATUS.QUEUED);
   assert.strictEqual(o.lines.length, 2);
@@ -65,27 +65,82 @@ test('buildOrder derives allergens, prices, estimate and audit entry', () => {
   assert.ok(o.allergenFlags.includes('gluten'), 'gluten from penne');
   assert.ok(o.allergenFlags.includes('dairy'), 'dairy from butter');
   assert.strictEqual(o.tagLabel, 'Table 12');
-  assert.ok(o.totalPrice > 0);
   assert.strictEqual(o.events.length, 1);
-  assert.strictEqual(o.lines[1].dish, 'Penne w/ Arrabbiata + Grilled Chicken');
+  assert.strictEqual(o.lines[1].dish, 'Penne w/ Arrabbiata + Marinara + Grilled Chicken');
+  assert.ok(!('totalPrice' in o), 'nothing is priced');
+  assert.ok(!('price' in o.lines[0]), 'no per-bowl price either');
 });
 
 test('derived fields ignore anything the client tried to assert', () => {
   const tampered = draft();
-  tampered.totalPrice = 0.01;
   tampered.cookEstimateSec = 1;
-  tampered.lines[0].price = 0.01;
+  tampered.lines[0].cookSec = 1;
+  tampered.lines[0].dish = 'Free Lobster';
   const o = make(tampered);
-  assert.ok(o.totalPrice > 1, 'price recomputed, not trusted');
   assert.ok(o.cookEstimateSec > 100, 'estimate recomputed, not trusted');
-  assert.ok(o.lines[0].price > 1, 'line price recomputed');
+  assert.ok(o.lines[0].cookSec > 100, 'line cook time recomputed');
+  assert.ok(!/Lobster/.test(o.lines[0].dish), 'dish text recomputed from the ids');
 });
 
 test('validation rejects a bowl with no sauce', () => {
   const bad = draft();
-  delete bad.lines[0].sauce;
+  bad.lines[0].sauces = [];
   const errors = order.validateDraft(bad, config);
   assert.ok(errors.some((e) => /sauce/i.test(e)), 'error mentions sauce');
+});
+
+test('a bowl can carry more than one sauce, up to the cap', () => {
+  const two = draft();
+  two.lines[0].sauces = ['marinara', 'alfredo'];
+  assert.deepStrictEqual(order.validateDraft(two, config), []);
+  const built = make(two);
+  assert.deepStrictEqual(built.lines[0].sauces, ['marinara', 'alfredo']);
+  assert.strictEqual(built.lines[0].dish, 'Shells w/ Marinara + Alfredo');
+  // Allergens union across every sauce chosen.
+  assert.ok(built.lines[0].allergens.includes('dairy'), 'alfredo brings dairy');
+
+  const tooMany = draft();
+  tooMany.lines[0].sauces = ['marinara', 'alfredo', 'pesto', 'butter'];
+  assert.ok(order.validateDraft(tooMany, config).some((e) => /Up to 3 sauces/.test(e)));
+});
+
+test('two sauces cost the slowest plus a handling penalty, not the sum', () => {
+  const one = { pasta: 'penne', sauces: ['marinara'], protein: 'none', toppings: [], sides: [], portion: 'regular' };
+  const two = { ...one, sauces: ['marinara', 'alfredo'] };
+  const marinara = menu.find('sauces', 'marinara').finishSec;
+  const alfredo = menu.find('sauces', 'alfredo').finishSec;
+  const delta = cooktime.bowlCookSec(two) - cooktime.bowlCookSec(one);
+  assert.strictEqual(delta, (alfredo - marinara) + cooktime.MODEL.extraSaucePenaltySec);
+  assert.ok(cooktime.bowlCookSec(two) < cooktime.bowlCookSec(one) + alfredo, 'not a naive sum');
+});
+
+test('a legacy single-sauce bowl still reads correctly', () => {
+  // Orders already on the rail when this build deployed carry `sauce`, not
+  // `sauces`. The kitchen display must not break on them mid-service.
+  const legacy = { pasta: 'penne', sauce: 'pesto', protein: 'none', toppings: [], sides: [], portion: 'regular' };
+  assert.deepStrictEqual(menu.saucesOf(legacy), ['pesto']);
+  assert.strictEqual(menu.describe(legacy), 'Penne w/ Basil Pesto');
+  assert.ok(menu.allergensFor(legacy).includes('tree_nuts'), 'pesto allergens still found');
+  assert.ok(cooktime.bowlCookSec(legacy) > 0);
+});
+
+test('86 ingredients are refused at submit, by name', () => {
+  const d = draft();
+  assert.deepStrictEqual(order.validateDraft(d, config, []), [], 'nothing 86 = fine');
+  const errors = order.validateDraft(d, config, ['chicken', 'butter']);
+  assert.ok(errors.some((e) => /Grilled Chicken just sold out/.test(e)), 'names the protein');
+  assert.ok(errors.some((e) => /Just Butter just sold out/.test(e)), 'names the sauce');
+  // An 86'd item nobody chose must not raise anything.
+  assert.deepStrictEqual(order.validateDraft(d, config, ['shrimp', 'olives']), []);
+});
+
+test('parcooked boil times are half the from-dry figures', () => {
+  // These are finish-to-order times for pasta already blanched and held.
+  const expected = { spaghetti: 240, penne: 300, rigatoni: 330, fettuccine: 210,
+    farfalle: 270, shells: 300, tortellini: 120, fusilli_gf: 270 };
+  Object.entries(expected).forEach(([id, sec]) => {
+    assert.strictEqual(menu.find('pastas', id).boilSec, sec, id + ' boil time');
+  });
 });
 
 test('validation rejects too many toppings', () => {
@@ -175,7 +230,7 @@ test('publicView hides staff and audit detail from the guest', () => {
   const o = order.applyTransition(make(), 'accept', { actor: 'cook:marco', sla });
   const pub = order.publicView(o);
   assert.strictEqual(pub.ticketNo, o.ticketNo);
-  ['acceptedBy', 'station', 'events', 'memberNumber', 'memberTier'].forEach((f) => {
+  ['acceptedBy', 'station', 'events', 'memberNumber', 'memberTier', 'totalPrice'].forEach((f) => {
     assert.ok(!(f in pub), f + ' must not reach the guest');
   });
 });
@@ -223,7 +278,7 @@ test('metrics roll up a finished day', () => {
   assert.strictEqual(m.counts.delivered, 5);
   assert.strictEqual(m.covers, 10);
   assert.strictEqual(m.bowls, 10);
-  assert.ok(m.revenue > 0);
+  assert.ok(!('revenue' in m), 'metrics carry no money');
   assert.strictEqual(m.timings.avgQueueSec, 45);
   assert.strictEqual(m.timings.avgRunnerSec, 30);
   assert.strictEqual(m.onTimePct, 100, 'cooked exactly to estimate counts as on time');

@@ -40,7 +40,7 @@ const appsRaw = firebase(['apps:list', 'WEB', '--project', projectId, '--json'])
 const apps = JSON.parse(appsRaw);
 const list = apps.result || [];
 if (!list.length) {
-  console.error('No WEB app found in ' + projectId + '. Run: firebase apps:create WEB "PastaPronto Web" --project ' + projectId);
+  console.error('No WEB app found in ' + projectId + '. Run: firebase apps:create WEB "PastaPresto Web" --project ' + projectId);
   process.exit(1);
 }
 const appId = list[0].appId;
@@ -58,7 +58,7 @@ if (missing.length) {
 }
 
 const body = `/**
- * Firebase web config for PastaPronto.
+ * Firebase web config for PastaPresto.
  *
  * These values are NOT secret - Firebase web config is designed to ship to the
  * browser, and every visitor can read it. What protects your data is

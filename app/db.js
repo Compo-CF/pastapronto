@@ -13,6 +13,7 @@
  *   orders/{orderId}         one document per order, the whole chit
  *   counters/{serviceDate}   { lastTicket } - allocates human ticket numbers
  *   members/{memberNumber}   { name, tier, dietaryNotes, defaultGuests }
+ *   config/availability      { unavailable: [ingredientId] } - the 86 list
  *
  * Every screen listens to "today's orders" with a single-field query and does
  * its own filtering and sorting in memory. A service day is tens to a few
@@ -64,6 +65,7 @@ if (
 }
 
 const ordersCol = collection(db, 'orders');
+const availabilityRef = doc(db, 'config', 'availability');
 
 /** Resolves once we have an anonymous identity, which the rules require. */
 let readyPromise = null;
@@ -89,6 +91,56 @@ function toOrder(snap) {
     noteClockSkew(data.submittedAt, data.submittedAtServer.toDate());
   }
   return { id: snap.id, ...data };
+}
+
+// -------------------------------------------------------------- 86 list
+
+/**
+ * Live feed of what the kitchen has run out of ("86'd", from the line-cook
+ * shorthand). One document, watched by every screen, so a manager toggling
+ * shrimp off greys it out on every guest's phone within a moment.
+ *
+ * @param {(unavailable: string[]) => void} cb
+ * @returns {() => void} unsubscribe
+ */
+export function watchAvailability(cb, { onError } = {}) {
+  return onSnapshot(
+    availabilityRef,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      cb(data && Array.isArray(data.unavailable) ? data.unavailable : []);
+    },
+    (err) => {
+      console.error('[db] watchAvailability failed:', err.code, err.message);
+      // Failing open is the right call: a screen that cannot read the 86 list
+      // should still take orders, and validateDraft re-checks on submit.
+      cb([]);
+      if (onError) onError(err);
+    },
+  );
+}
+
+/** Replace the 86 list. Manager screen only. */
+export async function setUnavailable(ids) {
+  await ready();
+  await setDoc(availabilityRef, {
+    unavailable: [...new Set(ids)],
+    updatedAt: serverTimestamp(),
+    updatedBy: uid(),
+  }, { merge: true });
+  return ids.length;
+}
+
+/** One read of the 86 list, for the submit-time re-check. */
+export async function getUnavailable() {
+  await ready();
+  try {
+    const snap = await getDoc(availabilityRef);
+    const data = snap.exists() ? snap.data() : null;
+    return data && Array.isArray(data.unavailable) ? data.unavailable : [];
+  } catch {
+    return [];
+  }
 }
 
 // ------------------------------------------------------------------- members
@@ -153,7 +205,10 @@ export async function lookupMember(raw) {
 export async function submitOrder(draft, { tagId, queueDepth = 0 } = {}) {
   await ready();
 
-  const errors = order.validateDraft(draft, config);
+  // Re-check the 86 list at submit. A phone that has had the review screen open
+  // for ten minutes may be offering something the kitchen has since run out of.
+  const unavailable = await getUnavailable();
+  const errors = order.validateDraft(draft, config, unavailable);
   if (errors.length) {
     throw Object.assign(new Error('Order failed validation'), { code: 'VALIDATION', errors });
   }

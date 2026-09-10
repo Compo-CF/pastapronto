@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// PastaPronto Firestore security rules.
+// PastaPresto Firestore security rules.
 //
 // POSTURE (same shape as the tasteoff app, with tighter write validation):
 // every screen signs in anonymously on load, so requiring an auth token blocks
@@ -10,16 +10,18 @@ rules_version = '2';
 //
 // WHAT THIS DOES PROTECT:
 //   - unauthenticated traffic cannot touch anything
-//   - an order's contents, price and ticket number are immutable after it is
-//     created, so a client can advance a chit but cannot rewrite the food or
-//     the amount charged
+//   - an order's contents and ticket number are immutable after it is created,
+//     so a client can advance a chit but cannot rewrite the food afterwards
 //   - new orders must arrive in the 'queued' state with a sane shape
 //   - the audit trail can only grow
 //
 // WHAT IT DOES NOT:
-//   - rules cannot re-run the cook-time or pricing model, so a hand-crafted
-//     client could create an order whose price disagrees with its contents
-//   - any signed-in client can read the whole day's rail
+//   - rules cannot re-run the cook-time model, so a hand-crafted client could
+//     create an order whose stated cook time disagrees with its contents
+//   - rules cannot tell a manager from a guest, so any signed-in client can
+//     read the whole day's rail and edit the 86 list
+//   - nothing here is priced; charges post against the member number through
+//     the club's own system, which this app never touches
 // Closing both of those properly means moving writes behind Cloud Functions
 // and adding Firebase App Check, which needs the Blaze plan. See README.md.
 
@@ -34,6 +36,14 @@ service cloud.firestore {
     match /members/{memberNumber} {
       allow read: if signedIn();
       allow write: if signedIn();
+    }
+
+    // Shared service configuration - currently just the 86 list.
+    match /config/{docId} {
+      allow read: if signedIn();
+      allow write: if signedIn()
+        && request.resource.data.unavailable is list
+        && request.resource.data.unavailable.size() <= 100;
     }
 
     // Ticket-number allocation, one document per service date.
@@ -60,7 +70,6 @@ service cloud.firestore {
           && d.memberNumber.size() >= 4 && d.memberNumber.size() <= 6
           && d.guestCount is int && d.guestCount >= 1 && d.guestCount <= 8
           && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 8
-          && d.totalPrice is number && d.totalPrice >= 0
           && d.cookEstimateSec is int && d.cookEstimateSec > 0
           && d.events is list && d.events.size() == 1;
       }
@@ -76,7 +85,6 @@ service cloud.firestore {
           && after.memberNumber == before.memberNumber
           && after.guestCount == before.guestCount
           && after.lines == before.lines
-          && after.totalPrice == before.totalPrice
           && after.cookEstimateSec == before.cookEstimateSec
           && after.submittedAt == before.submittedAt
           && after.tag == before.tag;

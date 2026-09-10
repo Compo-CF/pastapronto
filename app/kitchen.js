@@ -53,8 +53,8 @@ const CATALOG = menu.catalog();
     stationFilter: document.getElementById('stationFilter'),
     soundToggle: document.getElementById('soundToggle'),
     soundIcon: document.getElementById('soundIcon'),
-    toast: document.getElementById('toast'),
     heldNote: document.getElementById('heldNote'),
+    eightySix: document.getElementById('eightySix'),
   };
   LANES.forEach(function (lane) {
     el.lanes[lane] = document.getElementById('lane-' + lane);
@@ -407,6 +407,23 @@ const CATALOG = menu.catalog();
     render();
   });
 
+  /**
+   * Read-only view of the 86 list. The manager sets it, but the cook is the
+   * one who needs to see it while reading chits.
+   */
+  function render86(list) {
+    if (!el.eightySix) return;
+    if (!list.length) {
+      el.eightySix.textContent = '';
+      return;
+    }
+    var names = list.map(function (id) {
+      var hit = menu.findAnywhere(id);
+      return hit ? hit.name : id;
+    });
+    el.eightySix.textContent = '86: ' + names.join(', ');
+  }
+
   // ----------------------------------------------------------------- live data
 
   /**
@@ -465,6 +482,8 @@ const CATALOG = menu.catalog();
     await db.ready();
     el.conn.className = 'conn is-live';
     el.conn.textContent = 'live';
+
+    db.watchAvailability(render86);
 
     db.watchToday(onSnapshotOrders, {
       onError: function (err) {

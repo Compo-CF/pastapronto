@@ -1,8 +1,8 @@
 {
-  "name": "pastapronto",
+  "name": "pastapresto",
   "version": "0.1.0",
   "private": true,
-  "description": "PastaPronto! - QR-to-kitchen pasta ordering. Static PWA on GitHub Pages / Firebase Hosting, Firestore backend.",
+  "description": "PastaPresto! - QR-to-kitchen pasta ordering. Static PWA on GitHub Pages / Firebase Hosting, Firestore backend.",
   "scripts": {
     "test": "node scripts/selftest.js && node scripts/qr-verify.js",
     "selftest": "node scripts/selftest.js",
