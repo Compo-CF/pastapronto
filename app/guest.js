@@ -265,7 +265,7 @@ import {
   function screenMember() {
     var digits = state.memberDigits;
     var boxes = [];
-    for (var i = 0; i < config.order.memberNumberLength; i += 1) {
+    for (var i = 0; i < config.order.maxMemberNumberLength; i += 1) {
       boxes.push(html`<span class="${digits[i] ? 'is-filled' : ''}">${digits[i] || ''}</span>`);
     }
     var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'];
@@ -274,7 +274,7 @@ import {
       <div class="step-head">
         <p class="step-kicker">Step 1 of 4</p>
         <h1 class="step-title">What is your ${state.boot.venue.memberLabel.toLowerCase()}?</h1>
-        <p class="step-sub">Four digits, on your card. A grown-up can help.</p>
+        <p class="step-sub">However it reads on your card - up to four digits. A grown-up can help.</p>
       </div>
       <div class="stack">
         <div class="memberview" aria-label="Member number entry">${boxes}</div>
@@ -740,7 +740,8 @@ import {
       // a third thing to read.
       parts = '';
     } else if (s === 'member') {
-      var ready = state.memberDigits.length === config.order.memberNumberLength;
+      // Any length from one digit up is a real member number.
+      var ready = state.memberDigits.length >= 1;
       parts = html`
         <button class="btn btn-ghost" type="button" data-act="go" data-id="welcome">Back</button>
         <button class="btn btn-primary btn-lg grow" type="button" data-act="submitMember"
@@ -866,7 +867,7 @@ import {
       var k = el.dataset.key;
       if (k === 'clear') state.memberDigits = '';
       else if (k === 'back') state.memberDigits = state.memberDigits.slice(0, -1);
-      else if (state.memberDigits.length < config.order.memberNumberLength) state.memberDigits += k;
+      else if (state.memberDigits.length < config.order.maxMemberNumberLength) state.memberDigits += k;
       state.member = null;
       render({ keepScroll: true });
     },
@@ -1144,7 +1145,7 @@ import {
 
   document.addEventListener('keydown', function (e) {
     if (state.screen !== 'member') return;
-    if (/^[0-9]$/.test(e.key) && state.memberDigits.length < config.order.memberNumberLength) {
+    if (/^[0-9]$/.test(e.key) && state.memberDigits.length < config.order.maxMemberNumberLength) {
       state.memberDigits += e.key;
       state.member = null;
       render({ keepScroll: true });
@@ -1152,7 +1153,7 @@ import {
       state.memberDigits = state.memberDigits.slice(0, -1);
       state.member = null;
       render({ keepScroll: true });
-    } else if (e.key === 'Enter' && state.memberDigits.length === config.order.memberNumberLength) {
+    } else if (e.key === 'Enter' && state.memberDigits.length >= 1) {
       actions.submitMember();
     }
   });

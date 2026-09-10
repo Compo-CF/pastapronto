@@ -14,7 +14,8 @@ import * as order from './order.js';
  * Demo member directory - 30 members, seeded into the `members` collection so
  * the guest keypad resolves a number to a name.
  *
- * Numbers are four digits, matching config.order.memberNumberPattern. The ones
+ * Numbers run 1 to 4 digits and are stored canonical - no leading zeros - so a
+ * guest typing 0007, 007, 07 or 7 all reach member 7. The ones
  * the demo orders below reference (2087, 3150, 4421, 5007, 6123) are kept here
  * on purpose so those chits show a name rather than an unverified badge.
  *
@@ -23,11 +24,11 @@ import * as order from './order.js';
  * hungry, and the chit carries the badge for a server to sort out.
  */
 export const MEMBERS = [
-  { memberNumber: '1043', name: 'Hollingsworth', tier: 'gold',   dietaryNotes: '', defaultGuests: 4 },
-  { memberNumber: '1188', name: 'Abernathy',     tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
-  { memberNumber: '1276', name: 'Vasquez',       tier: 'bronze', dietaryNotes: '', defaultGuests: 3 },
+  { memberNumber: '7',    name: 'Hollingsworth', tier: 'gold',   dietaryNotes: '', defaultGuests: 4 },
+  { memberNumber: '42',   name: 'Abernathy',     tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '108',  name: 'Vasquez',       tier: 'bronze', dietaryNotes: '', defaultGuests: 3 },
   { memberNumber: '1352', name: 'Nazarian',      tier: 'gold',   dietaryNotes: 'Tree nut allergy - Leila', defaultGuests: 6 },
-  { memberNumber: '1409', name: 'Kirkpatrick',   tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '250',  name: 'Kirkpatrick',   tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
   { memberNumber: '1567', name: 'Castellanos',   tier: 'gold',   dietaryNotes: '', defaultGuests: 5 },
   { memberNumber: '1631', name: 'Easton',        tier: 'bronze', dietaryNotes: '', defaultGuests: 2 },
   { memberNumber: '1794', name: 'Compofelice',   tier: 'gold',   dietaryNotes: 'Shellfish allergy on file', defaultGuests: 4 },

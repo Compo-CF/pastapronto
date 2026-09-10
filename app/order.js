@@ -67,6 +67,23 @@ export function allowedActions(order, sla, now = Date.now()) {
 }
 
 /**
+ * Canonical form of a member number, or null if it is not one.
+ *
+ * Member numbers are 1 to 4 digits, and a guest types whatever they remember:
+ * "2", "02", "002" and "0002" are all member 2. Leading zeros are stripped so
+ * one member is one row and one document id, however it was entered.
+ *
+ * There is no member zero, so "0", "00" and "0000" are rejected rather than
+ * collapsing onto a member that cannot exist.
+ */
+export function normalizeMemberNumber(raw) {
+  const digits = String(raw == null ? '' : raw).trim();
+  if (!/^[0-9]{1,4}$/.test(digits)) return null;
+  const canonical = digits.replace(/^0+/, '');
+  return canonical === '' ? null : canonical;
+}
+
+/**
  * Validate a guest draft. Returns plain-English problems, safe to display.
  *
  * `unavailable` is the list of 86'd ingredient ids. It is checked here rather
@@ -75,9 +92,8 @@ export function allowedActions(order, sla, now = Date.now()) {
  */
 export function validateDraft(draft, cfg, unavailable = []) {
   const errors = [];
-  const memberNumber = String(draft.memberNumber || '').trim();
-  if (!cfg.order.memberNumberPattern.test(memberNumber)) {
-    errors.push('Member number must be four digits.');
+  if (!normalizeMemberNumber(draft.memberNumber)) {
+    errors.push('Member number must be 1 to 4 digits.');
   }
 
   const guestCount = Number(draft.guestCount);
@@ -173,7 +189,8 @@ export function buildOrder(draft, ctx) {
     claimCode: ctx.claimCode,
     serviceDate: ctx.serviceDate,
 
-    memberNumber: String(draft.memberNumber || '').trim(),
+    // Stored canonical, so 0002 and 2 are one member on the report.
+    memberNumber: normalizeMemberNumber(draft.memberNumber) || '',
     memberName: String(draft.memberName || '').slice(0, 48),
     memberStatus: draft.memberStatus || 'unverified',
     memberTier: draft.memberTier || 'guest',

@@ -640,6 +640,49 @@ test('the member list is sorted by how much they ate', () => {
   assert.ok(rows[0].items > rows[1].items);
 });
 
+test('a member number is the same member however it is typed', () => {
+  // The operator's case: someone enters 2, or 0002, or 002.
+  ['2', '02', '002', '0002'].forEach((typed) => {
+    assert.strictEqual(order.normalizeMemberNumber(typed), '2', typed + ' is member 2');
+  });
+  assert.strictEqual(order.normalizeMemberNumber('0007'), '7');
+  assert.strictEqual(order.normalizeMemberNumber('1794'), '1794');
+  assert.strictEqual(order.normalizeMemberNumber(' 42 '), '42', 'stray spaces forgiven');
+
+  // There is no member zero, so these are not a member rather than member 0.
+  ['0', '00', '000', '0000'].forEach((z) => {
+    assert.strictEqual(order.normalizeMemberNumber(z), null, z + ' is not a member');
+  });
+  // And nothing outside 1-4 digits.
+  ['', '12345', 'abc', '1a', '-1', '1.5'].forEach((bad) => {
+    assert.strictEqual(order.normalizeMemberNumber(bad), null, JSON.stringify(bad));
+  });
+});
+
+test('an order stores the canonical member number, not what was typed', () => {
+  const padded = draft();
+  padded.memberNumber = '0007';
+  assert.deepStrictEqual(order.validateDraft(padded, config), [], '0007 is valid input');
+  assert.strictEqual(make(padded).memberNumber, '7', 'stored canonical');
+
+  // So two guests typing the same member differently are one member on the
+  // report, not two - which is what AYCE billing depends on.
+  const a = make((() => { const d = draft(); d.memberNumber = '7'; return d; })());
+  const b = make((() => { const d = draft(); d.memberNumber = '007'; return d; })());
+  const rows = order.memberRollup([a, b]);
+  assert.strictEqual(rows.length, 1, 'one member, not two');
+  assert.strictEqual(rows[0].memberNumber, '7');
+  assert.strictEqual(rows[0].orders, 2);
+});
+
+test('a member number outside 1-4 digits is refused', () => {
+  const bad = draft();
+  bad.memberNumber = '12345';
+  assert.ok(order.validateDraft(bad, config).some((e) => /1 to 4 digits/.test(e)));
+  bad.memberNumber = '0000';
+  assert.ok(order.validateDraft(bad, config).some((e) => /1 to 4 digits/.test(e)));
+});
+
 test('the directory holds family names, so rows read as a party', () => {
   // Every row is a surname, which is why the greeting is addressed to the
   // party and not to a person. Guard against a first name creeping in.
@@ -654,8 +697,15 @@ test('the demo member directory is usable as a lookup table', () => {
   const nums = seed.MEMBERS.map((m) => m.memberNumber);
 
   assert.strictEqual(seed.MEMBERS.length, 30);
-  // Every number must be enterable on the keypad, or the row is unreachable.
-  nums.forEach((n) => assert.ok(config.order.memberNumberPattern.test(n), n + ' is not four digits'));
+  // Every number must be in canonical form, or the row is unreachable: a guest
+  // typing 7 would look up members/7 and never find members/0007.
+  nums.forEach((n) => assert.ok(config.order.memberNumberPattern.test(n),
+    n + ' is not a canonical 1-4 digit number'));
+  nums.forEach((n) => assert.strictEqual(order.normalizeMemberNumber(n), n,
+    n + ' is already canonical'));
+  // The demo should exercise more than one length.
+  const lengths = new Set(nums.map((n) => n.length));
+  assert.ok(lengths.size >= 3, 'directory spans several number lengths, got ' + [...lengths]);
   assert.strictEqual(new Set(nums).size, nums.length, 'numbers are unique');
   assert.strictEqual(new Set(seed.MEMBERS.map((m) => m.name)).size, 30, 'names are unique');
 

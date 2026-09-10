@@ -197,8 +197,22 @@ This matters more now that there are two lanes, because coming back for the
 other one is the normal case. On a seeded day the naive sum read 41 covers
 against a true 17.
 
-Member numbers are **four digits**, enforced in `config.order.memberNumberPattern`,
-in the guest keypad (four boxes, input stops at four) and in `firestore.rules`.
+### Member numbers
+
+One to four digits, and a guest types whatever they remember - **`2`, `02`,
+`002` and `0002` are all member 2.** `order.normalizeMemberNumber()` strips
+leading zeros, so one member is one row and one document id however it was
+entered, and two guests entering the same member differently are one charge on
+the report rather than two.
+
+There is no member zero, so `0`, `00` and `0000` are refused rather than
+collapsing onto a member that cannot exist. Anything outside 1-4 digits is
+refused too.
+
+Two patterns, on purpose: `memberNumberInputPattern` is what the keypad will
+accept, `memberNumberPattern` is the canonical stored form (`^[1-9][0-9]{0,3}$`).
+`firestore.rules` enforces the canonical one, so a padded number cannot be
+written straight to the database.
 
 ## A note on money
 

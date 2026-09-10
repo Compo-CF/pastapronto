@@ -59,10 +59,13 @@ export const config = {
     maxProteinsPerItem: 3,
     maxSidesPerBowl: 2,
     allowUnverifiedMembers: true,
-    // Member numbers are four digits, always. The keypad shows exactly four
-    // boxes and stops accepting input at four, so there is no "am I done yet".
-    memberNumberLength: 4,
-    memberNumberPattern: /^[0-9]{4}$/,
+    // Member numbers run from 1 to 4 digits. Guests type them however they
+    // remember them - 2, 02, 002 and 0002 are all member 2 - so there are two
+    // patterns: what the keypad will accept, and the canonical form that gets
+    // stored and looked up. order.normalizeMemberNumber() converts between them.
+    maxMemberNumberLength: 4,
+    memberNumberInputPattern: /^[0-9]{1,4}$/,
+    memberNumberPattern: /^[1-9][0-9]{0,3}$/,
   },
 
   // Each printed table tent gets its own tag, so the kitchen knows where the

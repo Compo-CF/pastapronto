@@ -154,10 +154,16 @@ export async function getUnavailable() {
  * flag on the chit.
  */
 export async function lookupMember(raw) {
-  const memberNumber = String(raw || '').trim();
+  // One member is one document id, whatever the guest typed - 0002 and 2 both
+  // read members/2.
+  const memberNumber = order.normalizeMemberNumber(raw);
 
-  if (!config.order.memberNumberPattern.test(memberNumber)) {
-    return { status: 'invalid', memberNumber, message: 'Member numbers are four digits.' };
+  if (!memberNumber) {
+    return {
+      status: 'invalid',
+      memberNumber: String(raw || '').trim(),
+      message: 'Member numbers are 1 to 4 digits.',
+    };
   }
 
   let hit = null;
@@ -179,7 +185,7 @@ export async function lookupMember(raw) {
       defaultGuests: hit.defaultGuests || 2,
       // The directory holds family names, not people, so the greeting is
       // addressed to the party rather than to an individual.
-      message: hit.name ? `Buon Giorno, ${hit.name} Party!` : 'Buon Giorno!',
+      message: hit.name ? `Buonasera, ${hit.name} Party!` : 'Buonasera!',
     };
   }
 

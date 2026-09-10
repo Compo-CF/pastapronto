@@ -17,11 +17,11 @@ the QR came from ("You are at Table 12"). If the code is unknown, an amber
 One button: **Start my order**.
 
 ### member
-Big 6-box display and a 3x4 keypad - no system keyboard, so a child never
+Big keypad display and a 3x4 keypad - no system keyboard, so a child never
 lands in autocorrect. Physical digits and Backspace also work. **Next**
 unlocks at 4 digits.
 
-- verified: green "Buon Giorno, Compofelice Party!" - the directory holds
+- verified: green "Buonasera, Compofelice Party!" - the directory holds
   family names, so the greeting addresses the party - and the guest count pre-fills
   from the member record
 - unverified: amber note that a server will confirm; the order proceeds
