@@ -1046,7 +1046,6 @@ import {
           memberNumber: state.memberDigits,
           memberName: state.member ? state.member.name : '',
           memberStatus: state.member ? state.member.status : 'unverified',
-          memberTier: state.member ? state.member.tier : 'guest',
           guestCount: state.guestCount,
           source: 'qr',
           avoidAllergens: state.avoid,

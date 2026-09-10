@@ -193,7 +193,6 @@ export function buildOrder(draft, ctx) {
     memberNumber: normalizeMemberNumber(draft.memberNumber) || '',
     memberName: String(draft.memberName || '').slice(0, 48),
     memberStatus: draft.memberStatus || 'unverified',
-    memberTier: draft.memberTier || 'guest',
 
     kind,
     guestCount: Number(draft.guestCount),

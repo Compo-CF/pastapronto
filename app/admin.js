@@ -263,10 +263,11 @@ const CATALOG = menu.catalog();
 
   document.getElementById('seedBtn').addEventListener('click', async function () {
     try {
-      await db.seedMembers(seed.MEMBERS);
+      var dir = await db.seedMembers(seed.MEMBERS);
       var built = seed.buildDemoOrders();
       var n = await db.seedOrders(built);
-      toast(n + ' demo chits written to the kitchen rail.');
+      toast(n + ' demo chits written, ' + dir.written + ' members in the directory'
+        + (dir.removed ? ' (' + dir.removed + ' stale removed).' : '.'));
     } catch (err) {
       toast(err.message, true);
     }

@@ -188,7 +188,7 @@ Allergen ids: `gluten`, `dairy`, `egg`, `tree_nuts`, `shellfish`, `pork`, `soy`.
 ```
 orders/{orderId}          one document per order - the whole chit
 counters/{serviceDate}    { lastTicket, serviceDate } - allocates ticket numbers
-members/{memberNumber}    { name, tier, dietaryNotes, defaultGuests }
+members/{memberNumber}    { name, dietaryNotes, defaultGuests }
 config/availability       { unavailable: [ingredientId] } - the 86 list
 ```
 

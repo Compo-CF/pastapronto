@@ -703,9 +703,11 @@ test('the demo member directory is usable as a lookup table', () => {
     n + ' is not a canonical 1-4 digit number'));
   nums.forEach((n) => assert.strictEqual(order.normalizeMemberNumber(n), n,
     n + ' is already canonical'));
-  // The demo should exercise more than one length.
+  // The demo has to exercise every length the keypad accepts, or a 1-digit
+  // member is a path nobody ever walks before a guest walks it.
   const lengths = new Set(nums.map((n) => n.length));
-  assert.ok(lengths.size >= 3, 'directory spans several number lengths, got ' + [...lengths]);
+  assert.deepStrictEqual([...lengths].sort(), [1, 2, 3, 4],
+    'directory spans all four number lengths, got ' + [...lengths].sort());
   assert.strictEqual(new Set(nums).size, nums.length, 'numbers are unique');
   assert.strictEqual(new Set(seed.MEMBERS.map((m) => m.name)).size, 30, 'names are unique');
 
@@ -715,7 +717,6 @@ test('the demo member directory is usable as a lookup table', () => {
 
   seed.MEMBERS.forEach((m) => {
     assert.ok(m.name && m.name.length > 1, 'every row has a name');
-    assert.ok(['gold', 'silver', 'bronze'].includes(m.tier), m.name + ' tier');
     assert.ok(Number.isInteger(m.defaultGuests) && m.defaultGuests >= 1
       && m.defaultGuests <= config.order.maxGuests, m.name + ' default guests');
   });
@@ -728,6 +729,19 @@ test('the demo member directory is usable as a lookup table', () => {
   assert.deepStrictEqual(missing, ['7890'],
     'only 7890 should be absent - it is what exercises the unverified path, got '
     + JSON.stringify(missing));
+});
+
+test('every short member in the directory is reachable zero-padded', () => {
+  // A guest reads 42 off their card and types it into four boxes as 0042. The
+  // short members are the whole point of the mixed list, so each one has to
+  // survive that on the way to a document id.
+  const short = seed.MEMBERS.filter((m) => m.memberNumber.length < 4);
+  assert.ok(short.length >= 15, 'plenty of short numbers to exercise, got ' + short.length);
+  short.forEach((m) => {
+    const padded = m.memberNumber.padStart(4, '0');
+    assert.strictEqual(order.normalizeMemberNumber(padded), m.memberNumber,
+      padded + ' reaches ' + m.name);
+  });
 });
 
 test('menu catalog exposes every group the screens render', () => {

@@ -12,7 +12,7 @@
  * Firestore layout
  *   orders/{orderId}         one document per order, the whole chit
  *   counters/{serviceDate}   { lastTicket } - allocates human ticket numbers
- *   members/{memberNumber}   { name, tier, dietaryNotes, defaultGuests }
+ *   members/{memberNumber}   { name, dietaryNotes, defaultGuests }
  *   config/availability      { unavailable: [ingredientId] } - the 86 list
  *
  * Every screen listens to "today's orders" with a single-field query and does
@@ -180,7 +180,6 @@ export async function lookupMember(raw) {
       status: 'verified',
       memberNumber,
       name: hit.name || '',
-      tier: hit.tier || 'member',
       dietaryNotes: hit.dietaryNotes || '',
       defaultGuests: hit.defaultGuests || 2,
       // The directory holds family names, not people, so the greeting is
@@ -197,7 +196,6 @@ export async function lookupMember(raw) {
     status: 'unverified',
     memberNumber,
     name: '',
-    tier: 'guest',
     dietaryNotes: '',
     defaultGuests: 2,
     message: 'We will pass this to your server to confirm.',
@@ -334,15 +332,17 @@ export async function getOrder(orderId) {
 }
 
 /**
- * One read of a service day.
+ * One read of a query, from the first snapshot a listener delivers.
  *
- * Uses the first snapshot from a listener rather than getDocs(). Observed on a
- * live project: getDocs() on this query stalled indefinitely while the
- * identical query delivered 13 documents through onSnapshot in 3ms. Listeners
- * are the transport that reliably works, so everything reads through them, and
- * a timeout means a stall degrades to an empty result instead of a hang.
+ * Uses a listener rather than getDocs(). Observed on a live project: getDocs()
+ * stalled indefinitely while the identical query delivered 13 documents
+ * through onSnapshot in 3ms. Listeners are the transport that reliably works,
+ * so everything reads through them, and a timeout means a stall degrades to an
+ * empty result instead of a hang.
+ *
+ * @returns {Promise<object[]>} the snapshot's docs
  */
-export function getDay(date = serviceDate()) {
+function firstSnapshot(q, { timeoutMs = 8000 } = {}) {
   return new Promise((resolve, reject) => {
     let unsub = null;
     let done = false;
@@ -358,28 +358,52 @@ export function getDay(date = serviceDate()) {
       fn(value);
     };
 
-    timer = setTimeout(() => finish(resolve, []), 8000);
+    timer = setTimeout(() => finish(resolve, []), timeoutMs);
 
     unsub = onSnapshot(
-      query(ordersCol, where('serviceDate', '==', date)),
-      (snap) => finish(resolve, snap.docs.map(toOrder)),
+      q,
+      (snap) => finish(resolve, snap.docs),
       (err) => finish(reject, err),
     );
   });
 }
 
+/** One read of a service day. */
+export async function getDay(date = serviceDate()) {
+  const docs = await firstSnapshot(query(ordersCol, where('serviceDate', '==', date)));
+  return docs.map(toOrder);
+}
+
 // --------------------------------------------------------------- admin tools
 
-/** Seed the member directory. Idempotent - safe to run repeatedly. */
+/**
+ * Replace the member directory with this list. Idempotent - safe to run
+ * repeatedly.
+ *
+ * It deletes rows that are no longer in the list, not just writes the ones
+ * that are. Otherwise renumbering a member leaves the old number resolving to
+ * the same name forever, and a manager typing a stale number gets a party
+ * that is not on the roster.
+ *
+ * @returns {Promise<{written: number, removed: number}>}
+ */
 export async function seedMembers(members) {
   await ready();
-  await Promise.all(members.map((m) => setDoc(doc(db, 'members', m.memberNumber), {
-    name: m.name,
-    tier: m.tier,
-    dietaryNotes: m.dietaryNotes || '',
-    defaultGuests: m.defaultGuests || 2,
-  })));
-  return members.length;
+  const keep = new Set(members.map((m) => m.memberNumber));
+
+  const existing = await firstSnapshot(query(collection(db, 'members')));
+  const stale = existing.map((d) => d.id).filter((id) => !keep.has(id));
+
+  await Promise.all([
+    ...members.map((m) => setDoc(doc(db, 'members', m.memberNumber), {
+      name: m.name,
+      dietaryNotes: m.dietaryNotes || '',
+      defaultGuests: m.defaultGuests || 2,
+    })),
+    ...stale.map((id) => deleteDoc(doc(db, 'members', id))),
+  ]);
+
+  return { written: members.length, removed: stale.length };
 }
 
 /**
