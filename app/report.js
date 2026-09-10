@@ -151,8 +151,8 @@ function menuMix(r) {
       ['Sides', r.mix.pasta.sides], ['Portions', r.mix.pasta.portions],
     ]],
     ['Pizza station', 'pizza', [
-      ['Sauces', r.mix.pizza.sauces], ['Toppings', r.mix.pizza.toppings],
-      ['Finishers', r.mix.pizza.finishers],
+      ['Sauces', r.mix.pizza.sauces], ['Proteins', r.mix.pizza.proteins],
+      ['Toppings', r.mix.pizza.toppings], ['Finishers', r.mix.pizza.finishers],
     ]],
   ];
 

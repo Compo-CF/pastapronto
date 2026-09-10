@@ -49,7 +49,6 @@ const SAUCES = [
 ];
 
 const PROTEINS = [
-  { id: 'none',      name: 'No Protein',      icon: 'none',     addSec: 0,   allergens: [], kid: true },
   { id: 'chicken',   name: 'Grilled Chicken', icon: 'chicken',  addSec: 60, allergens: [], kid: true },
   { id: 'meatballs', name: 'Meatballs',       icon: 'meatball', addSec: 90, allergens: ['gluten', 'egg'], kid: true },
   { id: 'sausage',   name: 'Italian Sausage', icon: 'sausage',  addSec: 90, allergens: ['pork'], kid: false },
@@ -109,13 +108,19 @@ const PIZZA_SAUCES = [
   { id: 'pz_white',    name: 'White Sauce', icon: 'cream',  allergens: ['dairy'], kid: true },
 ];
 
-const PIZZA_TOPPINGS = [
+// Meats get their own step rather than competing with the vegetables for
+// topping slots - two meats on a pizza is ordinary, and it should not cost
+// half the topping allowance.
+const PIZZA_PROTEINS = [
   { id: 'pepperoni',   name: 'Pepperoni',       icon: 'pepperoni', addSec: 15, allergens: ['pork'], kid: true },
   { id: 'pz_sausage',  name: 'Italian Sausage', icon: 'sausage',   addSec: 20, allergens: ['pork'], kid: false },
   { id: 'pz_meatball', name: 'Meatball',        icon: 'meatball',  addSec: 20, allergens: ['gluten', 'egg'], kid: true },
   { id: 'pz_chicken',  name: 'Grilled Chicken', icon: 'chicken',   addSec: 15, allergens: [], kid: true },
   { id: 'bacon',       name: 'Bacon',           icon: 'bacon',     addSec: 15, allergens: ['pork'], kid: true },
   { id: 'ham',         name: 'Ham',             icon: 'ham',       addSec: 10, allergens: ['pork'], kid: true },
+];
+
+const PIZZA_TOPPINGS = [
   { id: 'extra_mozz',  name: 'Extra Mozzarella',icon: 'mozz',      addSec: 15, allergens: ['dairy'], kid: true },
   { id: 'ricotta',     name: 'Ricotta',         icon: 'cream',     addSec: 15, allergens: ['dairy'], kid: false },
   { id: 'pz_mushroom', name: 'Mushrooms',       icon: 'mushroom',  addSec: 15, allergens: [], kid: false },
@@ -139,7 +144,8 @@ const FINISHERS = [
 const GROUPS = {
   pastas: PASTAS, sauces: SAUCES, proteins: PROTEINS,
   toppings: TOPPINGS, sides: SIDES, portions: PORTIONS,
-  pizzaSauces: PIZZA_SAUCES, pizzaToppings: PIZZA_TOPPINGS, finishers: FINISHERS,
+  pizzaSauces: PIZZA_SAUCES, pizzaProteins: PIZZA_PROTEINS,
+  pizzaToppings: PIZZA_TOPPINGS, finishers: FINISHERS,
 };
 
 /** 'pasta' unless the line says otherwise. Old documents have no kind. */
@@ -149,8 +155,8 @@ export function kindOf(line) {
 
 /** Which group a kind's sauces and toppings come from. */
 export const GROUPS_FOR = {
-  pasta: { sauces: 'sauces', toppings: 'toppings' },
-  pizza: { sauces: 'pizzaSauces', toppings: 'pizzaToppings' },
+  pasta: { sauces: 'sauces', proteins: 'proteins', toppings: 'toppings' },
+  pizza: { sauces: 'pizzaSauces', proteins: 'pizzaProteins', toppings: 'pizzaToppings' },
 };
 
 /**
@@ -164,6 +170,19 @@ export const GROUPS_FOR = {
 export function saucesOf(line) {
   if (Array.isArray(line.sauces)) return line.sauces;
   if (line.sauce) return [line.sauce];
+  return [];
+}
+
+/**
+ * A line's proteins, always as an array.
+ *
+ * Lines used to carry a single `protein` string, with 'none' as a real value.
+ * Multi-select makes an empty array the way to say "no protein", so 'none' is
+ * dropped here for old documents rather than surfacing as a phantom topping.
+ */
+export function proteinsOf(line) {
+  if (Array.isArray(line.proteins)) return line.proteins;
+  if (line.protein && line.protein !== 'none') return [line.protein];
   return [];
 }
 
@@ -198,11 +217,11 @@ export function allergensFor(line) {
     (line.finishers || []).forEach((id) => add(find('finishers', id)));
   } else {
     add(find('pastas', line.pasta));
-    add(find('proteins', line.protein));
     (line.sides || []).forEach((id) => add(find('sides', id)));
   }
 
   saucesOf(line).forEach((id) => add(find(g.sauces, id)));
+  proteinsOf(line).forEach((id) => add(find(g.proteins, id)));
   (line.toppings || []).forEach((id) => add(find(g.toppings, id)));
   return [...out];
 }
@@ -210,24 +229,26 @@ export function allergensFor(line) {
 /** Human one-liner used on chits and review screens. */
 export function describe(line) {
   const g = GROUPS_FOR[kindOf(line)];
-  const sauces = saucesOf(line).map((id) => find(g.sauces, id)).filter(Boolean);
-  const sauceText = sauces.length ? sauces.map((x) => x.name).join(' + ') : '';
+  const name = (group) => (id) => (find(group, id) || {}).name;
+  const sauces = saucesOf(line).map(name(g.sauces)).filter(Boolean);
+  const proteins = proteinsOf(line).map(name(g.proteins)).filter(Boolean);
+  const sauceText = sauces.join(' + ');
 
   if (kindOf(line) === 'pizza') {
     // The crust is a constant, so the sauce leads - that is what a cook reads
-    // first when they pull the ticket.
-    const toppings = (line.toppings || []).map((id) => find('pizzaToppings', id)).filter(Boolean);
+    // first when they pull the ticket. Meats before vegetables after that.
+    const toppings = (line.toppings || []).map(name('pizzaToppings')).filter(Boolean);
+    const on = proteins.concat(toppings);
     const parts = [sauceText ? sauceText + ' Pizza' : 'Pizza'];
-    if (toppings.length) parts.push('w/ ' + toppings.map((x) => x.name).join(', '));
+    if (on.length) parts.push('w/ ' + on.join(', '));
     return parts.join(' ');
   }
 
   const parts = [];
   const pasta = find('pastas', line.pasta);
-  const protein = find('proteins', line.protein);
   if (pasta) parts.push(pasta.name);
   if (sauceText) parts.push('w/ ' + sauceText);
-  if (protein && protein.id !== 'none') parts.push('+ ' + protein.name);
+  if (proteins.length) parts.push('+ ' + proteins.join(', '));
   return parts.join(' ');
 }
 
@@ -242,6 +263,12 @@ export function validateLine(line, limits) {
   if (sauces.some((id) => !find(g.sauces, id))) errors.push('That sauce is not on the menu.');
   if (limits.maxSaucesPerBowl && sauces.length > limits.maxSaucesPerBowl) {
     errors.push('Up to ' + limits.maxSaucesPerBowl + ' sauces each.');
+  }
+
+  const proteins = proteinsOf(line);
+  if (proteins.some((id) => !find(g.proteins, id))) errors.push('That protein is not on the menu.');
+  if (limits.maxProteinsPerItem && proteins.length > limits.maxProteinsPerItem) {
+    errors.push('Up to ' + limits.maxProteinsPerItem + ' proteins each.');
   }
 
   const toppings = line.toppings || [];
@@ -260,7 +287,6 @@ export function validateLine(line, limits) {
   }
 
   if (!find('pastas', line.pasta)) errors.push('Pick a pasta shape.');
-  if (line.protein && !find('proteins', line.protein)) errors.push('That protein is not on the menu.');
   if (!find('portions', line.portion)) errors.push('Pick a portion size.');
   if (toppings.length > limits.maxToppingsPerBowl) {
     errors.push('Up to ' + limits.maxToppingsPerBowl + ' toppings per bowl.');
@@ -276,7 +302,7 @@ export function validateLine(line, limits) {
 
 export {
   ALLERGENS, PASTAS, SAUCES, PROTEINS, TOPPINGS, SIDES, PORTIONS, SPICE_LEVELS,
-  PIZZA_SAUCES, PIZZA_TOPPINGS, FINISHERS,
+  PIZZA_SAUCES, PIZZA_PROTEINS, PIZZA_TOPPINGS, FINISHERS,
   find,
 };
 
@@ -285,7 +311,8 @@ export function catalog() {
   return {
     allergens: ALLERGENS, pastas: PASTAS, sauces: SAUCES, proteins: PROTEINS,
     toppings: TOPPINGS, sides: SIDES, portions: PORTIONS, spice: SPICE_LEVELS,
-    pizzaSauces: PIZZA_SAUCES, pizzaToppings: PIZZA_TOPPINGS, finishers: FINISHERS,
+    pizzaSauces: PIZZA_SAUCES, pizzaProteins: PIZZA_PROTEINS,
+    pizzaToppings: PIZZA_TOPPINGS, finishers: FINISHERS,
     pizzaBase: PIZZA_BASE,
   };
 }

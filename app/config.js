@@ -54,6 +54,9 @@ export const config = {
     // A bowl can be half-and-half, or a three-way. More than this and the
     // pan stops tasting like anything.
     maxSaucesPerBowl: 3,
+    // More than one protein is ordinary - chicken and sausage, pepperoni and
+    // bacon. Past three the pan or the pie stops working.
+    maxProteinsPerItem: 3,
     maxSidesPerBowl: 2,
     allowUnverifiedMembers: true,
     // Member numbers are four digits, always. The keypad shows exactly four

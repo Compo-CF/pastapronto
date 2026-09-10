@@ -69,11 +69,18 @@ from that answer.
 | --- | --- | --- |
 | Stations | `PASTA-1`, `PASTA-2` | `PIZZA-1`, `PIZZA-2` |
 | Equipment | 3 pans per station | 2-deck oven, one 12" pie per deck |
-| Build steps | pasta, sauce, protein, toppings, size | sauce, toppings, finish |
-| Sauces | 8 | marinara, BBQ, white - that is the whole list |
+| Build steps | pasta, sauce, protein, toppings, size | sauce, protein, toppings, finish |
+| Sauces | 8, pick up to 3 | marinara, BBQ, white - pick up to 3 |
+| Proteins | 5, pick up to 3 | 6, pick up to 3 |
 | Size | kid / regular / large | one size, always |
 | Extras | sides, spice level | finishers: parmesan, red pepper flakes, flake salt, oregano |
-| Topping cap | 4 | 5 |
+| Topping cap | 4 | 5 (vegetables and cheese only - meats are proteins) |
+
+Sauces and proteins are both multi-select on both lanes: chicken *and*
+meatballs, pepperoni *and* bacon. Selecting nothing on the protein step is how
+you say "no protein" - there is no "none" tile to contradict a real choice.
+Multiple proteins cost the slowest plus a little handling, not the sum, because
+they share the pan.
 
 **Routing is by kind, and it cannot go wrong**: every station declares the kind
 it cooks, and `order.stationForTicket()` only ever picks from the matching pool.

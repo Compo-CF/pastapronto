@@ -45,6 +45,7 @@ export const MODEL = {
     perToppingSec: 10,
   },
   extraSaucePenaltySec: 20,
+  extraProteinPenaltySec: 15,
   // Rough queue drag used only for the guest-facing promise, not the SLA.
   queueDragPerOrderSec: 45,
   minPromiseSec: 240,
@@ -58,15 +59,19 @@ export function lineCookSec(line) {
   const sauces = menu.saucesOf(line).map((id) => menu.find(g.sauces, id)).filter(Boolean);
 
   if (kind === 'pizza') {
-    const toppings = (line.toppings || []).map((id) => menu.find('pizzaToppings', id)).filter(Boolean);
-    const load = toppings.reduce((a, t) => a + (t.addSec || 0), 0)
-      + toppings.length * MODEL.pizza.perToppingSec;
+    // On a pizza, meats are just more load on the pie - they go on before the
+    // bake like everything else.
+    const on = (line.toppings || []).map((id) => menu.find('pizzaToppings', id))
+      .concat(menu.proteinsOf(line).map((id) => menu.find('pizzaProteins', id)))
+      .filter(Boolean);
+    const load = on.reduce((a, t) => a + (t.addSec || 0), 0)
+      + on.length * MODEL.pizza.perToppingSec;
     // Sauce is spread before the bake, so it does not extend the oven clock.
     return menu.PIZZA_BASE.bakeSec + load;
   }
 
   const pasta = menu.find('pastas', line.pasta);
-  const protein = menu.find('proteins', line.protein);
+  const proteins = menu.proteinsOf(line).map((id) => menu.find('proteins', id)).filter(Boolean);
   const portion = menu.find('portions', line.portion) || menu.find('portions', 'regular');
 
   let sec = 0;
@@ -74,7 +79,11 @@ export function lineCookSec(line) {
   sec += sauces.length
     ? Math.max(...sauces.map((x) => x.finishSec)) + (sauces.length - 1) * MODEL.extraSaucePenaltySec
     : 60;
-  sec += protein ? protein.addSec : 0;
+  // Proteins share the pan, so the cost is the slowest plus a little handling
+  // for each extra - the same shape as sauces, and for the same reason.
+  sec += proteins.length
+    ? Math.max(...proteins.map((x) => x.addSec)) + (proteins.length - 1) * MODEL.extraProteinPenaltySec
+    : 0;
   sec += portion.extraSec;
   sec += (line.toppings || []).reduce((acc, id) => {
     const t = menu.find('toppings', id);

@@ -104,7 +104,7 @@ export function validateDraft(draft, cfg, unavailable = []) {
       const chosen = [
         line.pasta,
         ...menu.saucesOf(line),
-        line.protein,
+        ...menu.proteinsOf(line),
         ...(line.toppings || []),
         ...(line.sides || []),
       ].filter(Boolean);
@@ -141,6 +141,7 @@ export function buildOrder(draft, ctx) {
       guestLabel: String(line.guestLabel || `Guest ${i + 1}`).slice(0, 24),
       kind,
       sauces: menu.saucesOf(line),
+      proteins: menu.proteinsOf(line),
       toppings: line.toppings || [],
       notes: String(line.notes || '').slice(0, 140),
       allergens: menu.allergensFor(line),
@@ -157,7 +158,6 @@ export function buildOrder(draft, ctx) {
     return {
       ...common,
       pasta: line.pasta,
-      protein: line.protein || 'none',
       sides: line.sides || [],
       portion: line.portion,
       spice: line.spice || 'mild',
@@ -275,6 +275,7 @@ export function publicView(order) {
       lineId: l.lineId, guestLabel: l.guestLabel, dish: l.dish,
       kind: menu.kindOf(l),
       sauces: menu.saucesOf(l),
+      proteins: menu.proteinsOf(l),
       toppings: l.toppings, finishers: l.finishers,
       sides: l.sides, portion: l.portion,
       spice: l.spice, notes: l.notes,
@@ -524,13 +525,14 @@ export function shiftReport(orders, sla) {
     pasta: {
       pastas: tally(pastaLines, (l) => [l.pasta]),
       sauces: tally(pastaLines, (l) => menu.saucesOf(l)),
-      proteins: tally(pastaLines, (l) => [l.protein]),
+      proteins: tally(pastaLines, (l) => menu.proteinsOf(l)),
       toppings: tally(pastaLines, (l) => l.toppings || []),
       sides: tally(pastaLines, (l) => l.sides || []),
       portions: tally(pastaLines, (l) => [l.portion]),
     },
     pizza: {
       sauces: tally(pizzaLines, (l) => menu.saucesOf(l)),
+      proteins: tally(pizzaLines, (l) => menu.proteinsOf(l)),
       toppings: tally(pizzaLines, (l) => l.toppings || []),
       finishers: tally(pizzaLines, (l) => l.finishers || []),
     },

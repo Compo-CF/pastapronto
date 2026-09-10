@@ -26,8 +26,8 @@ const DRAFTS = [
     memberNumber: '2087', memberName: 'Nakamura', memberStatus: 'verified', memberTier: 'silver',
     guestCount: 2, tag: 'table-03',
     lines: [
-      { guestLabel: 'Kenji', pasta: 'spaghetti', sauces: ['marinara'], protein: 'meatballs', toppings: ['parmesan', 'basil'], sides: [], portion: 'regular', spice: 'mild' },
-      { guestLabel: 'Yuki', pasta: 'fettuccine', sauces: ['alfredo'], protein: 'chicken', toppings: ['mushrooms'], sides: ['garlic_bread'], portion: 'regular', spice: 'mild' },
+      { guestLabel: 'Kenji', pasta: 'spaghetti', sauces: ['marinara'], proteins: ['meatballs'], toppings: ['parmesan', 'basil'], sides: [], portion: 'regular', spice: 'mild' },
+      { guestLabel: 'Yuki', pasta: 'fettuccine', sauces: ['alfredo'], proteins: ['chicken'], toppings: ['mushrooms'], sides: ['garlic_bread'], portion: 'regular', spice: 'mild' },
     ],
   },
   {
@@ -36,11 +36,11 @@ const DRAFTS = [
     guestCount: 5, tag: 'patio-a', avoidAllergens: ['gluten'],
     notes: 'Sam is celiac - separate water, please',
     lines: [
-      { guestLabel: 'Sam (GF)', pasta: 'fusilli_gf', sauces: ['marinara'], protein: 'chicken', toppings: ['tomatoes'], sides: [], portion: 'regular', spice: 'mild', notes: 'CELIAC - dedicated pot' },
-      { guestLabel: 'Ada', pasta: 'penne', sauces: ['pesto'], protein: 'none', toppings: ['parmesan'], sides: [], portion: 'regular', spice: 'mild' },
-      { guestLabel: 'Chi', pasta: 'rigatoni', sauces: ['bolognese', 'arrabbiata'], protein: 'sausage', toppings: ['chili'], sides: ['breadsticks'], portion: 'large', spice: 'hot' },
-      { guestLabel: 'Tunde', pasta: 'shells', sauces: ['butter_parm'], protein: 'none', toppings: ['broccoli'], sides: [], portion: 'kid', spice: 'mild' },
-      { guestLabel: 'Nia', pasta: 'tortellini', sauces: ['butter'], protein: 'none', toppings: [], sides: [], portion: 'kid', spice: 'mild' },
+      { guestLabel: 'Sam (GF)', pasta: 'fusilli_gf', sauces: ['marinara'], proteins: ['chicken'], toppings: ['tomatoes'], sides: [], portion: 'regular', spice: 'mild', notes: 'CELIAC - dedicated pot' },
+      { guestLabel: 'Ada', pasta: 'penne', sauces: ['pesto'], proteins: [], toppings: ['parmesan'], sides: [], portion: 'regular', spice: 'mild' },
+      { guestLabel: 'Chi', pasta: 'rigatoni', sauces: ['bolognese', 'arrabbiata'], proteins: ['sausage'], toppings: ['chili'], sides: ['breadsticks'], portion: 'large', spice: 'hot' },
+      { guestLabel: 'Tunde', pasta: 'shells', sauces: ['butter_parm'], proteins: [], toppings: ['broccoli'], sides: [], portion: 'kid', spice: 'mild' },
+      { guestLabel: 'Nia', pasta: 'tortellini', sauces: ['butter'], proteins: [], toppings: [], sides: [], portion: 'kid', spice: 'mild' },
     ],
   },
   {
@@ -48,9 +48,9 @@ const DRAFTS = [
     memberNumber: '4421', memberName: 'Delgado', memberStatus: 'verified', memberTier: 'bronze',
     guestCount: 3, tag: 'table-01',
     lines: [
-      { guestLabel: 'Rosa', pasta: 'penne', sauces: ['arrabbiata'], protein: 'shrimp', toppings: ['peppers'], sides: [], portion: 'regular', spice: 'hot' },
-      { guestLabel: 'Mateo', pasta: 'farfalle', sauces: ['marinara', 'alfredo'], protein: 'none', toppings: ['parmesan'], sides: ['side_salad'], portion: 'kid', spice: 'mild' },
-      { guestLabel: 'Luz', pasta: 'spaghetti', sauces: ['aglio_olio'], protein: 'beans', toppings: ['spinach', 'chili'], sides: [], portion: 'regular', spice: 'medium' },
+      { guestLabel: 'Rosa', pasta: 'penne', sauces: ['arrabbiata'], proteins: ['shrimp'], toppings: ['peppers'], sides: [], portion: 'regular', spice: 'hot' },
+      { guestLabel: 'Mateo', pasta: 'farfalle', sauces: ['marinara', 'alfredo'], proteins: [], toppings: ['parmesan'], sides: ['side_salad'], portion: 'kid', spice: 'mild' },
+      { guestLabel: 'Luz', pasta: 'spaghetti', sauces: ['aglio_olio'], proteins: ['beans'], toppings: ['spinach', 'chili'], sides: [], portion: 'regular', spice: 'medium' },
     ],
   },
   {
@@ -59,8 +59,8 @@ const DRAFTS = [
     guestCount: 2, tag: 'cabana-3', avoidAllergens: ['dairy'],
     notes: 'Ana is dairy free',
     lines: [
-      { guestLabel: 'Ana (DF)', pasta: 'spaghetti', sauces: ['marinara'], protein: 'chicken', toppings: ['basil'], sides: [], portion: 'regular', spice: 'mild', notes: 'NO DAIRY - no parm' },
-      { guestLabel: 'Dmitri', pasta: 'rigatoni', sauces: ['bolognese'], protein: 'none', toppings: ['parmesan'], sides: ['garlic_bread'], portion: 'large', spice: 'medium' },
+      { guestLabel: 'Ana (DF)', pasta: 'spaghetti', sauces: ['marinara'], proteins: ['chicken'], toppings: ['basil'], sides: [], portion: 'regular', spice: 'mild', notes: 'NO DAIRY - no parm' },
+      { guestLabel: 'Dmitri', pasta: 'rigatoni', sauces: ['bolognese'], proteins: [], toppings: ['parmesan'], sides: ['garlic_bread'], portion: 'large', spice: 'medium' },
     ],
   },
   {
@@ -68,7 +68,7 @@ const DRAFTS = [
     memberNumber: '5007', memberName: 'Whitfield', memberStatus: 'verified', memberTier: 'silver',
     guestCount: 1, tag: 'pool-bar',
     lines: [
-      { guestLabel: 'Guest 1', pasta: 'tortellini', sauces: ['pesto'], protein: 'none', toppings: ['tomatoes', 'basil'], sides: [], portion: 'regular', spice: 'mild' },
+      { guestLabel: 'Guest 1', pasta: 'tortellini', sauces: ['pesto'], proteins: [], toppings: ['tomatoes', 'basil'], sides: [], portion: 'regular', spice: 'mild' },
     ],
   },
   {
@@ -76,8 +76,8 @@ const DRAFTS = [
     memberNumber: '7890', memberName: '', memberStatus: 'unverified', memberTier: 'guest',
     guestCount: 2, tag: 'takeout',
     lines: [
-      { guestLabel: 'Kid 1', pasta: 'shells', sauces: ['butter'], protein: 'none', toppings: ['parmesan'], sides: ['breadsticks'], portion: 'kid', spice: 'mild' },
-      { guestLabel: 'Kid 2', pasta: 'farfalle', sauces: ['marinara'], protein: 'meatballs', toppings: ['mozzarella'], sides: [], portion: 'kid', spice: 'mild' },
+      { guestLabel: 'Kid 1', pasta: 'shells', sauces: ['butter'], proteins: [], toppings: ['parmesan'], sides: ['breadsticks'], portion: 'kid', spice: 'mild' },
+      { guestLabel: 'Kid 2', pasta: 'farfalle', sauces: ['marinara'], proteins: ['meatballs'], toppings: ['mozzarella'], sides: [], portion: 'kid', spice: 'mild' },
     ],
   },
   {
@@ -85,9 +85,9 @@ const DRAFTS = [
     memberNumber: '2087', memberName: 'Nakamura', memberStatus: 'verified', memberTier: 'silver',
     guestCount: 4, tag: 'table-04',
     lines: [
-      { guestLabel: 'Kenji', kind: 'pizza', sauces: ['pz_marinara'], toppings: ['pepperoni', 'pz_mushroom'], finishers: ['fin_parm', 'fin_oregano'] },
-      { guestLabel: 'Yuki', kind: 'pizza', sauces: ['pz_white'], toppings: ['pz_spinach', 'ricotta'], finishers: ['fin_chili'] },
-      { guestLabel: 'Rin', kind: 'pizza', sauces: ['pz_bbq'], toppings: ['pz_chicken', 'red_onion', 'bacon'], finishers: ['fin_salt'] },
+      { guestLabel: 'Kenji', kind: 'pizza', sauces: ['pz_marinara'], proteins: ['pepperoni'], toppings: ['pz_mushroom'], finishers: ['fin_parm', 'fin_oregano'] },
+      { guestLabel: 'Yuki', kind: 'pizza', sauces: ['pz_white'], proteins: [], toppings: ['pz_spinach', 'ricotta'], finishers: ['fin_chili'] },
+      { guestLabel: 'Rin', kind: 'pizza', sauces: ['pz_bbq'], proteins: ['pz_chicken', 'bacon'], toppings: ['red_onion'], finishers: ['fin_salt'] },
     ],
   },
   {
@@ -96,8 +96,8 @@ const DRAFTS = [
     guestCount: 2, tag: 'patio-a', avoidAllergens: ['pork'],
     notes: 'No pork on either pizza',
     lines: [
-      { guestLabel: 'Rosa', kind: 'pizza', sauces: ['pz_marinara'], toppings: ['pz_pepper', 'pz_olives', 'pz_tomatoes'], finishers: ['fin_oregano'], notes: 'NO PORK' },
-      { guestLabel: 'Mateo', kind: 'pizza', sauces: ['pz_marinara', 'pz_bbq'], toppings: ['pineapple', 'pz_chicken'], finishers: [] },
+      { guestLabel: 'Rosa', kind: 'pizza', sauces: ['pz_marinara'], proteins: [], toppings: ['pz_pepper', 'pz_olives', 'pz_tomatoes'], finishers: ['fin_oregano'], notes: 'NO PORK' },
+      { guestLabel: 'Mateo', kind: 'pizza', sauces: ['pz_marinara', 'pz_bbq'], proteins: ['pz_chicken', 'ham'], toppings: ['pineapple'], finishers: [] },
     ],
   },
   {
@@ -105,7 +105,7 @@ const DRAFTS = [
     memberNumber: '6123', memberName: 'Petrov', memberStatus: 'verified', memberTier: 'gold',
     guestCount: 1, tag: 'pool-bar',
     lines: [
-      { guestLabel: 'Guest 1', kind: 'pizza', sauces: ['pz_white'], toppings: ['extra_mozz', 'jalapeno'], finishers: ['fin_chili', 'fin_salt'] },
+      { guestLabel: 'Guest 1', kind: 'pizza', sauces: ['pz_white'], proteins: ['pz_sausage'], toppings: ['extra_mozz', 'jalapeno'], finishers: ['fin_chili', 'fin_salt'] },
     ],
   },
 ];

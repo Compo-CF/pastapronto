@@ -31,12 +31,13 @@ import {
     pasta: [
       { id: 'pasta', label: 'Pasta', group: 'pastas', title: 'Pick your pasta', sub: 'Tap the shape you want.' },
       { id: 'sauces', label: 'Sauce', group: 'sauces', title: 'Now the sauce', sub: '', multi: true },
-      { id: 'protein', label: 'Protein', group: 'proteins', title: 'Add a protein?', sub: 'Or skip it - totally fine.' },
+      { id: 'proteins', label: 'Protein', group: 'proteins', title: 'Add a protein?', sub: '', multi: true },
       { id: 'toppings', label: 'Toppings', group: 'toppings', title: 'Toppings!', sub: '' },
       { id: 'finish', label: 'Size', group: 'portions', title: 'How big?', sub: '' },
     ],
     pizza: [
       { id: 'sauces', label: 'Sauce', group: 'pizzaSauces', title: 'Pick your sauce', sub: '', multi: true },
+      { id: 'proteins', label: 'Protein', group: 'pizzaProteins', title: 'Add a protein?', sub: '', multi: true },
       { id: 'toppings', label: 'Toppings', group: 'pizzaToppings', title: 'Toppings!', sub: '' },
       { id: 'finishers', label: 'Finish', group: 'finishers', title: 'Anything on top?', sub: 'Added after it comes out of the oven.', multi: true },
     ],
@@ -116,12 +117,13 @@ import {
       guestLabel: 'Guest ' + (index + 1),
       kind: state.kind,
       sauces: [],
+      proteins: [],
       toppings: [],
       notes: '',
     };
     if (state.kind === 'pizza') return Object.assign(base, { finishers: [] });
     return Object.assign(base, {
-      pasta: null, protein: 'none', sides: [], portion: null, spice: 'mild',
+      pasta: null, sides: [], portion: null, spice: 'mild',
     });
   }
 
@@ -385,6 +387,8 @@ import {
         + detailPanel(bowl);
     } else if (step.id === 'sauces') {
       body = tileGrid(step.group, { act: 'toggleSauce', value: bowl.sauces, multi: true });
+    } else if (step.id === 'proteins') {
+      body = tileGrid(step.group, { act: 'toggleProtein', value: bowl.proteins, multi: true });
     } else {
       body = tileGrid(step.group, {
         act: 'pick', value: bowl[step.id], multi: false,
@@ -397,6 +401,11 @@ import {
     }
     if (step.id === 'finishers' && bowl.finishers.length) {
       sub = bowl.finishers.length + ' on top, added after the bake.';
+    }
+    if (step.id === 'proteins') {
+      sub = bowl.proteins.length
+        ? bowl.proteins.length + ' chosen - tap Next when you are happy.'
+        : 'Pick as many as you like, or skip it - totally fine.';
     }
     if (step.id === 'sauces') {
       sub = bowl.sauces.length > 1
@@ -594,25 +603,26 @@ import {
 
   function dishText(bowl) {
     var isPizza = bowl.kind === 'pizza';
-    var sauceGroup = isPizza ? 'pizzaSauces' : 'sauces';
-    var sauces = saucesOf(bowl).map(function (id) { return item(sauceGroup, id); }).filter(Boolean);
-    var sauceText = sauces.map(function (x) { return x.name; }).join(' + ');
+    var nameIn = function (group) {
+      return function (id) { return (item(group, id) || {}).name; };
+    };
+    var sauceText = saucesOf(bowl)
+      .map(nameIn(isPizza ? 'pizzaSauces' : 'sauces')).filter(Boolean).join(' + ');
+    var proteins = (bowl.proteins || [])
+      .map(nameIn(isPizza ? 'pizzaProteins' : 'proteins')).filter(Boolean);
 
     if (isPizza) {
-      var toppings = bowl.toppings.map(function (t) { return item('pizzaToppings', t); }).filter(Boolean);
+      var on = proteins.concat(bowl.toppings.map(nameIn('pizzaToppings')).filter(Boolean));
       var out = [sauceText ? sauceText + ' Pizza' : 'Pizza'];
-      if (toppings.length) {
-        out.push('w/ ' + toppings.map(function (x) { return x.name; }).join(', '));
-      }
+      if (on.length) out.push('w/ ' + on.join(', '));
       return out.join(' ');
     }
 
     var pasta = item('pastas', bowl.pasta);
-    var protein = item('proteins', bowl.protein);
     var parts = [];
     if (pasta) parts.push(pasta.name);
     if (sauceText) parts.push('w/ ' + sauceText);
-    if (protein && protein.id !== 'none') parts.push('+ ' + protein.name);
+    if (proteins.length) parts.push('+ ' + proteins.join(', '));
     return parts.join(' ');
   }
 
@@ -739,7 +749,7 @@ import {
     } else if (s === 'build') {
       var bowl = currentBowl();
       var step = steps()[state.buildStep];
-      var chosen = step.id === 'toppings' ? true
+      var chosen = step.id === 'toppings' || step.id === 'proteins' || step.id === 'finishers' ? true
         : step.id === 'finish' ? Boolean(bowl.portion)
         : step.id === 'sauces' ? bowl.sauces.length > 0
         : Boolean(bowl[step.id]);
@@ -907,6 +917,22 @@ import {
       state.showAll = false;
       // Tapping a choice moves you on - fewer buttons for a child to hunt for.
       advance();
+    },
+
+    toggleProtein: function (el) {
+      var bowl = currentBowl();
+      var id = el.dataset.id;
+      var i = bowl.proteins.indexOf(id);
+      if (i !== -1) {
+        bowl.proteins.splice(i, 1);
+      } else if (bowl.proteins.length >= state.boot.limits.maxProteinsPerItem) {
+        toast('Up to ' + state.boot.limits.maxProteinsPerItem + ' proteins. Tap one to swap it.');
+        return;
+      } else {
+        bowl.proteins.push(id);
+      }
+      state.showAll = false;
+      render({ keepScroll: true });
     },
 
     toggleSauce: function (el) {
@@ -1148,6 +1174,7 @@ import {
       limits: {
         maxGuests: config.order.maxGuests,
         maxSaucesPerBowl: config.order.maxSaucesPerBowl,
+        maxProteinsPerItem: config.order.maxProteinsPerItem,
         maxToppingsPerBowl: config.order.maxToppingsPerBowl,
         maxSidesPerBowl: config.order.maxSidesPerBowl,
         maxToppingsPerPizza: config.order.maxToppingsPerPizza,

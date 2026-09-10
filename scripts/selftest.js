@@ -32,8 +32,8 @@ const draft = () => ({
   memberStatus: 'verified',
   guestCount: 2,
   lines: [
-    { guestLabel: 'Ada', pasta: 'shells', sauces: ['butter'], protein: 'none', toppings: ['parmesan'], sides: [], portion: 'kid', spice: 'mild' },
-    { guestLabel: 'Sam', pasta: 'penne', sauces: ['arrabbiata', 'marinara'], protein: 'chicken', toppings: ['mushrooms', 'chili'], sides: ['garlic_bread'], portion: 'regular', spice: 'hot' },
+    { guestLabel: 'Ada', pasta: 'shells', sauces: ['butter'], proteins: [], toppings: ['parmesan'], sides: [], portion: 'kid', spice: 'mild' },
+    { guestLabel: 'Sam', pasta: 'penne', sauces: ['arrabbiata', 'marinara'], proteins: ['chicken', 'meatballs'], toppings: ['mushrooms', 'chili'], sides: ['garlic_bread'], portion: 'regular', spice: 'hot' },
   ],
 });
 
@@ -66,7 +66,7 @@ test('buildOrder derives allergens, cook time and audit entry', () => {
   assert.ok(o.allergenFlags.includes('dairy'), 'dairy from butter');
   assert.strictEqual(o.tagLabel, 'Table 12');
   assert.strictEqual(o.events.length, 1);
-  assert.strictEqual(o.lines[1].dish, 'Penne w/ Arrabbiata + Marinara + Grilled Chicken');
+  assert.strictEqual(o.lines[1].dish, 'Penne w/ Arrabbiata + Marinara + Grilled Chicken, Meatballs');
   assert.ok(!('totalPrice' in o), 'nothing is priced');
   assert.ok(!('price' in o.lines[0]), 'no per-bowl price either');
 });
@@ -105,13 +105,68 @@ test('a bowl can carry more than one sauce, up to the cap', () => {
 });
 
 test('two sauces cost the slowest plus a handling penalty, not the sum', () => {
-  const one = { pasta: 'penne', sauces: ['marinara'], protein: 'none', toppings: [], sides: [], portion: 'regular' };
+  const one = { pasta: 'penne', sauces: ['marinara'], proteins: [], toppings: [], sides: [], portion: 'regular' };
   const two = { ...one, sauces: ['marinara', 'alfredo'] };
   const marinara = menu.find('sauces', 'marinara').finishSec;
   const alfredo = menu.find('sauces', 'alfredo').finishSec;
   const delta = cooktime.bowlCookSec(two) - cooktime.bowlCookSec(one);
   assert.strictEqual(delta, (alfredo - marinara) + cooktime.MODEL.extraSaucePenaltySec);
   assert.ok(cooktime.bowlCookSec(two) < cooktime.bowlCookSec(one) + alfredo, 'not a naive sum');
+});
+
+test('a bowl or a pizza can carry more than one protein', () => {
+  const L = config.order;
+
+  const bowl = { pasta: 'penne', sauces: ['marinara'], proteins: ['chicken', 'meatballs'], toppings: [], sides: [], portion: 'regular' };
+  assert.deepStrictEqual(menu.validateLine(bowl, L), []);
+  assert.strictEqual(menu.describe(bowl), 'Penne w/ Marinara + Grilled Chicken, Meatballs');
+  // Allergens union across every protein: meatballs bring gluten and egg.
+  assert.ok(menu.allergensFor(bowl).includes('egg'));
+
+  const pie = { kind: 'pizza', sauces: ['pz_bbq'], proteins: ['pepperoni', 'bacon'], toppings: ['red_onion'], finishers: [] };
+  assert.deepStrictEqual(menu.validateLine(pie, L), []);
+  assert.strictEqual(menu.describe(pie), 'BBQ Pizza w/ Pepperoni, Bacon, Red Onion');
+
+  // The cap applies to both lanes.
+  assert.ok(menu.validateLine({ ...bowl, proteins: ['chicken', 'meatballs', 'sausage', 'shrimp'] }, L)
+    .some((e) => /3 proteins each/.test(e)));
+  assert.ok(menu.validateLine({ ...pie, proteins: ['pepperoni', 'bacon', 'ham', 'pz_chicken'] }, L)
+    .some((e) => /3 proteins each/.test(e)));
+
+  // No protein is an empty array, not a 'none' tile.
+  assert.deepStrictEqual(menu.validateLine({ ...bowl, proteins: [] }, L), []);
+  assert.strictEqual(menu.describe({ ...bowl, proteins: [] }), 'Penne w/ Marinara');
+});
+
+test('proteins do not cross between the lanes', () => {
+  const L = config.order;
+  // Pepperoni is a pizza protein; shrimp is a pasta one.
+  assert.ok(menu.validateLine({ pasta: 'penne', sauces: ['marinara'], proteins: ['pepperoni'], portion: 'regular' }, L)
+    .some((e) => /protein is not on the menu/.test(e)));
+  assert.ok(menu.validateLine({ kind: 'pizza', sauces: ['pz_bbq'], proteins: ['shrimp'], toppings: [], finishers: [] }, L)
+    .some((e) => /protein is not on the menu/.test(e)));
+});
+
+test('two proteins cost the slowest plus handling, not the sum', () => {
+  const one = { pasta: 'penne', sauces: ['marinara'], proteins: ['chicken'], toppings: [], sides: [], portion: 'regular' };
+  const two = { ...one, proteins: ['chicken', 'shrimp'] };
+  const chicken = menu.find('proteins', 'chicken').addSec;
+  const shrimp = menu.find('proteins', 'shrimp').addSec;
+  const delta = cooktime.lineCookSec(two) - cooktime.lineCookSec(one);
+  assert.strictEqual(delta, (shrimp - chicken) + cooktime.MODEL.extraProteinPenaltySec);
+  assert.ok(cooktime.lineCookSec(two) < cooktime.lineCookSec(one) + shrimp, 'not a naive sum');
+});
+
+test('a legacy single-protein line still reads correctly', () => {
+  // Orders written before multi-select carry `protein`, sometimes 'none'.
+  const legacy = { pasta: 'penne', sauces: ['marinara'], protein: 'chicken', toppings: [], sides: [], portion: 'regular' };
+  assert.deepStrictEqual(menu.proteinsOf(legacy), ['chicken']);
+  assert.strictEqual(menu.describe(legacy), 'Penne w/ Marinara + Grilled Chicken');
+  assert.ok(cooktime.lineCookSec(legacy) > 0);
+
+  const noneLegacy = { ...legacy, protein: 'none' };
+  assert.deepStrictEqual(menu.proteinsOf(noneLegacy), [], "'none' becomes an empty list");
+  assert.strictEqual(menu.describe(noneLegacy), 'Penne w/ Marinara', 'and never prints as a topping');
 });
 
 test('a legacy single-sauce bowl still reads correctly', () => {
@@ -359,8 +414,8 @@ const pizzaDraft = () => ({
   memberStatus: 'verified',
   guestCount: 2,
   lines: [
-    { guestLabel: 'Ada', kind: 'pizza', sauces: ['pz_bbq'], toppings: ['pz_chicken', 'red_onion', 'bacon'], finishers: ['fin_chili', 'fin_parm'] },
-    { guestLabel: 'Sam', kind: 'pizza', sauces: ['pz_marinara', 'pz_white'], toppings: ['pepperoni'], finishers: [] },
+    { guestLabel: 'Ada', kind: 'pizza', sauces: ['pz_bbq'], proteins: ['pz_chicken', 'bacon'], toppings: ['red_onion'], finishers: ['fin_chili', 'fin_parm'] },
+    { guestLabel: 'Sam', kind: 'pizza', sauces: ['pz_marinara', 'pz_white'], proteins: ['pepperoni'], toppings: [], finishers: [] },
   ],
 });
 
@@ -386,17 +441,17 @@ test('validation names a pizza a pizza, not a bowl', () => {
   assert.ok(sold.some((e) => /^Pizza 2: Pepperoni just sold out/.test(e)), sold.join(' | '));
 });
 
-test('a pizza is built with no portion, protein or sides', () => {
+test('a pizza is built with no portion, sides or spice', () => {
   assert.deepStrictEqual(order.validateDraft(pizzaDraft(), config), []);
   const o = makePizza();
   assert.strictEqual(o.kind, 'pizza');
   const line = o.lines[0];
   assert.strictEqual(line.kind, 'pizza');
   assert.deepStrictEqual(line.finishers, ['fin_chili', 'fin_parm']);
-  ['portion', 'protein', 'sides', 'spice'].forEach((f) => {
+  ['portion', 'sides', 'spice'].forEach((f) => {
     assert.ok(!(f in line), 'a pizza line has no ' + f);
   });
-  assert.strictEqual(line.dish, 'BBQ Pizza w/ Grilled Chicken, Red Onion, Bacon');
+  assert.strictEqual(line.dish, 'BBQ Pizza w/ Grilled Chicken, Bacon, Red Onion');
   assert.strictEqual(o.lines[1].dish, 'Marinara + White Sauce Pizza w/ Pepperoni');
 });
 
@@ -405,7 +460,7 @@ test('every pizza inherits the crust allergens', () => {
   const a = menu.allergensFor(plain);
   assert.ok(a.includes('gluten'), 'crust');
   assert.ok(a.includes('dairy'), 'cheese');
-  assert.ok(menu.allergensFor({ ...plain, toppings: ['bacon'] }).includes('pork'));
+  assert.ok(menu.allergensFor({ ...plain, proteins: ['bacon'] }).includes('pork'), 'bacon is a protein now');
 });
 
 test('pizza and pasta cannot share one order', () => {
@@ -425,7 +480,7 @@ test('pizza sauces and pasta sauces are not interchangeable', () => {
 
 test('pizza allows five toppings and four finishers', () => {
   const many = pizzaDraft();
-  many.lines[0].toppings = ['pepperoni', 'bacon', 'ham', 'pineapple', 'jalapeno'];
+  many.lines[0].toppings = ['extra_mozz', 'ricotta', 'pz_mushroom', 'pineapple', 'jalapeno'];
   assert.deepStrictEqual(order.validateDraft(many, config), [], 'five is fine on a pizza');
   many.lines[0].toppings.push('red_onion');
   assert.ok(order.validateDraft(many, config).some((e) => /5 toppings per pizza/.test(e)));
@@ -448,7 +503,7 @@ test('orders route to the station pool matching their kind', () => {
 });
 
 test('the two-deck oven bakes two pies at a time', () => {
-  const pie = { kind: 'pizza', sauces: ['pz_marinara'], toppings: ['pepperoni'], finishers: [] };
+  const pie = { kind: 'pizza', sauces: ['pz_marinara'], proteins: ['pepperoni'], toppings: [], finishers: [] };
   const at = (n) => cooktime.orderCookSec(Array.from({ length: n }, () => pie));
   const reload = cooktime.MODEL.pizza.deckReloadSec;
   assert.strictEqual(cooktime.MODEL.pizza.decks * cooktime.MODEL.pizza.piesPerDeck, 2);
