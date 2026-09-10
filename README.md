@@ -20,6 +20,7 @@ HTML/CSS/ES modules, and everything live goes through Firestore.
 | Kitchen chit rail | [`/kitchen.html`](https://pastapresto.web.app/kitchen.html) | the cook |
 | Expo / runner board | [`/expo.html`](https://pastapresto.web.app/expo.html) | expo and runners |
 | Manager, QR codes, 86 list | [`/admin.html`](https://pastapresto.web.app/admin.html) | manager |
+| End-of-night close-out | [`/report.html`](https://pastapresto.web.app/report.html) | manager |
 
 The older `pastapronto-260909.web.app` host still serves the same build, so any
 table tent printed before the rename keeps working. The Firebase **project id**
@@ -70,6 +71,30 @@ the line-cook shorthand for "we are out of it"). Flipping one writes to
 - the kitchen footer shows the current 86 list
 - an order is re-checked at submit, so a phone that has been sitting on the
   review screen cannot slip through an ingredient that ran out meanwhile
+
+## End of the night
+
+`report.html` is the close-out. The manager screen answers "how is service going
+right now" and only ever shows today; this reads **any past service date** and is
+built to be printed for the folder or exported to a spreadsheet.
+
+- headline tiles: covers, bowls, delivered, on-time %, avg ticket, p90, avg cook,
+  avg wait to accept
+- **bowls per 15 minutes** with the peak labelled, plus the same numbers as a
+  table for anyone who cannot use the chart
+- **what sold** - counts per pasta, sauce, protein, topping, side and portion.
+  This is the section that drives tomorrow's prep. Sauce counts exceed bowl
+  counts where a bowl was mixed.
+- **late tickets** worst-first, with estimate, actual and how far over
+- **by station**, so you can see if one side of the line is dragging
+- **exceptions to follow up**: voids, orders left on hold, rushes, allergy
+  orders with what was avoided, and unverified member numbers whose charge
+  still needs confirming
+- **Download CSV** stacks every section into one file; **Print** uses a
+  dedicated stylesheet
+
+The arithmetic is `order.shiftReport()`, a pure function with its own tests, so
+the numbers on this page are checked without a database.
 
 ## A note on money
 

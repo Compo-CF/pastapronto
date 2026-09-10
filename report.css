@@ -1,0 +1,75 @@
+/* Close-out report. Built to be read on a laptop at the end of service and
+   printed for the folder, so the print stylesheet is not an afterthought. */
+
+.report { display: flex; flex-direction: column; gap: 28px; padding-top: 24px; padding-bottom: 60px; }
+.rpt-controls { display: flex; flex-direction: column; gap: 14px; }
+
+.rpt-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.rpt-date { font-size: 26px; font-weight: 820; letter-spacing: -0.02em; }
+.rpt-gen { font-size: 13px; color: var(--ink-faint); }
+
+.rpt-section { break-inside: avoid; }
+.rpt-empty { padding: 22px; border: 2px dashed var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); font-weight: 650; text-align: center; }
+
+/* ---------------------------------------------------------- service curve
+   One series (bowls per quarter-hour), so no legend: the heading names it.
+   Single hue, recessive baseline, only the peak is labelled. */
+
+.curve { display: flex; align-items: flex-end; gap: 2px; height: 172px; padding: 0 2px; border-bottom: 1px solid var(--line-strong); }
+.curve-col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; min-width: 0; height: 100%; position: relative; }
+.curve-bar {
+  background: var(--tomato);
+  border-radius: 4px 4px 0 0;   /* rounded data-end, anchored to the baseline */
+  min-height: 2px;
+  transition: filter 120ms ease;
+}
+.curve-col:hover .curve-bar { filter: brightness(1.15); }
+.curve-col[data-peak="true"] .curve-bar { background: var(--tomato-dark); }
+.curve-peak {
+  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; font-weight: 800; color: var(--tomato-dark); white-space: nowrap;
+}
+.curve-axis { display: flex; gap: 2px; padding: 6px 2px 0; }
+.curve-axis span { flex: 1 1 0; font-size: 10px; color: var(--ink-faint); text-align: center; min-width: 0; overflow: hidden; }
+
+/* Hover tooltip, per the interaction rules - an HTML chart is interactive. */
+.curve-col .curve-tip {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(-6px);
+  z-index: 5;
+  padding: 7px 10px; border-radius: 8px;
+  background: var(--ink); color: #fff;
+  font-size: 12px; font-weight: 650; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 120ms ease;
+}
+.curve-col:hover .curve-tip, .curve-col:focus-visible .curve-tip { opacity: 1; }
+
+/* -------------------------------------------------------------- mix tables */
+
+.mixgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.mixcard { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 16px 18px; break-inside: avoid; }
+.mixcard h3 { margin: 0 0 10px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+.mixrow { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; font-size: 15px; padding: 3px 0; }
+.mixrow b { font-variant-numeric: tabular-nums; font-weight: 750; }
+.mixbar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.mixbar i { display: block; height: 100%; border-radius: 3px; background: var(--tomato); }
+
+.rpt-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.rpt-table th, .rpt-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+.rpt-table th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.rpt-table td.num, .rpt-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.rpt-table tr.is-late td { color: var(--tomato-dark); font-weight: 650; }
+
+.exlist { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.exbox { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: var(--card); }
+.exbox-label { font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
+.exbox-value { font-size: 24px; font-weight: 800; }
+.exbox-detail { font-size: 13px; color: var(--ink-soft); margin-top: 4px; line-height: 1.45; }
+
+@media print {
+  @page { margin: 14mm; }
+  .no-print, .appbar, .toast { display: none !important; }
+  body { background: #fff; }
+  .report { padding: 0; gap: 18px; }
+  .card, .mixcard, .exbox { box-shadow: none; }
+  .curve-tip { display: none; }
+}

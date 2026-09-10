@@ -333,3 +333,143 @@ export function claimCode(random = Math.random) {
   for (let i = 0; i < 4; i += 1) out += alphabet[Math.floor(random() * alphabet.length)];
   return out;
 }
+
+// ------------------------------------------------------- end-of-night report
+
+/**
+ * The close-out report a manager reads at the end of service.
+ *
+ * Pure, like everything else in this file, so scripts/selftest.js can assert
+ * the arithmetic without a database. `metrics()` above answers "how is service
+ * going right now"; this answers "how did the night go, and what do we prep
+ * tomorrow".
+ */
+export function shiftReport(orders, sla) {
+  const secs = (a, b) => (new Date(b).getTime() - new Date(a).getTime()) / 1000;
+
+  const alive = orders.filter((o) => o.status !== STATUS.VOIDED);
+  const done = orders.filter((o) => o.status === STATUS.DELIVERED);
+  const voided = orders.filter((o) => o.status === STATUS.VOIDED);
+  const held = orders.filter((o) => o.status === STATUS.HELD);
+
+  // ---- timings, over delivered tickets only ------------------------------
+  const queueWaits = done.filter((o) => o.acceptedAt).map((o) => secs(o.submittedAt, o.acceptedAt));
+  const cookTimes = done.filter((o) => o.acceptedAt && o.readyAt).map((o) => secs(o.acceptedAt, o.readyAt));
+  const runnerTimes = done.filter((o) => o.readyAt && o.deliveredAt).map((o) => secs(o.readyAt, o.deliveredAt));
+  const totalTimes = done.map((o) => secs(o.submittedAt, o.deliveredAt));
+
+  // ---- who blew the cook SLA, and by how much ---------------------------
+  const late = done
+    .filter((o) => o.acceptedAt && o.readyAt)
+    .map((o) => {
+      const cookSec = secs(o.acceptedAt, o.readyAt);
+      const allowed = o.cookEstimateSec * sla.cookLateFactor;
+      return {
+        ticketNo: o.ticketNo,
+        tagLabel: o.tagLabel,
+        station: o.station,
+        bowls: o.lines.length,
+        cookSec: Math.round(cookSec),
+        estimateSec: o.cookEstimateSec,
+        overSec: Math.round(cookSec - allowed),
+      };
+    })
+    .filter((x) => x.overSec > 0)
+    .sort((a, b) => b.overSec - a.overSec);
+
+  const onTimeCount = done.filter((o) => o.acceptedAt && o.readyAt).length - late.length;
+
+  // ---- service curve in quarter-hours -----------------------------------
+  const buckets = {};
+  alive.forEach((o) => {
+    const d = new Date(o.submittedAt);
+    const key = `${String(d.getHours()).padStart(2, '0')}:${String(Math.floor(d.getMinutes() / 15) * 15).padStart(2, '0')}`;
+    if (!buckets[key]) buckets[key] = { bucket: key, orders: 0, bowls: 0, covers: 0 };
+    buckets[key].orders += 1;
+    buckets[key].bowls += o.lines.length;
+    buckets[key].covers += o.guestCount;
+  });
+  const curve = Object.values(buckets).sort((a, b) => a.bucket.localeCompare(b.bucket));
+  const peak = curve.reduce((best, b) => (!best || b.bowls > best.bowls ? b : best), null);
+
+  // ---- what actually sold, which is what drives tomorrow's prep ---------
+  const tally = (group, pick) => {
+    const counts = {};
+    alive.forEach((o) => o.lines.forEach((line) => {
+      pick(line).forEach((id) => { if (id) counts[id] = (counts[id] || 0) + 1; });
+    }));
+    return Object.entries(counts)
+      .map(([id, count]) => {
+        const item = menu.find(group, id);
+        return { id, name: item ? item.name : id, count };
+      })
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  };
+
+  const mix = {
+    pastas: tally('pastas', (l) => [l.pasta]),
+    sauces: tally('sauces', (l) => menu.saucesOf(l)),
+    proteins: tally('proteins', (l) => [l.protein]),
+    toppings: tally('toppings', (l) => l.toppings || []),
+    sides: tally('sides', (l) => l.sides || []),
+    portions: tally('portions', (l) => [l.portion]),
+  };
+
+  // ---- per station -------------------------------------------------------
+  const stationIds = [...new Set(alive.map((o) => o.station).filter(Boolean))].sort();
+  const stations = stationIds.map((id) => {
+    const mine = alive.filter((o) => o.station === id);
+    const mineCooked = mine.filter((o) => o.acceptedAt && o.readyAt).map((o) => secs(o.acceptedAt, o.readyAt));
+    return {
+      id,
+      orders: mine.length,
+      bowls: mine.reduce((a, o) => a + o.lines.length, 0),
+      avgCookSec: average(mineCooked),
+    };
+  });
+
+  const bowls = alive.reduce((a, o) => a + o.lines.length, 0);
+  const covers = alive.reduce((a, o) => a + o.guestCount, 0);
+
+  return {
+    serviceDate: orders.length ? orders[0].serviceDate : null,
+    generatedAt: new Date().toISOString(),
+    totals: {
+      orders: alive.length,
+      delivered: done.length,
+      voided: voided.length,
+      held: held.length,
+      stillOpen: alive.filter((o) => LIVE_STATUSES.includes(o.status)).length,
+      covers,
+      bowls,
+      bowlsPerCover: covers ? Math.round((bowls / covers) * 100) / 100 : 0,
+    },
+    timings: {
+      avgQueueSec: average(queueWaits),
+      avgCookSec: average(cookTimes),
+      avgRunnerSec: average(runnerTimes),
+      avgTotalSec: average(totalTimes),
+      p90TotalSec: percentile(totalTimes, 90),
+      worstTotalSec: totalTimes.length ? Math.round(Math.max(...totalTimes)) : 0,
+    },
+    onTime: {
+      pct: done.length ? Math.round((onTimeCount / Math.max(1, onTimeCount + late.length)) * 100) : null,
+      count: onTimeCount,
+      lateCount: late.length,
+    },
+    late,
+    curve,
+    peak,
+    mix,
+    stations,
+    exceptions: {
+      voided: voided.map((o) => ({ ticketNo: o.ticketNo, tagLabel: o.tagLabel })),
+      held: held.map((o) => ({ ticketNo: o.ticketNo, tagLabel: o.tagLabel })),
+      rushed: alive.filter((o) => o.priority === 'rush').map((o) => ({ ticketNo: o.ticketNo, tagLabel: o.tagLabel })),
+      allergy: alive.filter((o) => (o.avoidAllergens || []).length)
+        .map((o) => ({ ticketNo: o.ticketNo, tagLabel: o.tagLabel, avoid: o.avoidAllergens })),
+      unverifiedMembers: alive.filter((o) => o.memberStatus === 'unverified')
+        .map((o) => ({ ticketNo: o.ticketNo, memberNumber: o.memberNumber })),
+    },
+  };
+}

@@ -284,6 +284,64 @@ test('metrics roll up a finished day', () => {
   assert.strictEqual(m.onTimePct, 100, 'cooked exactly to estimate counts as on time');
 });
 
+test('shift report totals, mix and exceptions', () => {
+  const orders = [];
+  // Three delivered on time, one delivered late, one voided, one held.
+  for (let i = 0; i < 4; i += 1) {
+    let o = make();
+    const base = Date.now() - (90 - i * 10) * 60000;
+    o.submittedAt = new Date(base).toISOString();
+    o = order.applyTransition(o, 'accept', { sla, now: new Date(base + 40000) });
+    // The fourth takes twice its estimate, so it must land in `late`.
+    const cook = i === 3 ? o.cookEstimateSec * 2 : o.cookEstimateSec * 0.9;
+    o = order.applyTransition(o, 'ready', { sla, now: new Date(base + 40000 + cook * 1000) });
+    o = order.applyTransition(o, 'deliver', { sla, now: new Date(base + 40000 + cook * 1000 + 25000) });
+    orders.push(o);
+  }
+  orders.push(order.applyTransition(make(), 'void', { sla }));
+  orders.push(order.applyTransition(make(), 'hold', { sla }));
+
+  const r = order.shiftReport(orders, sla);
+
+  // Voided tickets are excluded from covers, bowls and mix, but still reported.
+  assert.strictEqual(r.totals.orders, 5, 'five live orders, void excluded');
+  assert.strictEqual(r.totals.delivered, 4);
+  assert.strictEqual(r.totals.voided, 1);
+  assert.strictEqual(r.totals.held, 1);
+  assert.strictEqual(r.totals.covers, 10, '5 live orders x 2 guests');
+  assert.strictEqual(r.totals.bowls, 10);
+
+  assert.strictEqual(r.late.length, 1, 'exactly one late ticket');
+  assert.ok(r.late[0].overSec > 0, 'and it records how far over');
+  assert.strictEqual(r.onTime.count, 3);
+  assert.strictEqual(r.onTime.pct, 75, '3 of 4 on time');
+
+  // Menu mix counts each sauce on a mixed bowl, so sauces exceed bowls.
+  const sauceTotal = r.mix.sauces.reduce((a, x) => a + x.count, 0);
+  assert.strictEqual(sauceTotal, 15, '5 orders x (1 sauce + 2 sauces)');
+  assert.strictEqual(r.mix.pastas.reduce((a, x) => a + x.count, 0), 10, 'one pasta per bowl');
+  assert.ok(r.mix.sauces[0].count >= r.mix.sauces[r.mix.sauces.length - 1].count, 'sorted by count');
+
+  // The curve accounts for every live bowl.
+  assert.strictEqual(r.curve.reduce((a, b) => a + b.bowls, 0), 10);
+  assert.ok(r.peak && r.peak.bowls > 0);
+
+  assert.strictEqual(r.exceptions.voided.length, 1);
+  assert.strictEqual(r.exceptions.held.length, 1);
+  assert.strictEqual(r.stations.length, 1, 'all seeded to PASTA-1');
+});
+
+test('shift report survives an empty day', () => {
+  const r = order.shiftReport([], sla);
+  assert.strictEqual(r.totals.orders, 0);
+  assert.strictEqual(r.totals.covers, 0);
+  assert.strictEqual(r.onTime.pct, null, 'no percentage without deliveries');
+  assert.deepStrictEqual(r.late, []);
+  assert.deepStrictEqual(r.curve, []);
+  assert.strictEqual(r.peak, null);
+  assert.strictEqual(r.totals.bowlsPerCover, 0, 'no divide by zero');
+});
+
 test('menu catalog exposes every group the screens render', () => {
   const c = menu.catalog();
   ['allergens', 'pastas', 'sauces', 'proteins', 'toppings', 'sides', 'portions', 'spice']

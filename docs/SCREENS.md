@@ -178,6 +178,30 @@ Boil times shown are for parcooked pasta - finish-to-order, not from-dry.
 **Demo controls** - seed a believable rail (and the member directory), or clear
 the day. Clearing asks for confirmation, because it deletes documents.
 
+## 5. Close-out report - `report.html`
+
+What a manager reads at the end of service, and the only screen that looks at
+past dates - everything else is scoped to today.
+
+A date picker (plus **Tonight** / **Yesterday**), then: headline tiles; a
+**bowls per 15 minutes** bar chart with the peak directly labelled; **what
+sold** as counts per group, which is the section that drives tomorrow's prep;
+**late tickets** worst-first with estimate vs actual and how far over; a
+per-station split; and **exceptions to follow up** - voids, orders left on
+hold, rushes, allergy orders with what was avoided, and unverified member
+numbers whose charge needs confirming.
+
+**Download CSV** stacks every section into one file with proper quoting.
+**Print** uses its own stylesheet, so sections do not break across pages.
+
+Chart notes: one series, so there is no legend - the heading names it - and only
+the peak carries a value label rather than every bar. Each column has a hover
+tooltip, and a `Show as a table` disclosure carries the identical numbers for
+anyone who cannot read the chart.
+
+All the arithmetic is `order.shiftReport()`, a pure function covered by
+`scripts/selftest.js`, so the page only renders.
+
 ## Accessibility and input
 
 - Touch targets are at least 60px; primary buttons 76px

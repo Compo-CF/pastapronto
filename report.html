@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#d33f30">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PastaPresto! Close-Out Report</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="report.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<header class="appbar no-print">
+  <div class="wrap appbar-inner">
+    <div class="brand"><span class="brand-mark" id="brandMark"></span> Pasta<em>Presto!</em></div>
+    <span class="pill">Close-out</span>
+    <div class="grow"></div>
+    <nav class="adminnav">
+      <a class="btn btn-ghost" href="admin.html">Manager</a>
+      <a class="btn btn-ghost" href="kitchen.html">Kitchen</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap report">
+
+  <section class="no-print">
+    <div class="card rpt-controls">
+      <div class="field">
+        <label for="datePick">Service date</label>
+        <input class="input" id="datePick" type="date">
+      </div>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <button class="btn btn-ghost" id="tonightBtn" type="button">Tonight</button>
+        <button class="btn btn-ghost" id="yesterdayBtn" type="button">Yesterday</button>
+        <div class="grow"></div>
+        <button class="btn btn-ghost" id="csvBtn" type="button">Download CSV</button>
+        <button class="btn btn-primary" id="printBtn" type="button">Print</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="reportBody"></div>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="app/report.js"></script>
+<script type="module" src="app/pwa.js"></script>
+</body>
+</html>
