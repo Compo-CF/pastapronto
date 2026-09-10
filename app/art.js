@@ -39,6 +39,18 @@ var SHAPES = {
     '<circle cx="32" cy="35" r="18" fill="' + PASTA + '"/>' +
     '<circle cx="32" cy="35" r="6.5" fill="#fdf8f0"/>' +
     '<path d="M19 21c4.5-6.5 21-6.5 26 0" fill="none" stroke="' + PASTA_DARK + '" stroke-width="4.5" stroke-linecap="round"/>',
+  pie:
+    '<circle cx="32" cy="32" r="26" fill="#e8c98f"/>' +
+    '<circle cx="32" cy="32" r="21" fill="#d8402f"/>' +
+    '<g fill="#f6efdc"><circle cx="24" cy="25" r="4.5"/><circle cx="40" cy="27" r="4"/>' +
+    '<circle cx="27" cy="40" r="4"/><circle cx="40" cy="39" r="4.5"/></g>' +
+    '<g fill="#a8281c"><circle cx="33" cy="20" r="3"/><circle cx="20" cy="33" r="3"/>' +
+    '<circle cx="45" cy="33" r="3"/><circle cx="32" cy="46" r="3"/></g>',
+  slice:
+    '<path d="M32 6 56 50a4 4 0 0 1-4 6H12a4 4 0 0 1-4-6z" fill="#e8c98f"/>' +
+    '<path d="M32 14 50 48H14z" fill="#d8402f"/>' +
+    '<g fill="#f6efdc"><circle cx="32" cy="30" r="4"/><circle cx="24" cy="41" r="3.5"/>' +
+    '<circle cx="40" cy="41" r="3.5"/></g>',
   spiral:
     '<path d="M32 7c-11 4.5 11 8 0 12.5s11 8 0 12.5 11 8 0 12.5 11 8 0 12.5" fill="none" stroke="' + PASTA_PALE + '" stroke-width="7.5" stroke-linecap="round"/>',
 };
@@ -114,6 +126,32 @@ var ICONS = {
   sticks:
     '<g fill="#dfb268"><rect x="14" y="12" width="9" height="42" rx="4.5" transform="rotate(-8 18 33)"/>' +
     '<rect x="34" y="12" width="9" height="42" rx="4.5" transform="rotate(9 38 33)"/></g>',
+  bbq:
+    '<path d="M14 24h36l-3 26a6 6 0 0 1-6 5H23a6 6 0 0 1-6-5z" fill="#7a3418"/>' +
+    '<ellipse cx="32" cy="24" rx="18" ry="6" fill="#95441f"/>' +
+    '<path d="M24 33c4 5 12 5 16 0" stroke="#5d2410" stroke-width="2.5" fill="none"/>',
+  pepperoni:
+    '<circle cx="32" cy="32" r="20" fill="#c0392b"/>' +
+    '<g fill="#8e2b20"><circle cx="25" cy="26" r="3"/><circle cx="39" cy="29" r="2.6"/>' +
+    '<circle cx="29" cy="39" r="2.8"/><circle cx="39" cy="40" r="2.2"/></g>',
+  bacon:
+    '<path d="M8 22c10-6 18 6 28 0s16 4 20 0v10c-6 5-12-4-20 1s-18-6-28 0z" fill="#c0563f"/>' +
+    '<path d="M8 34c10-6 18 6 28 0s16 4 20 0v9c-6 5-12-4-20 1s-18-6-28 0z" fill="#e8dcc8"/>',
+  ham:
+    '<path d="M18 22h22a10 10 0 0 1 0 20H18a6 6 0 0 1 0-20z" fill="#e79a9a"/>' +
+    '<circle cx="26" cy="32" r="3" fill="#f5d0d0"/><circle cx="36" cy="30" r="2.4" fill="#f5d0d0"/>',
+  onion:
+    '<circle cx="32" cy="34" r="20" fill="#c9a8d4"/><circle cx="32" cy="34" r="14" fill="#ddc4e5"/>' +
+    '<circle cx="32" cy="34" r="8" fill="#efe2f3"/><circle cx="32" cy="34" r="3" fill="#c9a8d4"/>',
+  pineapple:
+    '<ellipse cx="32" cy="38" rx="16" ry="19" fill="#f0c33c"/>' +
+    '<g stroke="#c99b1f" stroke-width="2" fill="none"><path d="M20 30l24 16M44 30L20 46"/></g>' +
+    '<path d="M32 19c-3-7-9-9-9-9 5 0 8 3 9 5 1-2 4-5 9-5 0 0-6 2-9 9z" fill="#4a8f3f"/>',
+  salt:
+    '<path d="M22 26h20l-2 28a4 4 0 0 1-4 4h-8a4 4 0 0 1-4-4z" fill="#eef1f4"/>' +
+    '<path d="M22 26c0-6 4-10 10-10s10 4 10 10z" fill="#c9d2da"/>' +
+    '<g fill="#8d99a6"><circle cx="28" cy="20" r="1.6"/><circle cx="36" cy="20" r="1.6"/>' +
+    '<circle cx="32" cy="17" r="1.6"/></g>',
   none:
     '<circle cx="32" cy="32" r="19" fill="none" stroke="#b8ada1" stroke-width="5"/>' +
     '<path d="M19 45 45 19" stroke="#b8ada1" stroke-width="5" stroke-linecap="round"/>',

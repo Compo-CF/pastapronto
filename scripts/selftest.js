@@ -317,10 +317,11 @@ test('shift report totals, mix and exceptions', () => {
   assert.strictEqual(r.onTime.pct, 75, '3 of 4 on time');
 
   // Menu mix counts each sauce on a mixed bowl, so sauces exceed bowls.
-  const sauceTotal = r.mix.sauces.reduce((a, x) => a + x.count, 0);
+  const sauceTotal = r.mix.pasta.sauces.reduce((a, x) => a + x.count, 0);
   assert.strictEqual(sauceTotal, 15, '5 orders x (1 sauce + 2 sauces)');
-  assert.strictEqual(r.mix.pastas.reduce((a, x) => a + x.count, 0), 10, 'one pasta per bowl');
-  assert.ok(r.mix.sauces[0].count >= r.mix.sauces[r.mix.sauces.length - 1].count, 'sorted by count');
+  assert.strictEqual(r.mix.pasta.pastas.reduce((a, x) => a + x.count, 0), 10, 'one pasta per bowl');
+  assert.strictEqual(r.byKind.pasta.items, 10);
+  assert.strictEqual(r.byKind.pizza.items, 0, 'no pizzas in this fixture');
 
   // The curve accounts for every live bowl.
   assert.strictEqual(r.curve.reduce((a, b) => a + b.bowls, 0), 10);
@@ -334,6 +335,7 @@ test('shift report totals, mix and exceptions', () => {
 test('shift report survives an empty day', () => {
   const r = order.shiftReport([], sla);
   assert.strictEqual(r.totals.orders, 0);
+  assert.deepStrictEqual(r.mix.pizza.sauces, [], 'empty pizza mix, not undefined');
   assert.strictEqual(r.totals.covers, 0);
   assert.strictEqual(r.onTime.pct, null, 'no percentage without deliveries');
   assert.deepStrictEqual(r.late, []);
@@ -342,10 +344,122 @@ test('shift report survives an empty day', () => {
   assert.strictEqual(r.totals.bowlsPerCover, 0, 'no divide by zero');
 });
 
+const pizzaDraft = () => ({
+  memberNumber: '10432',
+  memberName: 'Compofelice',
+  memberStatus: 'verified',
+  guestCount: 2,
+  lines: [
+    { guestLabel: 'Ada', kind: 'pizza', sauces: ['pz_bbq'], toppings: ['pz_chicken', 'red_onion', 'bacon'], finishers: ['fin_chili', 'fin_parm'] },
+    { guestLabel: 'Sam', kind: 'pizza', sauces: ['pz_marinara', 'pz_white'], toppings: ['pepperoni'], finishers: [] },
+  ],
+});
+
+const makePizza = (d = pizzaDraft()) => ({
+  id: 'ord_pz_' + (seq += 1),
+  ...order.buildOrder(d, {
+    ticketNo: seq,
+    claimCode: 'TEST',
+    station: order.stationForTicket(seq, config.kitchen.stations, true, 'pizza'),
+    queueDepth: 0,
+    tag: { id: 'table-04', label: 'Table 4', kind: 'table' },
+    serviceDate: '2026-09-10',
+  }),
+});
+
+test('a pizza is built with no portion, protein or sides', () => {
+  assert.deepStrictEqual(order.validateDraft(pizzaDraft(), config), []);
+  const o = makePizza();
+  assert.strictEqual(o.kind, 'pizza');
+  const line = o.lines[0];
+  assert.strictEqual(line.kind, 'pizza');
+  assert.deepStrictEqual(line.finishers, ['fin_chili', 'fin_parm']);
+  ['portion', 'protein', 'sides', 'spice'].forEach((f) => {
+    assert.ok(!(f in line), 'a pizza line has no ' + f);
+  });
+  assert.strictEqual(line.dish, 'BBQ Pizza w/ Grilled Chicken, Red Onion, Bacon');
+  assert.strictEqual(o.lines[1].dish, 'Marinara + White Sauce Pizza w/ Pepperoni');
+});
+
+test('every pizza inherits the crust allergens', () => {
+  const plain = { kind: 'pizza', sauces: ['pz_marinara'], toppings: [], finishers: [] };
+  const a = menu.allergensFor(plain);
+  assert.ok(a.includes('gluten'), 'crust');
+  assert.ok(a.includes('dairy'), 'cheese');
+  assert.ok(menu.allergensFor({ ...plain, toppings: ['bacon'] }).includes('pork'));
+});
+
+test('pizza and pasta cannot share one order', () => {
+  const mixed = pizzaDraft();
+  mixed.lines.push({ pasta: 'penne', sauces: ['marinara'], portion: 'regular' });
+  assert.ok(order.validateDraft(mixed, config).some((e) => /separate orders/.test(e)));
+});
+
+test('pizza sauces and pasta sauces are not interchangeable', () => {
+  const wrong = pizzaDraft();
+  wrong.lines[0].sauces = ['pesto'];
+  assert.ok(order.validateDraft(wrong, config).some((e) => /not on the menu/.test(e)));
+  const alsoWrong = draft();
+  alsoWrong.lines[0].sauces = ['pz_bbq'];
+  assert.ok(order.validateDraft(alsoWrong, config).some((e) => /not on the menu/.test(e)));
+});
+
+test('pizza allows five toppings and four finishers', () => {
+  const many = pizzaDraft();
+  many.lines[0].toppings = ['pepperoni', 'bacon', 'ham', 'pineapple', 'jalapeno'];
+  assert.deepStrictEqual(order.validateDraft(many, config), [], 'five is fine on a pizza');
+  many.lines[0].toppings.push('red_onion');
+  assert.ok(order.validateDraft(many, config).some((e) => /5 toppings per pizza/.test(e)));
+
+  const fin = pizzaDraft();
+  fin.lines[0].finishers = ['fin_parm', 'fin_chili', 'fin_salt', 'fin_oregano'];
+  assert.deepStrictEqual(order.validateDraft(fin, config), []);
+  fin.lines[0].finishers.push('fin_parm');
+  assert.ok(order.validateDraft(fin, config).some((e) => /finishers per pizza/.test(e)));
+});
+
+test('orders route to the station pool matching their kind', () => {
+  const st = config.kitchen.stations;
+  assert.strictEqual(order.stationForTicket(1, st, true, 'pizza'), 'PIZZA-1');
+  assert.strictEqual(order.stationForTicket(2, st, true, 'pizza'), 'PIZZA-2');
+  for (let n = 1; n <= 40; n += 1) {
+    assert.ok(order.stationForTicket(n, st, true, 'pizza').startsWith('PIZZA'), 'pizza ticket ' + n);
+    assert.ok(order.stationForTicket(n, st, true, 'pasta').startsWith('PASTA'), 'pasta ticket ' + n);
+  }
+});
+
+test('the two-deck oven bakes two pies at a time', () => {
+  const pie = { kind: 'pizza', sauces: ['pz_marinara'], toppings: ['pepperoni'], finishers: [] };
+  const at = (n) => cooktime.orderCookSec(Array.from({ length: n }, () => pie));
+  const reload = cooktime.MODEL.pizza.deckReloadSec;
+  assert.strictEqual(cooktime.MODEL.pizza.decks * cooktime.MODEL.pizza.piesPerDeck, 2);
+  assert.ok(at(2) - at(1) < 60, 'second pie rides along in the other deck');
+  assert.ok(at(3) - at(2) >= reload, 'third waits for a deck to clear');
+  assert.ok(at(5) - at(3) >= reload, 'and so does the fifth');
+  const finished = { ...pie, finishers: ['fin_parm', 'fin_chili', 'fin_salt', 'fin_oregano'] };
+  assert.strictEqual(cooktime.lineCookSec(finished), cooktime.lineCookSec(pie),
+    'finishers go on after the bake, so they cost no oven time');
+});
+
+test('shift report splits the prep guide by station', () => {
+  const r = order.shiftReport([makePizza(), makePizza(), make()], sla);
+  assert.strictEqual(r.byKind.pizza.orders, 2);
+  assert.strictEqual(r.byKind.pizza.items, 4);
+  assert.strictEqual(r.byKind.pasta.orders, 1);
+  assert.strictEqual(r.byKind.pasta.items, 2);
+  assert.ok(r.mix.pizza.sauces.some((x) => x.name === 'BBQ'));
+  assert.ok(!r.mix.pasta.sauces.some((x) => x.name === 'BBQ'), 'BBQ never lands in the pasta list');
+  assert.strictEqual(r.mix.pizza.sauces.reduce((a, x) => a + x.count, 0), 6, '2 orders x (1 + 2 sauces)');
+  assert.ok(r.mix.pizza.finishers.length > 0, 'finishers tallied');
+});
+
 test('menu catalog exposes every group the screens render', () => {
   const c = menu.catalog();
-  ['allergens', 'pastas', 'sauces', 'proteins', 'toppings', 'sides', 'portions', 'spice']
+  ['allergens', 'pastas', 'sauces', 'proteins', 'toppings', 'sides', 'portions', 'spice',
+    'pizzaSauces', 'pizzaToppings', 'finishers']
     .forEach((k) => assert.ok(Array.isArray(c[k]) && c[k].length, k + ' present'));
+  assert.strictEqual(c.pizzaSauces.length, 3, 'marinara, bbq, white only');
+  assert.ok(c.pizzaBase && c.pizzaBase.bakeSec > 0, 'one crust, one size');
 });
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

@@ -140,6 +140,31 @@ deployed URLs for exactly that reason.
 | Firebase not configured | every screen says so plainly instead of white-screening |
 | Service worker fails | caught and logged; the app works without it |
 
+## Pasta and pizza
+
+`kind` lives on the order (and is copied to every line). It decides three
+things: which build wizard the guest sees, which catalog groups the sauces and
+toppings come from (`menu.GROUPS_FOR`), and which pool of stations the ticket
+can be routed to. Stations declare the kind they cook, so routing is a filter
+rather than a convention.
+
+The two share the entire state machine, chit rail, expo board and report. What
+differs is confined to the menu data and one branch in `cooktime.js`, because
+the batching is genuinely different: pasta runs three pans that turn over, pizza
+runs a two-deck oven holding one pie each. That single fact is why six pizzas
+take longer than six bowls, and why it would be wrong to reuse one model.
+
+`menu.kindOf()` defaults to `'pasta'` when a document has no `kind`, so orders
+written before this shipped keep rendering.
+
+**One order is one kind.** That is a deliberate simplification, and the one
+place it shows is a table wanting pasta and pizza together: they send two
+orders. Supporting a single mixed ticket properly means per-station sub-status
+on the order - each station accepting and bumping its own lines, and the order
+only reaching `ready` when both are done - which touches the state machine, the
+rules, the kitchen rail and expo. It is the right design for a bigger kitchen;
+it is not a small edit.
+
 ## Where to go next
 
 | Concern | How |

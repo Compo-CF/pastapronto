@@ -23,13 +23,48 @@ import {
 (function () {
   'use strict';
 
-  var BUILD_STEPS = [
-    { id: 'pasta', label: 'Pasta', group: 'pastas', title: 'Pick your pasta', sub: 'Tap the shape you want.' },
-    { id: 'sauces', label: 'Sauce', group: 'sauces', title: 'Now the sauce', sub: '', multi: true },
-    { id: 'protein', label: 'Protein', group: 'proteins', title: 'Add a protein?', sub: 'Or skip it - totally fine.' },
-    { id: 'toppings', label: 'Toppings', group: 'toppings', title: 'Toppings!', sub: '' },
-    { id: 'finish', label: 'Size', group: 'portions', title: 'How big?', sub: '' },
-  ];
+  /**
+   * The build wizard, per kind. Pizza has one step fewer because every pizza is
+   * the same size, so there is nothing to ask about portions.
+   */
+  var STEPS = {
+    pasta: [
+      { id: 'pasta', label: 'Pasta', group: 'pastas', title: 'Pick your pasta', sub: 'Tap the shape you want.' },
+      { id: 'sauces', label: 'Sauce', group: 'sauces', title: 'Now the sauce', sub: '', multi: true },
+      { id: 'protein', label: 'Protein', group: 'proteins', title: 'Add a protein?', sub: 'Or skip it - totally fine.' },
+      { id: 'toppings', label: 'Toppings', group: 'toppings', title: 'Toppings!', sub: '' },
+      { id: 'finish', label: 'Size', group: 'portions', title: 'How big?', sub: '' },
+    ],
+    pizza: [
+      { id: 'sauces', label: 'Sauce', group: 'pizzaSauces', title: 'Pick your sauce', sub: '', multi: true },
+      { id: 'toppings', label: 'Toppings', group: 'pizzaToppings', title: 'Toppings!', sub: '' },
+      { id: 'finishers', label: 'Finish', group: 'finishers', title: 'Anything on top?', sub: 'Added after it comes out of the oven.', multi: true },
+    ],
+  };
+
+  /** Guest-facing words for each lane, so no screen has to branch on strings. */
+  var LANES = {
+    pasta: {
+      one: 'bowl', many: 'bowls',
+      title: 'Build your <em>bowl</em>',
+      blurb: 'Pick a pasta, pick a sauce, pile on toppings. We cook it fresh and bring it over.',
+      art: 'bowl',
+    },
+    pizza: {
+      one: 'pizza', many: 'pizzas',
+      title: 'Build your <em>pizza</em>',
+      blurb: 'One size, three sauces, all the toppings. Straight into the oven.',
+      art: 'pie',
+    },
+  };
+
+  function lane() {
+    return LANES[state.kind] || LANES.pasta;
+  }
+
+  function steps() {
+    return STEPS[state.kind] || STEPS.pasta;
+  }
 
   var TRACK = [
     { status: 'queued', label: 'Sent' },
@@ -40,6 +75,7 @@ import {
 
   var state = {
     screen: 'welcome',
+    kind: null,
     mode: recall('mode', 'simple'),
     boot: null,
     tag: null,
@@ -76,12 +112,17 @@ import {
   }
 
   function newBowl(index) {
-    return {
+    var base = {
       guestLabel: 'Guest ' + (index + 1),
-      pasta: null, sauces: [], protein: 'none',
-      toppings: [], sides: [], portion: null,
-      spice: 'mild', notes: '',
+      kind: state.kind,
+      sauces: [],
+      toppings: [],
+      notes: '',
     };
+    if (state.kind === 'pizza') return Object.assign(base, { finishers: [] });
+    return Object.assign(base, {
+      pasta: null, protein: 'none', sides: [], portion: null, spice: 'mild',
+    });
   }
 
   function currentBowl() {
@@ -89,7 +130,9 @@ import {
   }
 
   function bowlComplete(bowl) {
-    return Boolean(bowl && bowl.pasta && bowl.sauces.length > 0 && bowl.portion);
+    if (!bowl) return false;
+    if (bowl.kind === 'pizza') return bowl.sauces.length > 0;
+    return Boolean(bowl.pasta && bowl.sauces.length > 0 && bowl.portion);
   }
 
   function allBowlsComplete() {
@@ -189,17 +232,28 @@ import {
 
     return html`
       <div class="hero">
-        <div class="hero-art">${raw(art('bowl'))}</div>
-        <h1>Build your <em>bowl</em></h1>
-        <p>Pick a pasta, pick a sauce, pile on toppings. We cook it fresh and bring it over.</p>
+        <h1>What are we making?</h1>
+        <p>Two lanes, same idea: pick your bits and we cook it fresh.</p>
         ${raw(where)}
-        <ul class="howto">
-          <li><span class="n">1</span> Enter your ${state.boot.venue.memberLabel.toLowerCase()}</li>
-          <li><span class="n">2</span> Tell us how many are eating</li>
-          <li><span class="n">3</span> Build a bowl for each person</li>
-          <li><span class="n">4</span> Send it to the kitchen</li>
-        </ul>
-      </div>`;
+      </div>
+
+      <div class="lanepick">
+        ${['pasta', 'pizza'].map(function (k) {
+          var l = LANES[k];
+          return html`<button class="lanetile" type="button" data-act="pickKind" data-id="${k}">
+            <span class="lanetile-art">${raw(art(l.art))}</span>
+            <span class="lanetile-title">${raw(l.title)}</span>
+            <span class="lanetile-blurb">${l.blurb}</span>
+          </button>`;
+        })}
+      </div>
+
+      <ul class="howto">
+        <li><span class="n">1</span> Enter your ${state.boot.venue.memberLabel.toLowerCase()}</li>
+        <li><span class="n">2</span> Tell us how many are eating</li>
+        <li><span class="n">3</span> Build one for each person</li>
+        <li><span class="n">4</span> Send it to the kitchen</li>
+      </ul>`;
   }
 
   function screenMember() {
@@ -307,7 +361,7 @@ import {
 
   function screenBuild() {
     var bowl = currentBowl();
-    var step = BUILD_STEPS[state.buildStep];
+    var step = steps()[state.buildStep];
 
     var tabs = state.bowls.map(function (b, i) {
       return html`<button class="bowltab ${bowlComplete(b) ? 'is-done' : ''}" type="button"
@@ -317,7 +371,7 @@ import {
       </button>`;
     });
 
-    var steps = BUILD_STEPS.map(function (s, i) {
+    var steps = steps().map(function (s, i) {
       var done = i < state.buildStep;
       return html`<button class="buildstep ${done ? 'is-done' : ''}" type="button"
         data-act="gotoStep" data-id="${i}" aria-current="${i === state.buildStep ? 'true' : 'false'}">${s.label}</button>`;
@@ -326,8 +380,10 @@ import {
     var body;
     if (step.id === 'toppings') body = buildToppings(bowl);
     else if (step.id === 'finish') body = buildFinish(bowl);
-    else if (step.id === 'sauces') {
-      body = tileGrid('sauces', { act: 'toggleSauce', value: bowl.sauces, multi: true });
+    else if (step.id === 'finishers') {
+      body = tileGrid('finishers', { act: 'toggleFinisher', value: bowl.finishers, multi: true, small: true });
+    } else if (step.id === 'sauces') {
+      body = tileGrid(step.group, { act: 'toggleSauce', value: bowl.sauces, multi: true });
     } else {
       body = tileGrid(step.group, {
         act: 'pick', value: bowl[step.id], multi: false,
@@ -335,7 +391,12 @@ import {
     }
 
     var sub = step.sub;
-    if (step.id === 'toppings') sub = 'Pick up to ' + state.boot.limits.maxToppingsPerBowl + '. Or none at all.';
+    if (step.id === 'toppings') {
+      sub = 'Pick up to ' + toppingCap() + '. Or none at all.';
+    }
+    if (step.id === 'finishers' && bowl.finishers.length) {
+      sub = bowl.finishers.length + ' on top, added after the bake.';
+    }
     if (step.id === 'sauces') {
       sub = bowl.sauces.length > 1
         ? 'Mixing ' + bowl.sauces.length + ' sauces - tap Next when you are happy.'
@@ -345,7 +406,7 @@ import {
     return html`
       <div class="bowltabs">${tabs}</div>
       <div class="step-head">
-        <p class="step-kicker">Bowl ${state.activeBowl + 1} of ${state.bowls.length} &middot; ${bowl.guestLabel}</p>
+        <p class="step-kicker">${lane().one[0].toUpperCase() + lane().one.slice(1)} ${state.activeBowl + 1} of ${state.bowls.length} &middot; ${bowl.guestLabel}</p>
         <h1 class="step-title">${step.title}</h1>
         <p class="step-sub">${sub}</p>
       </div>
@@ -353,21 +414,32 @@ import {
       ${raw(body)}`;
   }
 
+  /** Toppings cap differs by kind: a pizza takes more than a bowl. */
+  function toppingCap() {
+    return state.kind === 'pizza'
+      ? state.boot.limits.maxToppingsPerPizza
+      : state.boot.limits.maxToppingsPerBowl;
+  }
+
   function buildToppings(bowl) {
-    var limit = state.boot.limits.maxToppingsPerBowl;
-    var grid = tileGrid('toppings', { act: 'toggleTopping', value: bowl.toppings, multi: true, small: true });
-    var sides = state.mode === 'pro' || bowl.sides.length > 0
+    var group = state.kind === 'pizza' ? 'pizzaToppings' : 'toppings';
+    var grid = tileGrid(group, { act: 'toggleTopping', value: bowl.toppings, multi: true, small: true });
+
+    // Sides are a pasta-station thing; a pizza order does not offer them.
+    var sides = state.kind === 'pasta' && (state.mode === 'pro' || bowl.sides.length > 0)
       ? html`<div class="stack" style="margin-top:22px">
           <strong>Add a side?</strong>
           ${raw(tileGrid('sides', { act: 'toggleSide', value: bowl.sides, multi: true, small: true }))}
         </div>`
       : '';
+
     return html`${raw(grid)}
-      <p class="muted" style="margin-top:12px">${bowl.toppings.length} of ${limit} chosen</p>
+      <p class="muted" style="margin-top:12px">${bowl.toppings.length} of ${toppingCap()} chosen</p>
       ${raw(sides)}`;
   }
 
   function buildFinish(bowl) {
+    // Pasta only - a pizza never reaches this step.
     var portions = tileGrid('portions', { act: 'pick', value: bowl.portion, multi: false });
     var extras = state.mode === 'pro'
       ? html`<div class="card stack" style="margin-top:22px">
@@ -401,28 +473,44 @@ import {
 
   function screenReview() {
     var bowls = state.bowls.map(function (bowl, i) {
-      var pasta = item('pastas', bowl.pasta);
+      var isPizza = bowl.kind === 'pizza';
+      var glyph = isPizza ? 'pie' : (item('pastas', bowl.pasta) || {}).shape || 'none';
+      var toppingGroup = isPizza ? 'pizzaToppings' : 'toppings';
+
       var extras = [];
       if (bowl.toppings.length) {
-        extras.push('with ' + bowl.toppings.map(function (t) { return item('toppings', t).name; }).join(', '));
+        extras.push('with ' + bowl.toppings.map(function (t) {
+          return (item(toppingGroup, t) || {}).name || t;
+        }).join(', '));
       }
-      if (bowl.sides.length) {
-        extras.push('side of ' + bowl.sides.map(function (s) { return item('sides', s).name; }).join(', '));
+      if (isPizza) {
+        if (bowl.finishers.length) {
+          extras.push('finished with ' + bowl.finishers.map(function (f) {
+            return (item('finishers', f) || {}).name || f;
+          }).join(', '));
+        }
+        extras.push('12" - one size');
+      } else {
+        if (bowl.sides.length) {
+          extras.push('side of ' + bowl.sides.map(function (x) {
+            return (item('sides', x) || {}).name || x;
+          }).join(', '));
+        }
+        if (bowl.spice !== 'mild') {
+          var spice = item('spice', bowl.spice);
+          if (spice) extras.push(spice.name + ' spice');
+        }
+        var portion = item('portions', bowl.portion);
+        if (portion) extras.push(portion.name);
       }
-      if (bowl.spice !== 'mild') {
-        var spice = item('spice', bowl.spice);
-        if (spice) extras.push(spice.name + ' spice');
-      }
-      var portion = item('portions', bowl.portion);
-      if (portion) extras.push(portion.name);
       if (bowl.notes) extras.push('Note: ' + bowl.notes);
 
       return html`<div class="bowl">
-        <span class="bowl-art">${raw(art(pasta ? pasta.shape : 'none'))}</span>
+        <span class="bowl-art">${raw(art(glyph))}</span>
         <div class="grow">
           <div class="bowl-who">${bowl.guestLabel}</div>
           <div class="bowl-dish">${dishText(bowl)}</div>
-          <div class="bowl-extras">${extras.filter(Boolean).join(' \u00b7 ')}</div>
+          <div class="bowl-extras">${extras.filter(Boolean).join(' · ')}</div>
         </div>
         <div style="text-align:right">
           <button class="btn btn-ghost" style="min-height:40px;padding:0 14px;font-size:14px"
@@ -431,16 +519,27 @@ import {
       </div>`;
     });
 
+    // Roll the allergens up from whichever groups this lane actually uses,
+    // plus the crust for a pizza - every pie carries its gluten and cheese.
     var allergens = [];
+    var addAll = function (list) {
+      list.forEach(function (a) { if (allergens.indexOf(a) === -1) allergens.push(a); });
+    };
     state.bowls.forEach(function (b) {
-      [item('pastas', b.pasta), item('sauces', b.sauce), item('proteins', b.protein)]
-        .concat(b.toppings.map(function (t) { return item('toppings', t); }))
-        .concat(b.sides.map(function (s) { return item('sides', s); }))
-        .forEach(function (entry) {
-          (entry && entry.allergens ? entry.allergens : []).forEach(function (a) {
-            if (allergens.indexOf(a) === -1) allergens.push(a);
-          });
-        });
+      var isPizza = b.kind === 'pizza';
+      var entries = saucesOf(b).map(function (x) { return item(isPizza ? 'pizzaSauces' : 'sauces', x); })
+        .concat(b.toppings.map(function (t) { return item(isPizza ? 'pizzaToppings' : 'toppings', t); }));
+
+      if (isPizza) {
+        addAll(state.boot.menu.pizzaBase.allergens);
+        entries = entries.concat((b.finishers || []).map(function (f) { return item('finishers', f); }));
+      } else {
+        entries = entries
+          .concat([item('pastas', b.pasta), item('proteins', b.protein)])
+          .concat((b.sides || []).map(function (x) { return item('sides', x); }));
+      }
+
+      entries.forEach(function (entry) { addAll(entry && entry.allergens ? entry.allergens : []); });
     });
 
     var allergenRow = allergens.length
@@ -478,12 +577,25 @@ import {
   }
 
   function dishText(bowl) {
+    var isPizza = bowl.kind === 'pizza';
+    var sauceGroup = isPizza ? 'pizzaSauces' : 'sauces';
+    var sauces = saucesOf(bowl).map(function (id) { return item(sauceGroup, id); }).filter(Boolean);
+    var sauceText = sauces.map(function (x) { return x.name; }).join(' + ');
+
+    if (isPizza) {
+      var toppings = bowl.toppings.map(function (t) { return item('pizzaToppings', t); }).filter(Boolean);
+      var out = [sauceText ? sauceText + ' Pizza' : 'Pizza'];
+      if (toppings.length) {
+        out.push('w/ ' + toppings.map(function (x) { return x.name; }).join(', '));
+      }
+      return out.join(' ');
+    }
+
     var pasta = item('pastas', bowl.pasta);
-    var sauces = saucesOf(bowl).map(function (id) { return item('sauces', id); }).filter(Boolean);
     var protein = item('proteins', bowl.protein);
     var parts = [];
     if (pasta) parts.push(pasta.name);
-    if (sauces.length) parts.push('w/ ' + sauces.map(function (x) { return x.name; }).join(' + '));
+    if (sauceText) parts.push('w/ ' + sauceText);
     if (protein && protein.id !== 'none') parts.push('+ ' + protein.name);
     return parts.join(' ');
   }
@@ -594,8 +706,9 @@ import {
     var parts = '';
 
     if (s === 'welcome') {
-      parts = html`<button class="btn btn-primary btn-lg btn-block" type="button" data-act="go" data-id="member">
-        Start my order</button>`;
+      // The two lane tiles are the call to action; a button here would just be
+      // a third thing to read.
+      parts = '';
     } else if (s === 'member') {
       var ready = state.memberDigits.length >= 4;
       parts = html`
@@ -606,17 +719,17 @@ import {
       parts = html`
         <button class="btn btn-ghost" type="button" data-act="go" data-id="member">Back</button>
         <button class="btn btn-primary btn-lg grow" type="button" data-act="startBuilding">
-          Build ${state.guestCount} bowl${state.guestCount === 1 ? '' : 's'}</button>`;
+          Build ${state.guestCount} ${state.guestCount === 1 ? lane().one : lane().many}</button>`;
     } else if (s === 'build') {
       var bowl = currentBowl();
-      var step = BUILD_STEPS[state.buildStep];
+      var step = steps()[state.buildStep];
       var chosen = step.id === 'toppings' ? true
         : step.id === 'finish' ? Boolean(bowl.portion)
         : step.id === 'sauces' ? bowl.sauces.length > 0
         : Boolean(bowl[step.id]);
-      var lastStep = state.buildStep === BUILD_STEPS.length - 1;
+      var lastStep = state.buildStep === steps().length - 1;
       var lastBowl = state.activeBowl === state.bowls.length - 1;
-      var label = !lastStep ? 'Next' : lastBowl ? 'Review order' : 'Next bowl';
+      var label = !lastStep ? 'Next' : lastBowl ? 'Review order' : ('Next ' + lane().one);
       parts = html`
         <button class="btn btn-ghost" type="button" data-act="buildBack">Back</button>
         <button class="btn btn-primary btn-lg grow" type="button" data-act="buildNext"
@@ -671,7 +784,7 @@ import {
 
   /** Move forward through steps, then bowls, then to review. */
   function advance() {
-    if (state.buildStep < BUILD_STEPS.length - 1) {
+    if (state.buildStep < steps().length - 1) {
       state.buildStep += 1;
       state.showAll = false;
       return render();
@@ -692,6 +805,16 @@ import {
   // --------------------------------------------------------------------- actions
 
   var actions = {
+    pickKind: function (el) {
+      state.kind = el.dataset.id;
+      // Changing lane invalidates anything already built - the shapes differ.
+      state.bowls = [];
+      state.activeBowl = 0;
+      state.buildStep = 0;
+      state.screen = 'member';
+      render();
+    },
+
     go: function (el) {
       state.screen = el.dataset.id;
       state.showAll = false;
@@ -786,13 +909,28 @@ import {
       render({ keepScroll: true });
     },
 
+    toggleFinisher: function (el) {
+      var bowl = currentBowl();
+      var id = el.dataset.id;
+      var i = bowl.finishers.indexOf(id);
+      if (i !== -1) {
+        bowl.finishers.splice(i, 1);
+      } else if (bowl.finishers.length >= state.boot.limits.maxFinishersPerPizza) {
+        toast('That is all four - tap one to swap it.');
+        return;
+      } else {
+        bowl.finishers.push(id);
+      }
+      render({ keepScroll: true });
+    },
+
     toggleTopping: function (el) {
       var bowl = currentBowl();
       var id = el.dataset.id;
       var i = bowl.toppings.indexOf(id);
       if (i !== -1) bowl.toppings.splice(i, 1);
-      else if (bowl.toppings.length >= state.boot.limits.maxToppingsPerBowl) {
-        toast('That is ' + state.boot.limits.maxToppingsPerBowl + ' toppings - plenty! Tap one to swap it.');
+      else if (bowl.toppings.length >= toppingCap()) {
+        toast('That is ' + toppingCap() + ' toppings - plenty! Tap one to swap it.');
         return;
       } else bowl.toppings.push(id);
       render({ keepScroll: true });
@@ -827,7 +965,7 @@ import {
       if (state.buildStep > 0) state.buildStep -= 1;
       else if (state.activeBowl > 0) {
         state.activeBowl -= 1;
-        state.buildStep = BUILD_STEPS.length - 1;
+        state.buildStep = steps().length - 1;
       } else state.screen = 'guests';
       state.showAll = false;
       render();
@@ -893,7 +1031,10 @@ import {
       state.orderNotes = '';
       state.activeBowl = 0;
       state.buildStep = 0;
-      state.screen = 'guests';
+      // Back to the lane picker, because the usual second order is the other
+      // kind - the table that just had pasta now wants a pizza.
+      state.kind = null;
+      state.screen = 'welcome';
       render();
     },
   };

@@ -44,6 +44,11 @@ const CATALOG = menu.catalog();
     return hit ? hit.shape : 'none';
   }
 
+  /** A pizza line draws a pie; a pasta line draws its shape. */
+  function lineGlyph(line) {
+    return menu.kindOf(line) === 'pizza' ? 'pie' : pastaShape(line.pasta);
+  }
+
   function waitLevel(sec) {
     var sla = config.sla;
     return sec >= sla.runnerLateSec ? 'late' : sec >= sla.runnerWarnSec ? 'warn' : '';
@@ -76,7 +81,7 @@ const CATALOG = menu.catalog();
         <div class="rcard-no">#${order.ticketNo}</div>
         <div>
           <div class="rcard-where">${order.tagLabel}</div>
-          <div class="rcard-sub">${order.lines.length} bowls &middot; ${order.guestCount} guests &middot; ${order.memberName || 'Member ' + order.memberNumber}</div>
+          <div class="rcard-sub">${(order.kind === 'pizza' ? 'PIZZA PASS' : 'PASTA PASS')} &middot; ${order.lines.length} ${order.kind === 'pizza' ? 'pizzas' : 'bowls'} &middot; ${order.guestCount} guests &middot; ${order.memberName || 'Member ' + order.memberNumber}</div>
         </div>
         <div class="rcard-wait" data-timer="${order.id}">${mmss(wait)}</div>
       </div>
@@ -84,7 +89,7 @@ const CATALOG = menu.catalog();
       <div class="rcard-items">
         ${order.lines.map(function (line) {
           return html`<div class="rcard-item">
-            ${raw(art(pastaShape(line.pasta)))}
+            ${raw(art(lineGlyph(line)))}
             <span><b>${line.guestLabel}</b> ${line.dish}</span>
           </div>`;
         })}
@@ -98,7 +103,7 @@ const CATALOG = menu.catalog();
     var remaining = (order.cookEstimateSec || 0) - cooking;
     return html`<div class="ncard">
       <span class="ncard-no">#${order.ticketNo}</span>
-      <span class="ncard-where">${order.tagLabel}<br><small class="rcard-sub">${order.lines.length} bowls</small></span>
+      <span class="ncard-where">${order.tagLabel}<br><small class="rcard-sub">${order.lines.length} ${order.kind === 'pizza' ? 'pizzas' : 'bowls'}</small></span>
       <span class="ncard-eta ${remaining < 0 ? 'is-over' : ''}" data-eta="${order.id}">${remaining < 0 ? 'over ' + mmss(-remaining) : mmss(remaining)}</span>
     </div>`;
   }

@@ -64,6 +64,7 @@ service cloud.firestore {
       function validNewOrder() {
         let d = request.resource.data;
         return d.status == 'queued'
+          && d.kind in ['pasta', 'pizza']
           && d.ticketNo is int && d.ticketNo > 0
           && d.serviceDate is string
           && d.memberNumber is string
@@ -80,6 +81,8 @@ service cloud.firestore {
         let before = resource.data;
         let after = request.resource.data;
         return after.ticketNo == before.ticketNo
+          // Flipping the kind would re-route the ticket to another station.
+          && after.kind == before.kind
           && after.claimCode == before.claimCode
           && after.serviceDate == before.serviceDate
           && after.memberNumber == before.memberNumber

@@ -42,7 +42,10 @@ function prettyDate(dateStr) {
 function statTiles(r) {
   const tiles = [
     { label: 'Covers', value: r.totals.covers, note: r.totals.bowlsPerCover + ' bowls per cover' },
-    { label: 'Bowls', value: r.totals.bowls, note: r.totals.orders + ' orders' },
+    {
+      label: 'Items', value: r.totals.bowls,
+      note: (r.byKind.pasta.items || 0) + ' bowls / ' + (r.byKind.pizza.items || 0) + ' pizzas',
+    },
     { label: 'Delivered', value: r.totals.delivered, note: r.totals.stillOpen + ' still open' },
     {
       label: 'On time', value: r.onTime.pct == null ? '--' : r.onTime.pct + '%',
@@ -105,32 +108,59 @@ function serviceCurve(r) {
   </section>`;
 }
 
-/** What sold. This is the section a manager actually acts on for prep. */
+/**
+ * What sold, split into the two prep lists. The pasta cook and the pizza cook
+ * work from different boards, and a combined "Marinara x14" tells neither of
+ * them how much to make.
+ */
 function menuMix(r) {
-  const groups = [
-    ['Pasta', r.mix.pastas], ['Sauces', r.mix.sauces], ['Proteins', r.mix.proteins],
-    ['Toppings', r.mix.toppings], ['Sides', r.mix.sides], ['Portions', r.mix.portions],
-  ].filter(([, rows]) => rows.length);
+  const lanes = [
+    ['Pasta station', 'pasta', [
+      ['Pasta shapes', r.mix.pasta.pastas], ['Sauces', r.mix.pasta.sauces],
+      ['Proteins', r.mix.pasta.proteins], ['Toppings', r.mix.pasta.toppings],
+      ['Sides', r.mix.pasta.sides], ['Portions', r.mix.pasta.portions],
+    ]],
+    ['Pizza station', 'pizza', [
+      ['Sauces', r.mix.pizza.sauces], ['Toppings', r.mix.pizza.toppings],
+      ['Finishers', r.mix.pizza.finishers],
+    ]],
+  ];
 
-  if (!groups.length) return '';
+  const rendered = lanes
+    .map(([label, kind, groups]) => {
+      const live = groups.filter(([, rows]) => rows.length);
+      if (!live.length) return '';
+      const k = r.byKind[kind] || { orders: 0, items: 0, covers: 0 };
+      return html`<div class="rpt-lane">
+        <h3 class="rpt-lane-head">
+          ${label}
+          <span class="rpt-lane-sub">${k.orders} orders &middot; ${k.items} ${kind === 'pizza' ? 'pizzas' : 'bowls'} &middot; ${k.covers} covers</span>
+        </h3>
+        <div class="mixgrid">
+          ${live.map(([groupLabel, rows]) => {
+            const max = Math.max(...rows.map((x) => x.count));
+            return html`<div class="mixcard">
+              <h3>${groupLabel}</h3>
+              ${rows.map((x) => html`<div class="mixrow">
+                <span>${x.name}</span><b>${x.count}</b>
+                <span class="mixbar"><i style="width:${Math.round((x.count / max) * 100)}%"></i></span>
+              </div>`)}
+            </div>`;
+          })}
+        </div>
+      </div>`;
+    })
+    .filter(Boolean);
+
+  if (!rendered.length) return '';
 
   return html`<section class="rpt-section">
     <h2 class="sec-title">What sold - prep guide for tomorrow</h2>
-    <div class="mixgrid">
-      ${groups.map(([label, rows]) => {
-        const max = Math.max(...rows.map((x) => x.count));
-        return html`<div class="mixcard">
-          <h3>${label}</h3>
-          ${rows.map((x) => html`<div class="mixrow">
-            <span>${x.name}</span><b>${x.count}</b>
-            <span class="mixbar"><i style="width:${Math.round((x.count / max) * 100)}%"></i></span>
-          </div>`)}
-        </div>`;
-      })}
-    </div>
+    ${rendered}
     <p class="muted" style="font-size:14px;margin:12px 0 0">
-      Sauce counts exceed bowl counts where a bowl was mixed - a bowl can carry
-      up to ${config.order.maxSaucesPerBowl} sauces.
+      Sauce counts exceed item counts where something was mixed - a bowl or a
+      pizza can carry up to ${config.order.maxSaucesPerBowl} sauces. Finishers
+      go on after the bake, so they cost nothing on the oven clock.
     </p>
   </section>`;
 }
@@ -291,10 +321,17 @@ function toCsv(r, date) {
   push('');
 
   push('MENU MIX');
-  push('Group', 'Item', 'Count');
-  Object.entries(r.mix).forEach(([group, list]) => {
-    list.forEach((x) => push(group, x.name, x.count));
+  push('Station', 'Group', 'Item', 'Count');
+  Object.entries(r.mix).forEach(([kind, groups]) => {
+    Object.entries(groups).forEach(([group, list]) => {
+      list.forEach((x) => push(kind, group, x.name, x.count));
+    });
   });
+  push('');
+
+  push('BY KIND');
+  push('Kind', 'Orders', 'Items', 'Covers');
+  Object.entries(r.byKind).forEach(([kind, k]) => push(kind, k.orders, k.items, k.covers));
   push('');
 
   push('LATE TICKETS');

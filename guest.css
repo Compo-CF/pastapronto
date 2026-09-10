@@ -150,3 +150,37 @@
 @media (max-width: 340px) {
   .modeswitch #modeLabel { display: none; }
 }
+
+/* -------------------------------------------------------------- lane picker
+   The first decision: bowl or pizza. Two targets, nothing else competing, so
+   a child can start without reading a sentence. */
+
+.lanepick { display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 4px; }
+
+.lanetile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 132px;
+  padding: 18px 20px;
+  border: 3px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  transition: transform 100ms ease, border-color 120ms ease, box-shadow 160ms ease;
+}
+.lanetile:hover { transform: translateY(-2px); border-color: var(--tomato); box-shadow: var(--shadow); }
+.lanetile:active { transform: translateY(0) scale(0.99); }
+
+.lanetile-art { flex: 0 0 76px; height: 76px; }
+.lanetile-art svg { width: 100%; height: 100%; }
+.lanetile-title { display: block; font-size: 26px; font-weight: 820; letter-spacing: -0.03em; line-height: 1.05; }
+.lanetile-title em { font-style: normal; color: var(--tomato); }
+.lanetile-blurb { display: block; margin-top: 5px; font-size: 15px; color: var(--ink-soft); line-height: 1.35; }
+
+@media (min-width: 680px) {
+  .lanepick { grid-template-columns: 1fr 1fr; }
+  .lanetile { flex-direction: column; text-align: center; min-height: 240px; justify-content: center; }
+  .lanetile-art { flex: 0 0 96px; height: 96px; }
+}

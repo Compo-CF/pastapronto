@@ -19,9 +19,13 @@ export const config = {
   },
 
   kitchen: {
+    // Every station cooks exactly one kind. Orders are routed by their kind,
+    // so a pizza can never land on a pasta rail.
     stations: [
-      { id: 'PASTA-1', label: 'Pasta 1', pans: 3 },
-      { id: 'PASTA-2', label: 'Pasta 2', pans: 3 },
+      { id: 'PASTA-1', label: 'Pasta 1', kind: 'pasta', pans: 3 },
+      { id: 'PASTA-2', label: 'Pasta 2', kind: 'pasta', pans: 3 },
+      { id: 'PIZZA-1', label: 'Pizza 1', kind: 'pizza', decks: 2 },
+      { id: 'PIZZA-2', label: 'Pizza 2', kind: 'pizza', decks: 2 },
     ],
     autoAssignStations: true,
     // Client-side gate on the kitchen/expo/admin screens. A convenience lock so
@@ -43,6 +47,10 @@ export const config = {
   order: {
     maxGuests: 8,
     maxToppingsPerBowl: 4,
+    // Pizzas are all one size, so the only limit that matters is how much you
+    // can pile on before the middle goes soggy.
+    maxToppingsPerPizza: 5,
+    maxFinishersPerPizza: 4,
     // A bowl can be half-and-half, or a three-way. More than this and the
     // pan stops tasting like anything.
     maxSaucesPerBowl: 3,

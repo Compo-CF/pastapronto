@@ -1,7 +1,8 @@
 # PastaPresto!
 
-QR-to-kitchen pasta ordering. A guest scans the code on their table, builds a
-bowl per person from a limited ingredient set, and it lands as a chit on the
+QR-to-kitchen ordering for a pasta and pizza station. A guest scans the code on
+their table, picks a lane - **build your bowl** or **build your pizza** - builds
+one per person from a limited ingredient set, and it lands as a chit on the right
 cook's screen with live timers, an accept button, and a call-runner button.
 
 Simple enough that a six-year-old can drive it unaided; detailed enough that an
@@ -58,6 +59,37 @@ Two things it cannot do for you, both one click in the console:
 
 Finally open `admin.html` and press **Seed demo orders** to fill the rail and
 the member directory.
+
+## Two lanes, four stations
+
+The landing screen asks what you are making, and everything downstream follows
+from that answer.
+
+| | Pasta | Pizza |
+| --- | --- | --- |
+| Stations | `PASTA-1`, `PASTA-2` | `PIZZA-1`, `PIZZA-2` |
+| Equipment | 3 pans per station | 2-deck oven, one 12" pie per deck |
+| Build steps | pasta, sauce, protein, toppings, size | sauce, toppings, finish |
+| Sauces | 8 | marinara, BBQ, white - that is the whole list |
+| Size | kid / regular / large | one size, always |
+| Extras | sides, spice level | finishers: parmesan, red pepper flakes, flake salt, oregano |
+| Topping cap | 4 | 5 |
+
+**Routing is by kind, and it cannot go wrong**: every station declares the kind
+it cooks, and `order.stationForTicket()` only ever picks from the matching pool.
+A test walks 40 ticket numbers to prove a pizza never lands on a pasta rail.
+
+**One order is one kind.** A table wanting both sends two orders - they are
+cooked by different people on different equipment and neither should wait on
+the other. The guest app makes that easy: finishing an order drops you back on
+the lane picker. If you would rather one ticket span both stations, that is a
+real change and a bigger one - see the note at the end of
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+**Throughput differs sharply**, which is the point of modelling them
+separately. Three pans turn over quickly; a two-deck oven does not. Six bowls
+is an 11-minute ticket, six pizzas is nearly 15 - the third pizza already waits
+for a deck to clear.
 
 ## Running out of something (86)
 

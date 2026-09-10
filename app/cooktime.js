@@ -4,7 +4,7 @@ import * as menu from './menu.js';
  * Cook-time model. Deliberately explicit so a chef can argue with the numbers
  * and change them in one place.
  *
- * One bowl:
+ * PASTA - one bowl:
  *   boil(pasta) + finish(sauces) + add(protein) + topping prep + portion extra
  *   ... plus the slowest side, which bakes in parallel with the boil.
  *
@@ -15,24 +15,57 @@ import * as menu from './menu.js';
  * the slowest sauce plus a small handling penalty for each extra one - not the
  * sum, which would badly over-quote a half-marinara-half-alfredo bowl.
  *
- * A whole order is NOT the sum of its bowls: a station boils several pans at
- * once. So we take the slowest bowl, then add a batch penalty for every pan
- * load beyond the station's capacity, plus plating time per bowl.
+ * PIZZA - one pie:
+ *   bake(base) + topping load. Every pizza is the same size, so the base bake
+ *   is a constant; more toppings hold more water and run a little longer.
+ *   Finishers go on after the bake and cost nothing on the oven clock.
+ *
+ * The two differ in how they BATCH, which is the part that actually matters at
+ * a rush. A pasta station runs three pans at once. A pizza station is a small
+ * two-deck oven holding one pie per deck, so only two pizzas bake together and
+ * the third waits for a deck to clear - pizza throughput is much tighter than
+ * pasta, and a table of six pizzas is a genuinely long ticket.
  */
 export const MODEL = {
-  pansPerStation: 3,
-  batchPenaltySec: 120,
-  platePerBowlSec: 20,
+  pasta: {
+    pansPerStation: 3,
+    batchPenaltySec: 120,
+    platePerItemSec: 20,
+  },
+  pizza: {
+    // A small two-deck oven: one 12" pie per deck, so a station bakes two at a
+    // time and the third pie waits for a deck to clear. This is the number that
+    // decides whether a table of six waits 10 minutes or 25, so it is worth
+    // getting from the actual oven rather than guessing.
+    decks: 2,
+    piesPerDeck: 1,
+    // Pulling a finished pie and loading the next one.
+    deckReloadSec: 180,
+    platePerItemSec: 15,
+    perToppingSec: 10,
+  },
   extraSaucePenaltySec: 20,
   // Rough queue drag used only for the guest-facing promise, not the SLA.
   queueDragPerOrderSec: 45,
   minPromiseSec: 240,
 };
 
-/** Seconds of active cooking for a single bowl. */
-export function bowlCookSec(line) {
+/** Seconds of active cooking for one bowl or one pizza. */
+export function lineCookSec(line) {
+  const kind = menu.kindOf(line);
+  const g = menu.GROUPS_FOR[kind];
+
+  const sauces = menu.saucesOf(line).map((id) => menu.find(g.sauces, id)).filter(Boolean);
+
+  if (kind === 'pizza') {
+    const toppings = (line.toppings || []).map((id) => menu.find('pizzaToppings', id)).filter(Boolean);
+    const load = toppings.reduce((a, t) => a + (t.addSec || 0), 0)
+      + toppings.length * MODEL.pizza.perToppingSec;
+    // Sauce is spread before the bake, so it does not extend the oven clock.
+    return menu.PIZZA_BASE.bakeSec + load;
+  }
+
   const pasta = menu.find('pastas', line.pasta);
-  const sauces = menu.saucesOf(line).map((id) => menu.find('sauces', id)).filter(Boolean);
   const protein = menu.find('proteins', line.protein);
   const portion = menu.find('portions', line.portion) || menu.find('portions', 'regular');
 
@@ -43,29 +76,42 @@ export function bowlCookSec(line) {
     : 60;
   sec += protein ? protein.addSec : 0;
   sec += portion.extraSec;
-  // Toppings that need heat/prep; cold garnishes are 0.
   sec += (line.toppings || []).reduce((acc, id) => {
     const t = menu.find('toppings', id);
     return acc + (t ? t.addSec : 0);
   }, 0);
-  // Sides go in the oven alongside the boil, so only the slowest one can
-  // become the binding constraint.
   const slowestSide = (line.sides || []).reduce((acc, id) => {
-    const s = menu.find('sides', id);
-    return Math.max(acc, s ? s.cookSec : 0);
+    const x = menu.find('sides', id);
+    return Math.max(acc, x ? x.cookSec : 0);
   }, 0);
   return Math.max(sec, slowestSide);
 }
 
-/** Seconds of cooking for the whole order, measured from ACCEPT. */
+/** Kept for older call sites; a "bowl" is just a pasta line. */
+export const bowlCookSec = lineCookSec;
+
+/**
+ * Seconds of cooking for a whole order, measured from ACCEPT.
+ *
+ * Not the sum of its items: a pasta station runs several pans at once, and a
+ * pizza oven bakes a whole deck together. Both are batching problems, with
+ * different batch sizes and different reload costs.
+ */
 export function orderCookSec(lines) {
   if (!lines || lines.length === 0) return 0;
-  const each = lines.map(bowlCookSec);
-  const slowest = Math.max(...each);
-  const panLoads = Math.ceil(lines.length / MODEL.pansPerStation);
-  const batch = (panLoads - 1) * MODEL.batchPenaltySec;
-  const plating = lines.length * MODEL.platePerBowlSec;
-  return slowest + batch + plating;
+  const kind = menu.kindOf(lines[0]);
+  const slowest = Math.max(...lines.map(lineCookSec));
+
+  if (kind === 'pizza') {
+    const m = MODEL.pizza;
+    const perBatch = Math.max(1, m.decks * m.piesPerDeck);
+    const batches = Math.ceil(lines.length / perBatch);
+    return slowest + (batches - 1) * m.deckReloadSec + lines.length * m.platePerItemSec;
+  }
+
+  const m = MODEL.pasta;
+  const panLoads = Math.ceil(lines.length / m.pansPerStation);
+  return slowest + (panLoads - 1) * m.batchPenaltySec + lines.length * m.platePerItemSec;
 }
 
 /**
@@ -82,12 +128,15 @@ export function promiseSec(lines, queueDepth = 0) {
 /** Per-bowl breakdown, used by the admin screen to explain an estimate. */
 export function explain(lines) {
   return {
-    bowls: lines.map((l) => ({
+    items: lines.map((l) => ({
       guest: l.guestLabel,
+      kind: menu.kindOf(l),
       dish: menu.describe(l),
-      cookSec: bowlCookSec(l),
+      cookSec: lineCookSec(l),
     })),
-    panLoads: Math.ceil(lines.length / MODEL.pansPerStation),
+    batches: menu.kindOf(lines[0] || {}) === 'pizza'
+      ? Math.ceil(lines.length / (MODEL.pizza.decks * MODEL.pizza.piesPerDeck))
+      : Math.ceil(lines.length / MODEL.pasta.pansPerStation),
     orderCookSec: orderCookSec(lines),
     model: MODEL,
   };

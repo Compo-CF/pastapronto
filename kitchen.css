@@ -252,3 +252,7 @@
   letter-spacing: 0.04em;
 }
 .k86:empty { display: none; }
+
+/* Which lane a chit came from. Colour plus the word, never colour alone. */
+.badge-kind.is-pasta { background: #3d3417; color: var(--kwarn); }
+.badge-kind.is-pizza { background: #3a1f2e; color: #ff9ecb; }

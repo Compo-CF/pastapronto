@@ -73,3 +73,12 @@
   .card, .mixcard, .exbox { box-shadow: none; }
   .curve-tip { display: none; }
 }
+
+/* Two prep lists, one per station, because two different cooks read them. */
+.rpt-lane { margin-top: 18px; break-inside: avoid; }
+.rpt-lane-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 10px;
+  font-size: 18px; font-weight: 800; letter-spacing: -0.01em;
+}
+.rpt-lane-sub { font-size: 13px; font-weight: 650; color: var(--ink-faint); }

@@ -34,6 +34,7 @@ import {
 import { firebaseConfig, isConfigured } from './firebase-config.js';
 import { config, serviceDate, tagById } from './config.js';
 import * as order from './order.js';
+import * as menu from './menu.js';
 import { noteClockSkew } from './ui.js';
 
 export { isConfigured };
@@ -215,6 +216,9 @@ export async function submitOrder(draft, { tagId, queueDepth = 0 } = {}) {
 
   const date = serviceDate();
   const tag = tagId ? tagById(tagId) : null;
+  // Pasta and pizza are cooked by different people on different equipment, so
+  // the kind decides which pool of stations this ticket can land on.
+  const kind = menu.kindOf((draft.lines || [])[0] || {});
   const ref = doc(ordersCol);
   const counterRef = doc(db, 'counters', date);
 
@@ -231,7 +235,7 @@ export async function submitOrder(draft, { tagId, queueDepth = 0 } = {}) {
       ticketNo,
       claimCode: order.claimCode(),
       station: order.stationForTicket(
-        ticketNo, config.kitchen.stations, config.kitchen.autoAssignStations,
+        ticketNo, config.kitchen.stations, config.kitchen.autoAssignStations, kind,
       ),
       queueDepth,
       tag,

@@ -80,6 +80,34 @@ const DRAFTS = [
       { guestLabel: 'Kid 2', pasta: 'farfalle', sauces: ['marinara'], protein: 'meatballs', toppings: ['mozzarella'], sides: [], portion: 'kid', spice: 'mild' },
     ],
   },
+  {
+    _age: 14, _state: 'cooking',
+    memberNumber: '20871', memberName: 'Nakamura', memberStatus: 'verified', memberTier: 'silver',
+    guestCount: 4, tag: 'table-04',
+    lines: [
+      { guestLabel: 'Kenji', kind: 'pizza', sauces: ['pz_marinara'], toppings: ['pepperoni', 'pz_mushroom'], finishers: ['fin_parm', 'fin_oregano'] },
+      { guestLabel: 'Yuki', kind: 'pizza', sauces: ['pz_white'], toppings: ['pz_spinach', 'ricotta'], finishers: ['fin_chili'] },
+      { guestLabel: 'Rin', kind: 'pizza', sauces: ['pz_bbq'], toppings: ['pz_chicken', 'red_onion', 'bacon'], finishers: ['fin_salt'] },
+    ],
+  },
+  {
+    _age: 6, _state: 'queued',
+    memberNumber: '44219', memberName: 'Delgado', memberStatus: 'verified', memberTier: 'bronze',
+    guestCount: 2, tag: 'patio-a', avoidAllergens: ['pork'],
+    notes: 'No pork on either pizza',
+    lines: [
+      { guestLabel: 'Rosa', kind: 'pizza', sauces: ['pz_marinara'], toppings: ['pz_pepper', 'pz_olives', 'pz_tomatoes'], finishers: ['fin_oregano'], notes: 'NO PORK' },
+      { guestLabel: 'Mateo', kind: 'pizza', sauces: ['pz_marinara', 'pz_bbq'], toppings: ['pineapple', 'pz_chicken'], finishers: [] },
+    ],
+  },
+  {
+    _age: 2, _state: 'queued',
+    memberNumber: '61234', memberName: 'Petrov', memberStatus: 'verified', memberTier: 'gold',
+    guestCount: 1, tag: 'pool-bar',
+    lines: [
+      { guestLabel: 'Guest 1', kind: 'pizza', sauces: ['pz_white'], toppings: ['extra_mozz', 'jalapeno'], finishers: ['fin_chili', 'fin_salt'] },
+    ],
+  },
 ];
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60000).toISOString();
@@ -92,12 +120,15 @@ function stripMeta(draft) {
 
 let ticket = 0;
 
-function build(spec, station) {
+function build(spec) {
   const draft = stripMeta(spec);
+  const ticketNo = (ticket += 1);
+  const kind = (spec.lines[0] || {}).kind === 'pizza' ? 'pizza' : 'pasta';
   return order.buildOrder(draft, {
-    ticketNo: (ticket += 1),
+    ticketNo,
     claimCode: order.claimCode(),
-    station,
+    // Same routing the live app uses, so seeded chits land on the right rails.
+    station: order.stationForTicket(ticketNo, config.kitchen.stations, true, kind),
     queueDepth: 2,
     tag: spec.tag ? tagById(spec.tag) : null,
     serviceDate: serviceDate(),
@@ -110,7 +141,7 @@ function deliveredHistory(count = 7) {
   const out = [];
   for (let i = 0; i < count; i += 1) {
     const spec = DRAFTS[i % DRAFTS.length];
-    const o = build(spec, i % 2 ? 'PASTA-2' : 'PASTA-1');
+    const o = build(spec);
     const age = 120 - i * 12;
     const queueWait = 30 + (i % 4) * 25;
     const cook = Math.round(o.cookEstimateSec * (0.8 + (i % 5) * 0.12));
@@ -141,7 +172,7 @@ export function buildDemoOrders() {
   const orders = deliveredHistory();
 
   DRAFTS.forEach((spec, i) => {
-    const o = build(spec, i % 2 ? 'PASTA-2' : 'PASTA-1');
+    const o = build(spec);
     o.submittedAt = minutesAgo(spec._age);
     o.events[0].at = o.submittedAt;
 

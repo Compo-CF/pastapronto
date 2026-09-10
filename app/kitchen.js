@@ -152,21 +152,36 @@ const CATALOG = menu.catalog();
     return hit ? hit.shape : 'none';
   }
 
+  /** A pizza line draws a pie; a pasta line draws its shape. */
+  function lineGlyph(line) {
+    return menu.kindOf(line) === 'pizza' ? 'pie' : pastaShape(line.pasta);
+  }
+
+  /** Which catalog group a line's toppings live in. */
+  function toppingGroup(line) {
+    return menu.kindOf(line) === 'pizza' ? 'pizzaToppings' : 'toppings';
+  }
+
   function renderLine(line) {
+    var isPizza = menu.kindOf(line) === 'pizza';
     var adds = [];
     if (line.toppings && line.toppings.length) {
-      adds.push(line.toppings.map(function (t) { return menuName('toppings', t); }).join(', '));
+      adds.push(line.toppings.map(function (t) { return menuName(toppingGroup(line), t); }).join(', '));
     }
-    if (line.sides && line.sides.length) {
+    if (isPizza && line.finishers && line.finishers.length) {
+      // Post-bake, so the cook needs it called out separately from the build.
+      adds.push('FINISH: ' + line.finishers.map(function (f) { return menuName('finishers', f); }).join(', '));
+    }
+    if (!isPizza && line.sides && line.sides.length) {
       adds.push('SIDE: ' + line.sides.map(function (s) { return menuName('sides', s); }).join(', '));
     }
 
-    var flags = [menuName('portions', line.portion)];
-    if (line.spice && line.spice !== 'mild') flags.push(line.spice.toUpperCase());
+    var flags = isPizza ? ['12\" PIE'] : [menuName('portions', line.portion)];
+    if (!isPizza && line.spice && line.spice !== 'mild') flags.push(line.spice.toUpperCase());
     if (line.allergens && line.allergens.length) flags.push(line.allergens.join('/'));
 
     return html`<li class="cline">
-      <span class="cline-art">${raw(art(pastaShape(line.pasta)))}</span>
+      <span class="cline-art">${raw(art(lineGlyph(line)))}</span>
       <div class="grow">
         <div class="cline-who">${line.guestLabel}</div>
         <div class="cline-dish">${line.dish}</div>
@@ -185,6 +200,8 @@ const CATALOG = menu.catalog();
     var badges = [];
     if (order.priority === 'rush') badges.push('<span class="badge badge-rush">Rush</span>');
     if (order.priority === 'allergy') badges.push('<span class="badge badge-allergy">Allergy</span>');
+    var kind = order.kind || 'pasta';
+    badges.push('<span class="badge badge-kind is-' + kind + '">' + (kind === 'pizza' ? 'Pizza' : 'Pasta') + '</span>');
     badges.push('<span class="badge badge-station">' + escapeHtml(order.station) + '</span>');
     badges.push('<span class="badge badge-guests">' + order.guestCount + ' guests</span>');
     if (order.memberStatus === 'unverified') badges.push('<span class="badge badge-unverified">Member unverified</span>');

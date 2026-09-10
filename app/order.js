@@ -86,7 +86,15 @@ export function validateDraft(draft, cfg, unavailable = []) {
   }
 
   const lines = Array.isArray(draft.lines) ? draft.lines : [];
-  if (lines.length === 0) errors.push('Add at least one bowl to the order.');
+  if (lines.length === 0) errors.push('Add at least one item to the order.');
+
+  // One order, one station. A table wanting both pasta and pizza sends two
+  // orders, because the two are cooked by different people on different
+  // equipment and neither should wait on the other.
+  const kinds = [...new Set(lines.map(menu.kindOf))];
+  if (kinds.length > 1) {
+    errors.push('Send pasta and pizza as separate orders - they cook at different stations.');
+  }
   lines.forEach((line, i) => {
     menu.validateLine(line, cfg.order).forEach((e) => errors.push(`Bowl ${i + 1}: ${e}`));
 
@@ -123,21 +131,36 @@ export function validateDraft(draft, cfg, unavailable = []) {
 export function buildOrder(draft, ctx) {
   const nowIso = (ctx.now || new Date()).toISOString();
 
-  const lines = (draft.lines || []).map((line, i) => ({
-    lineId: 'ln' + String(i + 1).padStart(2, '0'),
-    guestLabel: String(line.guestLabel || `Guest ${i + 1}`).slice(0, 24),
-    pasta: line.pasta,
-    sauces: menu.saucesOf(line),
-    protein: line.protein || 'none',
-    toppings: line.toppings || [],
-    sides: line.sides || [],
-    portion: line.portion,
-    spice: line.spice || 'mild',
-    notes: String(line.notes || '').slice(0, 140),
-    allergens: menu.allergensFor(line),
-    cookSec: cooktime.bowlCookSec(line),
-    dish: menu.describe(line),
-  }));
+  const kind = menu.kindOf((draft.lines || [])[0] || {});
+
+  const lines = (draft.lines || []).map((line, i) => {
+    const common = {
+      lineId: 'ln' + String(i + 1).padStart(2, '0'),
+      guestLabel: String(line.guestLabel || `Guest ${i + 1}`).slice(0, 24),
+      kind,
+      sauces: menu.saucesOf(line),
+      toppings: line.toppings || [],
+      notes: String(line.notes || '').slice(0, 140),
+      allergens: menu.allergensFor(line),
+      cookSec: cooktime.lineCookSec(line),
+      dish: menu.describe(line),
+    };
+
+    if (kind === 'pizza') {
+      // No portion (every pizza is the same size), no protein or sides - meats
+      // are just toppings on a pizza - and finishers instead of a spice level.
+      return { ...common, finishers: line.finishers || [] };
+    }
+
+    return {
+      ...common,
+      pasta: line.pasta,
+      protein: line.protein || 'none',
+      sides: line.sides || [],
+      portion: line.portion,
+      spice: line.spice || 'mild',
+    };
+  });
 
   const avoid = Array.isArray(draft.avoidAllergens) ? draft.avoidAllergens : [];
   const cookEstimateSec = cooktime.orderCookSec(lines);
@@ -153,6 +176,7 @@ export function buildOrder(draft, ctx) {
     memberStatus: draft.memberStatus || 'unverified',
     memberTier: draft.memberTier || 'guest',
 
+    kind,
     guestCount: Number(draft.guestCount),
     tag: ctx.tag ? ctx.tag.id : null,
     tagLabel: ctx.tag ? ctx.tag.label : 'Walk-up',
@@ -244,10 +268,13 @@ export function publicView(order) {
     cookEstimateSec: order.cookEstimateSec,
     promiseSec: order.promiseSec,
     promisedReadyAt: order.promisedReadyAt,
+    kind: order.kind || 'pasta',
     lines: (order.lines || []).map((l) => ({
       lineId: l.lineId, guestLabel: l.guestLabel, dish: l.dish,
+      kind: menu.kindOf(l),
       sauces: menu.saucesOf(l),
-      toppings: l.toppings, sides: l.sides, portion: l.portion,
+      toppings: l.toppings, finishers: l.finishers,
+      sides: l.sides, portion: l.portion,
       spice: l.spice, notes: l.notes,
     })),
   };
@@ -314,16 +341,18 @@ export function metrics(orders, sla) {
 /**
  * Which station cooks this ticket.
  *
- * Derived from the ticket number rather than from a live count of each
- * station's load. That trades a little cleverness for two real wins: it needs
- * no database read on the path that places an order, and it is deterministic,
- * so it can be computed inside the same transaction that allocates the number.
- * With a monotonic ticket sequence this is exact round-robin anyway.
+ * Stations are declared with the kind they cook, so a pizza can never be
+ * routed to a pasta rail. Within a kind the choice is derived from the ticket
+ * number rather than a live count of each station's load: that needs no
+ * database read on the path that places an order, it is deterministic so it can
+ * be computed inside the transaction that allocates the number, and with a
+ * monotonic sequence it is exact round-robin anyway.
  */
-export function stationForTicket(ticketNo, stations, autoAssign = true) {
-  if (!stations.length) return null;
-  if (!autoAssign) return stations[0].id;
-  return stations[(Math.max(1, ticketNo) - 1) % stations.length].id;
+export function stationForTicket(ticketNo, stations, autoAssign = true, kind = 'pasta') {
+  const eligible = stations.filter((s) => (s.kind || 'pasta') === kind);
+  if (!eligible.length) return null;
+  if (!autoAssign) return eligible[0].id;
+  return eligible[(Math.max(1, ticketNo) - 1) % eligible.length].id;
 }
 
 /** Short claim code shown to the guest so a server can find their ticket. */
@@ -393,27 +422,54 @@ export function shiftReport(orders, sla) {
   const peak = curve.reduce((best, b) => (!best || b.bowls > best.bowls ? b : best), null);
 
   // ---- what actually sold, which is what drives tomorrow's prep ---------
-  const tally = (group, pick) => {
+  //
+  // Split by kind: the pasta cook and the pizza cook prep different lists, and
+  // "Marinara x14" means nothing until you know how much of it went on pies.
+  const tally = (lines, pick) => {
     const counts = {};
-    alive.forEach((o) => o.lines.forEach((line) => {
+    lines.forEach((line) => {
       pick(line).forEach((id) => { if (id) counts[id] = (counts[id] || 0) + 1; });
-    }));
+    });
     return Object.entries(counts)
       .map(([id, count]) => {
-        const item = menu.find(group, id);
+        const item = menu.findAnywhere(id);
         return { id, name: item ? item.name : id, count };
       })
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   };
 
+  const linesOfKind = (kind) => alive
+    .filter((o) => (o.kind || 'pasta') === kind)
+    .flatMap((o) => o.lines);
+
+  const pastaLines = linesOfKind('pasta');
+  const pizzaLines = linesOfKind('pizza');
+
   const mix = {
-    pastas: tally('pastas', (l) => [l.pasta]),
-    sauces: tally('sauces', (l) => menu.saucesOf(l)),
-    proteins: tally('proteins', (l) => [l.protein]),
-    toppings: tally('toppings', (l) => l.toppings || []),
-    sides: tally('sides', (l) => l.sides || []),
-    portions: tally('portions', (l) => [l.portion]),
+    pasta: {
+      pastas: tally(pastaLines, (l) => [l.pasta]),
+      sauces: tally(pastaLines, (l) => menu.saucesOf(l)),
+      proteins: tally(pastaLines, (l) => [l.protein]),
+      toppings: tally(pastaLines, (l) => l.toppings || []),
+      sides: tally(pastaLines, (l) => l.sides || []),
+      portions: tally(pastaLines, (l) => [l.portion]),
+    },
+    pizza: {
+      sauces: tally(pizzaLines, (l) => menu.saucesOf(l)),
+      toppings: tally(pizzaLines, (l) => l.toppings || []),
+      finishers: tally(pizzaLines, (l) => l.finishers || []),
+    },
   };
+
+  const byKind = ['pasta', 'pizza'].reduce((acc, kind) => {
+    const mine = alive.filter((o) => (o.kind || 'pasta') === kind);
+    acc[kind] = {
+      orders: mine.length,
+      items: mine.reduce((a, o) => a + o.lines.length, 0),
+      covers: mine.reduce((a, o) => a + o.guestCount, 0),
+    };
+    return acc;
+  }, {});
 
   // ---- per station -------------------------------------------------------
   const stationIds = [...new Set(alive.map((o) => o.station).filter(Boolean))].sort();
@@ -461,6 +517,7 @@ export function shiftReport(orders, sla) {
     curve,
     peak,
     mix,
+    byKind,
     stations,
     exceptions: {
       voided: voided.map((o) => ({ ticketNo: o.ticketNo, tagLabel: o.tagLabel })),
