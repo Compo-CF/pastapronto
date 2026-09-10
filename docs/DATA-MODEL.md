@@ -40,7 +40,7 @@ answers "how long has this been *my* problem":
   "claimCode": "RL5F",              // 4 chars, shown to the guest for a server
   "serviceDate": "2026-09-09",      // rolls at 4am so a late shift stays on one date
 
-  "memberNumber": "10432",
+  "memberNumber": "1043",
   "memberName": "Compofelice",
   "memberStatus": "verified",       // verified | unverified
   "memberTier": "gold",

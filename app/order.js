@@ -77,7 +77,7 @@ export function validateDraft(draft, cfg, unavailable = []) {
   const errors = [];
   const memberNumber = String(draft.memberNumber || '').trim();
   if (!cfg.order.memberNumberPattern.test(memberNumber)) {
-    errors.push('Member number must be 4 to 6 digits.');
+    errors.push('Member number must be four digits.');
   }
 
   const guestCount = Number(draft.guestCount);

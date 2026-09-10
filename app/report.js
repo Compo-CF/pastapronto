@@ -42,8 +42,8 @@ function prettyDate(dateStr) {
 function statTiles(r) {
   const tiles = [
     {
-      label: 'Covers (billable)', value: r.totals.covers,
-      note: r.totals.members + ' member' + (r.totals.members === 1 ? '' : 's') + ' · AYCE, one charge each',
+      label: 'Covers = charges', value: r.totals.covers,
+      note: 'one AYCE charge per guest · ' + r.totals.members + ' member' + (r.totals.members === 1 ? '' : 's'),
     },
     {
       label: 'Items', value: r.totals.bowls,
@@ -215,7 +215,7 @@ function memberList(r) {
       <table class="rpt-table">
         <thead><tr>
           <th>Member</th><th>Name</th>
-          <th class="num">Orders</th><th class="num">Covers</th>
+          <th class="num">Orders</th><th class="num">Charges</th>
           <th class="num">Bowls</th><th class="num">Pizzas</th>
           <th class="num">Items</th><th class="num">Per cover</th>
           <th>Ate</th>
@@ -250,10 +250,10 @@ function memberList(r) {
       </table>
     </div>
     <p class="muted" style="font-size:14px;margin:12px 0 0">
-      <strong>Covers is what you charge.</strong> One price per person covers both
-      pasta and pizza, so a member who orders twice is still one party on one
-      charge - the covers column is the largest head count they reported, not the
-      sum of their orders. ${r.totals.repeatOrders > 0
+      <strong>Charges is the billing column.</strong> One price per person covers
+      both pasta and pizza, so four guests at a table are four charges no matter
+      how many bowls or pizzas they order. It is the largest head count that
+      member reported, never the sum of their orders. ${r.totals.repeatOrders > 0
         ? 'Tonight ' + r.totals.repeatOrders + ' order' + (r.totals.repeatOrders === 1 ? ' was' : 's were') + ' a repeat trip by a member already counted.'
         : 'Nobody ordered twice tonight.'}
     </p>
@@ -361,6 +361,14 @@ function render() {
       <span class="rpt-date">${prettyDate(date)}</span>
       <span class="rpt-gen">generated ${new Date(r.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
     </div>`,
+    html`<p class="rpt-headline">
+      <strong>${r.totals.covers} charges</strong> tonight - one per guest, all you can eat.
+      ${r.totals.bowls} items came out of the kitchen
+      (${r.byKind.pasta.items} bowls, ${r.byKind.pizza.items} pizzas) across
+      ${r.totals.orders} order${r.totals.orders === 1 ? '' : 's'} from
+      ${r.totals.members} member${r.totals.members === 1 ? '' : 's'}.
+      How much they ordered does not change what they are charged.
+    </p>`,
     statTiles(r),
     serviceCurve(r),
     memberList(r),

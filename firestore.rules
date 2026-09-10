@@ -68,7 +68,7 @@ service cloud.firestore {
           && d.ticketNo is int && d.ticketNo > 0
           && d.serviceDate is string
           && d.memberNumber is string
-          && d.memberNumber.size() >= 4 && d.memberNumber.size() <= 6
+          && d.memberNumber.size() == 4
           && d.guestCount is int && d.guestCount >= 1 && d.guestCount <= 8
           && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 8
           && d.cookEstimateSec is int && d.cookEstimateSec > 0

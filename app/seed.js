@@ -12,18 +12,18 @@ import * as order from './order.js';
 
 /** Seeded into the `members` collection so the keypad can resolve names. */
 export const MEMBERS = [
-  { memberNumber: '10432', name: 'Compofelice', tier: 'gold',   dietaryNotes: 'Shellfish allergy on file', defaultGuests: 4 },
-  { memberNumber: '20871', name: 'Nakamura',    tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
-  { memberNumber: '31500', name: 'Okonkwo',     tier: 'gold',   dietaryNotes: 'Gluten free - Sam', defaultGuests: 5 },
-  { memberNumber: '44219', name: 'Delgado',     tier: 'bronze', dietaryNotes: '', defaultGuests: 3 },
-  { memberNumber: '50077', name: 'Whitfield',   tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
-  { memberNumber: '61234', name: 'Petrov',      tier: 'gold',   dietaryNotes: 'No dairy - Ana', defaultGuests: 6 },
+  { memberNumber: '1043', name: 'Compofelice', tier: 'gold',   dietaryNotes: 'Shellfish allergy on file', defaultGuests: 4 },
+  { memberNumber: '2087', name: 'Nakamura',    tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '3150', name: 'Okonkwo',     tier: 'gold',   dietaryNotes: 'Gluten free - Sam', defaultGuests: 5 },
+  { memberNumber: '4421', name: 'Delgado',     tier: 'bronze', dietaryNotes: '', defaultGuests: 3 },
+  { memberNumber: '5007', name: 'Whitfield',   tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '6123', name: 'Petrov',      tier: 'gold',   dietaryNotes: 'No dairy - Ana', defaultGuests: 6 },
 ];
 
 const DRAFTS = [
   {
     _age: 25, _state: 'ready',
-    memberNumber: '20871', memberName: 'Nakamura', memberStatus: 'verified', memberTier: 'silver',
+    memberNumber: '2087', memberName: 'Nakamura', memberStatus: 'verified', memberTier: 'silver',
     guestCount: 2, tag: 'table-03',
     lines: [
       { guestLabel: 'Kenji', pasta: 'spaghetti', sauces: ['marinara'], protein: 'meatballs', toppings: ['parmesan', 'basil'], sides: [], portion: 'regular', spice: 'mild' },
@@ -32,7 +32,7 @@ const DRAFTS = [
   },
   {
     _age: 17, _state: 'cooking', _late: true,
-    memberNumber: '31500', memberName: 'Okonkwo', memberStatus: 'verified', memberTier: 'gold',
+    memberNumber: '3150', memberName: 'Okonkwo', memberStatus: 'verified', memberTier: 'gold',
     guestCount: 5, tag: 'patio-a', avoidAllergens: ['gluten'],
     notes: 'Sam is celiac - separate water, please',
     lines: [
@@ -45,7 +45,7 @@ const DRAFTS = [
   },
   {
     _age: 9, _state: 'cooking',
-    memberNumber: '44219', memberName: 'Delgado', memberStatus: 'verified', memberTier: 'bronze',
+    memberNumber: '4421', memberName: 'Delgado', memberStatus: 'verified', memberTier: 'bronze',
     guestCount: 3, tag: 'table-01',
     lines: [
       { guestLabel: 'Rosa', pasta: 'penne', sauces: ['arrabbiata'], protein: 'shrimp', toppings: ['peppers'], sides: [], portion: 'regular', spice: 'hot' },
@@ -55,7 +55,7 @@ const DRAFTS = [
   },
   {
     _age: 4, _state: 'queued', _rush: true,
-    memberNumber: '61234', memberName: 'Petrov', memberStatus: 'verified', memberTier: 'gold',
+    memberNumber: '6123', memberName: 'Petrov', memberStatus: 'verified', memberTier: 'gold',
     guestCount: 2, tag: 'cabana-3', avoidAllergens: ['dairy'],
     notes: 'Ana is dairy free',
     lines: [
@@ -65,7 +65,7 @@ const DRAFTS = [
   },
   {
     _age: 3, _state: 'queued',
-    memberNumber: '50077', memberName: 'Whitfield', memberStatus: 'verified', memberTier: 'silver',
+    memberNumber: '5007', memberName: 'Whitfield', memberStatus: 'verified', memberTier: 'silver',
     guestCount: 1, tag: 'pool-bar',
     lines: [
       { guestLabel: 'Guest 1', pasta: 'tortellini', sauces: ['pesto'], protein: 'none', toppings: ['tomatoes', 'basil'], sides: [], portion: 'regular', spice: 'mild' },
@@ -73,7 +73,7 @@ const DRAFTS = [
   },
   {
     _age: 1, _state: 'queued',
-    memberNumber: '78901', memberName: '', memberStatus: 'unverified', memberTier: 'guest',
+    memberNumber: '7890', memberName: '', memberStatus: 'unverified', memberTier: 'guest',
     guestCount: 2, tag: 'takeout',
     lines: [
       { guestLabel: 'Kid 1', pasta: 'shells', sauces: ['butter'], protein: 'none', toppings: ['parmesan'], sides: ['breadsticks'], portion: 'kid', spice: 'mild' },
@@ -82,7 +82,7 @@ const DRAFTS = [
   },
   {
     _age: 14, _state: 'cooking',
-    memberNumber: '20871', memberName: 'Nakamura', memberStatus: 'verified', memberTier: 'silver',
+    memberNumber: '2087', memberName: 'Nakamura', memberStatus: 'verified', memberTier: 'silver',
     guestCount: 4, tag: 'table-04',
     lines: [
       { guestLabel: 'Kenji', kind: 'pizza', sauces: ['pz_marinara'], toppings: ['pepperoni', 'pz_mushroom'], finishers: ['fin_parm', 'fin_oregano'] },
@@ -92,7 +92,7 @@ const DRAFTS = [
   },
   {
     _age: 6, _state: 'queued',
-    memberNumber: '44219', memberName: 'Delgado', memberStatus: 'verified', memberTier: 'bronze',
+    memberNumber: '4421', memberName: 'Delgado', memberStatus: 'verified', memberTier: 'bronze',
     guestCount: 2, tag: 'patio-a', avoidAllergens: ['pork'],
     notes: 'No pork on either pizza',
     lines: [
@@ -102,7 +102,7 @@ const DRAFTS = [
   },
   {
     _age: 2, _state: 'queued',
-    memberNumber: '61234', memberName: 'Petrov', memberStatus: 'verified', memberTier: 'gold',
+    memberNumber: '6123', memberName: 'Petrov', memberStatus: 'verified', memberTier: 'gold',
     guestCount: 1, tag: 'pool-bar',
     lines: [
       { guestLabel: 'Guest 1', kind: 'pizza', sauces: ['pz_white'], toppings: ['extra_mozz', 'jalapeno'], finishers: ['fin_chili', 'fin_salt'] },

@@ -27,7 +27,7 @@ function test(name, fn) {
 }
 
 const draft = () => ({
-  memberNumber: '10432',
+  memberNumber: '1043',
   memberName: 'Compofelice',
   memberStatus: 'verified',
   guestCount: 2,
@@ -354,7 +354,7 @@ test('shift report survives an empty day', () => {
 });
 
 const pizzaDraft = () => ({
-  memberNumber: '10432',
+  memberNumber: '1043',
   memberName: 'Compofelice',
   memberStatus: 'verified',
   guestCount: 2,
@@ -487,19 +487,19 @@ test('AYCE billing counts a person once, however many orders they place', () => 
   // A party of four eats pasta, then comes back for pizza. One price covers
   // both, so this is four covers and one charge - not eight.
   const pasta = make();
-  pasta.memberNumber = '31500';
+  pasta.memberNumber = '3150';
   pasta.memberName = 'Okonkwo';
   pasta.guestCount = 4;
 
   const pizza = makePizza();
-  pizza.memberNumber = '31500';
+  pizza.memberNumber = '3150';
   pizza.memberName = 'Okonkwo';
   pizza.guestCount = 4;
 
   const rows = order.memberRollup([pasta, pizza]);
   assert.strictEqual(rows.length, 1, 'one member, one row');
   const m = rows[0];
-  assert.strictEqual(m.memberNumber, '31500');
+  assert.strictEqual(m.memberNumber, '3150');
   assert.strictEqual(m.name, 'Okonkwo');
   assert.strictEqual(m.orders, 2, 'two trips to the app');
   assert.strictEqual(m.partySize, 4, 'still four people');
@@ -510,22 +510,53 @@ test('AYCE billing counts a person once, however many orders they place', () => 
   assert.strictEqual(order.billableCovers([pasta, pizza]), 4, 'four covers, not eight');
 });
 
+test('four guests at a table are four charges, whatever they order', () => {
+  // The operator's rule, verbatim: "If there are four guests at the table, no
+  // matter how many bowls or pizzas they order, it's always just four charges."
+  const orders = [];
+  for (let i = 0; i < 3; i += 1) {
+    const o = make();            // three pasta orders, four bowls each
+    o.memberNumber = '3150';
+    o.guestCount = 4;
+    o.lines = [...o.lines, ...o.lines];
+    orders.push(o);
+  }
+  for (let i = 0; i < 2; i += 1) {
+    const o = makePizza();       // then two pizza orders on top
+    o.memberNumber = '3150';
+    o.guestCount = 4;
+    orders.push(o);
+  }
+
+  const items = orders.reduce((a, o) => a + o.lines.length, 0);
+  assert.ok(items >= 16, 'they ordered a lot: ' + items + ' items');
+  assert.strictEqual(order.billableCovers(orders), 4, 'still four charges');
+
+  const r = order.shiftReport(orders, sla);
+  assert.strictEqual(r.totals.covers, 4, 'the report charges four');
+  assert.strictEqual(r.totals.orders, 5, 'across five orders');
+  assert.strictEqual(r.totals.members, 1, 'one member');
+  assert.strictEqual(r.totals.bowls, items, 'and every item is still counted');
+  assert.strictEqual(r.members[0].partySize, 4);
+  assert.strictEqual(r.members[0].orders, 5);
+});
+
 test('a bigger second party raises the billable count', () => {
   // Two joined them for round two, so the party genuinely grew.
   const first = make();
-  first.memberNumber = '44219';
+  first.memberNumber = '4421';
   first.guestCount = 2;
   const second = makePizza();
-  second.memberNumber = '44219';
+  second.memberNumber = '4421';
   second.guestCount = 5;
   assert.strictEqual(order.billableCovers([first, second]), 5, 'take the largest head count');
 });
 
 test('separate members are billed separately, and voids are excluded', () => {
-  const a = make(); a.memberNumber = '10001'; a.guestCount = 3;
-  const b = make(); b.memberNumber = '10002'; b.guestCount = 2;
+  const a = make(); a.memberNumber = '1001'; a.guestCount = 3;
+  const b = make(); b.memberNumber = '1002'; b.guestCount = 2;
   const voided = order.applyTransition(make(), 'void', { sla });
-  voided.memberNumber = '10003';
+  voided.memberNumber = '1003';
   voided.guestCount = 9;
 
   assert.strictEqual(order.billableCovers([a, b, voided]), 5, '3 + 2, void not charged');
@@ -535,7 +566,7 @@ test('separate members are billed separately, and voids are excluded', () => {
 
 test('an unverified member still appears on the list', () => {
   const o = make();
-  o.memberNumber = '78901';
+  o.memberNumber = '7890';
   o.memberName = '';
   o.memberStatus = 'unverified';
   const m = order.memberRollup([o])[0];
@@ -545,11 +576,11 @@ test('an unverified member still appears on the list', () => {
 });
 
 test('the member list is sorted by how much they ate', () => {
-  const light = make(); light.memberNumber = '20001';
-  const heavy = make(); heavy.memberNumber = '20002';
+  const light = make(); light.memberNumber = '2001';
+  const heavy = make(); heavy.memberNumber = '2002';
   heavy.lines = heavy.lines.concat(heavy.lines);
   const rows = order.memberRollup([light, heavy]);
-  assert.strictEqual(rows[0].memberNumber, '20002', 'heaviest eater first');
+  assert.strictEqual(rows[0].memberNumber, '2002', 'heaviest eater first');
   assert.ok(rows[0].items > rows[1].items);
 });
 

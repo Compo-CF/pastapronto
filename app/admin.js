@@ -40,7 +40,9 @@ const CATALOG = menu.catalog();
     var onTime = m.onTimePct;
     var cards = [
       { label: 'Orders today', value: m.counts.total, note: m.counts.delivered + ' delivered' },
-      { label: 'Covers', value: m.covers, note: m.bowls + ' bowls' },
+      // Covers is the AYCE charge count: one per guest, however many trips they
+      // make. m.guestCountEntries is the raw sum, kept off the tile on purpose.
+      { label: 'Covers = charges', value: m.covers, note: m.bowls + ' items out' },
       { label: 'Open now', value: m.counts.queued + m.counts.cooking + m.counts.ready,
         note: m.counts.queued + ' queued / ' + m.counts.cooking + ' cooking / ' + m.counts.ready + ' ready' },
       { label: 'Avg wait to accept', value: mmss(m.timings.avgQueueSec), note: 'target under ' + mmss(config.sla.acceptWarnSec) },

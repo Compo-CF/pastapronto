@@ -157,7 +157,7 @@ export async function lookupMember(raw) {
   const memberNumber = String(raw || '').trim();
 
   if (!config.order.memberNumberPattern.test(memberNumber)) {
-    return { status: 'invalid', memberNumber, message: 'Member numbers are 4 to 6 digits.' };
+    return { status: 'invalid', memberNumber, message: 'Member numbers are four digits.' };
   }
 
   let hit = null;

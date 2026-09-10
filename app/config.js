@@ -56,7 +56,10 @@ export const config = {
     maxSaucesPerBowl: 3,
     maxSidesPerBowl: 2,
     allowUnverifiedMembers: true,
-    memberNumberPattern: /^[0-9]{4,6}$/,
+    // Member numbers are four digits, always. The keypad shows exactly four
+    // boxes and stops accepting input at four, so there is no "am I done yet".
+    memberNumberLength: 4,
+    memberNumberPattern: /^[0-9]{4}$/,
   },
 
   // Each printed table tent gets its own tag, so the kitchen knows where the

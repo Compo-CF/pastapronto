@@ -128,6 +128,27 @@ built to be printed for the folder or exported to a spreadsheet.
 The arithmetic is `order.shiftReport()`, a pure function with its own tests, so
 the numbers on this page are checked without a database.
 
+## Covers are charges, not orders
+
+The venue is **all-you-can-eat: one price per person covers both pasta and
+pizza.** So the billable unit is a guest, not an order:
+
+> Four guests at a table are four charges, no matter how many bowls or pizzas
+> they order.
+
+`order.billableCovers()` counts each member's party **once**, taking the
+largest head count they reported that service date - never the sum across
+their orders. A party that eats pasta and comes back for pizza is still one
+charge each. Orders and items are consumption signals, useful for spotting a
+table that ran the kitchen hard; they are not billing.
+
+This matters more now that there are two lanes, because coming back for the
+other one is the normal case. On a seeded day the naive sum read 41 covers
+against a true 17.
+
+Member numbers are **four digits**, enforced in `config.order.memberNumberPattern`,
+in the guest keypad (four boxes, input stops at four) and in `firestore.rules`.
+
 ## A note on money
 
 There is none. Nothing in the app is priced - charges post against the member
