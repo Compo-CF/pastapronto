@@ -81,14 +81,7 @@
 .exbox-value { font-size: 24px; font-weight: 800; }
 .exbox-detail { font-size: 13px; color: var(--ink-soft); margin-top: 4px; line-height: 1.45; }
 
-@media print {
-  @page { margin: 14mm; }
-  .no-print, .appbar, .toast { display: none !important; }
-  body { background: #fff; }
-  .report { padding: 0; gap: 18px; }
-  .card, .mixcard, .exbox { box-shadow: none; }
-  .curve-tip { display: none; }
-}
+
 
 /* Two prep lists, one per station, because two different cooks read them. */
 .rpt-lane { margin-top: 18px; break-inside: avoid; }
@@ -115,3 +108,138 @@
   color: var(--ink-soft);
 }
 .rpt-headline strong { color: var(--ink); font-size: 20px; font-weight: 820; }
+
+/* ------------------------------------------------------------ billing block
+   The section the report exists for, so it leads and it is the loudest thing
+   on the page. Two figures a manager reads and stops. */
+
+.chargebar {
+  display: flex; align-items: flex-start; gap: 28px; flex-wrap: wrap;
+  margin: 0 0 14px; padding: 18px 20px;
+  border: 2px solid var(--tomato); border-radius: var(--radius);
+  background: var(--card);
+}
+.chargebar-fig { display: flex; flex-direction: column; }
+.chargebar-n {
+  font-size: 40px; font-weight: 850; line-height: 1;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+  color: var(--tomato);
+}
+.chargebar-l {
+  margin-top: 4px; font-size: 12px; font-weight: 800;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+}
+.chargebar-note {
+  flex: 1 1 260px; margin: 0; align-self: center;
+  font-size: 14px; line-height: 1.5; color: var(--ink-soft);
+}
+
+/* The billing number, wherever it appears in the table. */
+.rpt-table td.charge, .rpt-table th.charge { font-weight: 850; font-size: 16px; }
+
+/* A number the directory did not know. The food went out; the charge needs a
+   human before it posts. Marked with a word, not only a colour. */
+.rpt-table tr.is-unverified td { background: color-mix(in srgb, var(--tomato) 6%, transparent); }
+.flag {
+  display: inline-block; margin-left: 0; padding: 1px 7px;
+  border: 1px solid var(--tomato); border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--tomato-dark); white-space: nowrap;
+}
+
+.rpt-foot { font-size: 14px; line-height: 1.55; margin: 12px 0 0; }
+
+/* ------------------------------------------------------------------- print
+   This report gets printed and filed, so print is a first-class layout rather
+   than the screen with the chrome removed.
+
+   Three things matter beyond shrinking type. Backgrounds are dropped by
+   default when printing, which would erase the whole bar chart, so anything
+   carrying meaning in a fill asks for exact colour. Long tables need their
+   header repeated on every page, or page two is a wall of unlabelled numbers.
+   And the "show as a table" disclosures are opened by a beforeprint handler in
+   report.js, since a printed chart cannot be hovered - the summary line is
+   hidden here so the table just appears under the chart. */
+
+@media print {
+  @page { margin: 12mm; }
+
+  .no-print, .appbar, .toast { display: none !important; }
+  body { background: #fff; font-size: 10pt; }
+  .report { padding: 0; max-width: none; }
+  .card, .mixcard, .exbox, .chargebar { box-shadow: none; }
+  .curve-tip { display: none !important; }
+
+  /* Running identity. Screen has the appbar for this; print does not. */
+  .rpt-printhead {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding-bottom: 6px; margin-bottom: 2px;
+    border-bottom: 2px solid var(--ink);
+    font-size: 9pt; color: var(--ink-soft);
+  }
+  .rpt-printhead-org { font-size: 11pt; font-weight: 850; color: var(--ink); }
+
+  .rpt-date { font-size: 15pt; }
+  .rpt-gen { font-size: 8pt; }
+  .report { gap: 18px; }
+  .sec-title {
+    font-size: 10pt; margin: 0 0 9px;
+    padding-top: 8px; border-top: 1px solid var(--line-strong);
+  }
+  .rpt-headline { padding: 10px 12px; font-size: 10pt; }
+  .rpt-headline strong { font-size: 12pt; }
+  .rpt-foot, .muted { font-size: 8.5pt; }
+
+  /* Keep a section whole where it fits, but never at the cost of clipping a
+     long table - those break, with the header repeated and no split rows. */
+  .rpt-section { break-inside: avoid; }
+  .rpt-billing, .rpt-usage, .mixgrid { break-inside: auto; }
+  .rpt-table { break-inside: auto; font-size: 8.5pt; }
+  .rpt-table thead { display: table-header-group; }
+  .rpt-table tfoot { display: table-footer-group; }
+  .rpt-table tr, .mixcard, .rpt-lane { break-inside: avoid; }
+  .rpt-table th, .rpt-table td { padding: 4px 6px; }
+  .rpt-table td.charge, .rpt-table th.charge { font-size: 10pt; }
+  .rpt-table td.mono { font-size: 8.5pt; }
+
+  /* Decoration that costs a column and says nothing on paper. */
+  .col-viz { display: none !important; }
+
+  .chargebar { padding: 12px 14px; gap: 20px; margin-bottom: 10px; }
+  .chargebar-n { font-size: 26pt; }
+  .chargebar-l { font-size: 7.5pt; }
+  .chargebar-note { font-size: 8.5pt; }
+
+  .statgrid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .stat { padding: 8px 10px; }
+  .stat-label { font-size: 7pt; min-height: 2.4em; }
+  .stat-value { font-size: 16pt; }
+  .stat-note { font-size: 7pt; }
+
+  .curve { height: 108px; }
+  .curve-axis span { font-size: 6.5pt; }
+  .curve-peak { font-size: 7.5pt; }
+
+  .mixgrid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .mixcard { padding: 10px 12px; }
+  .mixrow { font-size: 8.5pt; padding: 1px 0; }
+  .exbox-value { font-size: 14pt; }
+  .exbox-detail { font-size: 8pt; }
+
+  /* Disclosures are opened for print; the click affordance is meaningless. */
+  details > summary { display: none !important; }
+  details { margin-top: 8px !important; }
+
+  /* Backgrounds are dropped by default when printing. Anything whose meaning
+     lives in a fill has to ask for the ink. */
+  .curve-seg, .mixbar, .mixbar i, .chargebar, .rpt-headline,
+  .stat, .mixcard, .exbox, .flag, .rpt-table tr.is-unverified td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* And a hairline so the bars still read if a driver strips fills anyway. */
+  .curve-seg { outline: 0.5pt solid var(--ink); outline-offset: -0.5pt; }
+}
+
+/* Print-only identity block: no place for it on screen, the appbar has it. */
+.rpt-printhead { display: none; }

@@ -8,10 +8,24 @@
 /* -------------------------------------------------------------------- stats */
 
 .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; }
-.stat { padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
-.stat-label { font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-faint); }
+
+/* A row of tiles is read by scanning the numbers, so the numbers have to sit
+   on one line. Labels wrap to one or two lines depending on their length, so
+   the label box reserves two lines either way and the note is pushed to the
+   bottom - otherwise every tile starts its value at a different height and the
+   row reads as ragged. */
+.stat {
+  display: flex; flex-direction: column;
+  padding: 16px 18px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--card);
+}
+.stat-label {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--ink-faint);
+  line-height: 1.25; min-height: 2.5em;
+}
 .stat-value { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 3px; }
-.stat-note { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+.stat-note { font-size: 13px; color: var(--ink-soft); font-weight: 600; line-height: 1.35; margin-top: auto; }
 .stat.is-good .stat-value { color: var(--basil); }
 .stat.is-bad .stat-value { color: var(--tomato); }
 

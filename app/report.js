@@ -13,7 +13,7 @@ import { config, serviceDate } from './config.js';
 import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
-import { mastheadHtml, pageTitle } from './brand.js';
+import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
 import { html, raw, mmss, escapeHtml, toast, requireStaff } from './ui.js';
 
 const el = {
@@ -66,13 +66,16 @@ function statTiles(r) {
     { label: 'Avg cook', value: mmss(r.timings.avgCookSec), note: 'accept to food up' },
     { label: 'Avg to accept', value: mmss(r.timings.avgQueueSec), note: 'target under ' + mmss(config.sla.acceptWarnSec) },
   ];
-  return html`<div class="statgrid">
-    ${tiles.map((t) => html`<div class="stat ${t.good ? 'is-good' : ''} ${t.bad ? 'is-bad' : ''}">
-      <div class="stat-label">${t.label}</div>
-      <div class="stat-value">${t.value}</div>
-      <div class="stat-note">${t.note}</div>
-    </div>`)}
-  </div>`;
+  return html`<section class="rpt-section">
+    <h2 class="sec-title">Service stats</h2>
+    <div class="statgrid">
+      ${tiles.map((t) => html`<div class="stat ${t.good ? 'is-good' : ''} ${t.bad ? 'is-bad' : ''}">
+        <div class="stat-label">${t.label}</div>
+        <div class="stat-value">${t.value}</div>
+        <div class="stat-note">${t.note}</div>
+      </div>`)}
+    </div>
+  </section>`;
 }
 
 /**
@@ -185,8 +188,8 @@ function menuMix(r) {
 
   if (!rendered.length) return '';
 
-  return html`<section class="rpt-section">
-    <h2 class="sec-title">What sold - prep guide for tomorrow</h2>
+  return html`<section class="rpt-section rpt-usage">
+    <h2 class="sec-title">Food usage - prep guide for tomorrow</h2>
     ${rendered}
     <p class="muted" style="font-size:14px;margin:12px 0 0">
       Sauce counts exceed item counts where something was mixed - a bowl or a
@@ -197,41 +200,67 @@ function menuMix(r) {
 }
 
 /**
- * Who ate, and how much.
+ * Who to charge. This is the section the report exists for, so it comes first.
  *
  * The venue is all-you-can-eat - one price covers pasta and pizza - so the
  * billable unit is a person, not an order. A party that orders pasta and comes
- * back for pizza is still one charge, which is why "party" here is the largest
- * head count that member reported and not the sum of their orders. Orders and
- * items are consumption, useful for spotting a table that ran the kitchen hard.
+ * back for pizza is still one charge, which is why "charges" here is the
+ * largest head count that member reported and not the sum of their orders.
+ *
+ * Sorted by member number rather than by consumption: this list gets read
+ * against the club's own billing system, and reconciling two lists is only
+ * easy when both are in the same order. The consumption view is still here in
+ * the items columns for spotting a table that ran the kitchen hard.
  */
-function memberList(r) {
+function membersToCharge(r) {
   if (!r.members.length) return '';
 
-  const maxItems = Math.max(...r.members.map((m) => m.items));
+  const rows = [...r.members].sort(
+    (a, b) => (Number(a.memberNumber) || 0) - (Number(b.memberNumber) || 0)
+      || a.memberNumber.localeCompare(b.memberNumber),
+  );
+  const unverified = rows.filter((m) => m.status !== 'verified');
+  const maxItems = Math.max(...rows.map((m) => m.items));
 
-  return html`<section class="rpt-section">
-    <h2 class="sec-title">Members and covers</h2>
+  return html`<section class="rpt-section rpt-billing">
+    <h2 class="sec-title">Members to charge</h2>
+
+    <div class="chargebar">
+      <div class="chargebar-fig">
+        <span class="chargebar-n">${r.totals.covers}</span>
+        <span class="chargebar-l">charges to post</span>
+      </div>
+      <div class="chargebar-fig">
+        <span class="chargebar-n">${r.totals.members}</span>
+        <span class="chargebar-l">member${r.totals.members === 1 ? '' : 's'} dining</span>
+      </div>
+      <p class="chargebar-note">
+        One all-you-can-eat price per guest, pasta and pizza together. Four
+        guests at a table are four charges however many bowls or pizzas they
+        order.
+      </p>
+    </div>
+
     <div class="card mtable-wrap">
       <table class="rpt-table">
         <thead><tr>
           <th>Member</th><th>Name</th>
-          <th class="num">Orders</th><th class="num">Charges</th>
-          <th class="num">Bowls</th><th class="num">Pizzas</th>
+          <th class="num">Charges</th>
+          <th class="num">Orders</th><th class="num">Bowls</th><th class="num">Pizzas</th>
           <th class="num">Items</th><th class="num">Per cover</th>
-          <th>Ate</th>
+          <th class="col-viz">Ate</th>
         </tr></thead>
         <tbody>
-          ${r.members.map((m) => html`<tr>
+          ${rows.map((m) => html`<tr class="${m.status === 'verified' ? '' : 'is-unverified'}">
             <td class="mono">${m.memberNumber}</td>
-            <td>${m.name || (m.status === 'unverified' ? '(unverified)' : '-')}</td>
+            <td>${m.name}${raw(m.status === 'verified' ? '' : '<span class="flag">not in directory</span>')}</td>
+            <td class="num charge">${m.partySize}</td>
             <td class="num">${m.orders}</td>
-            <td class="num"><b>${m.partySize}</b></td>
             <td class="num">${m.bowls || ''}</td>
             <td class="num">${m.pizzas || ''}</td>
             <td class="num">${m.items}</td>
             <td class="num">${m.itemsPerCover}</td>
-            <td>
+            <td class="col-viz">
               <span class="mixbar" style="display:block;width:70px">
                 <i style="width:${Math.round((m.items / maxItems) * 100)}%"></i>
               </span>
@@ -239,24 +268,26 @@ function memberList(r) {
           </tr>`)}
         </tbody>
         <tfoot><tr>
-          <th>${r.members.length} members</th><th></th>
+          <th>${rows.length} member${rows.length === 1 ? '' : 's'}</th><th></th>
+          <th class="num charge">${r.totals.covers}</th>
           <th class="num">${r.totals.orders}</th>
-          <th class="num">${r.totals.covers}</th>
           <th class="num">${r.byKind.pasta.items}</th>
           <th class="num">${r.byKind.pizza.items}</th>
           <th class="num">${r.totals.bowls}</th>
           <th class="num">${r.totals.bowlsPerCover}</th>
-          <th></th>
+          <th class="col-viz"></th>
         </tr></tfoot>
       </table>
     </div>
-    <p class="muted" style="font-size:14px;margin:12px 0 0">
-      <strong>Charges is the billing column.</strong> One price per person covers
-      both pasta and pizza, so four guests at a table are four charges no matter
-      how many bowls or pizzas they order. It is the largest head count that
-      member reported, never the sum of their orders. ${r.totals.repeatOrders > 0
-        ? 'Tonight ' + r.totals.repeatOrders + ' order' + (r.totals.repeatOrders === 1 ? ' was' : 's were') + ' a repeat trip by a member already counted.'
+
+    <p class="muted rpt-foot">
+      <strong>Charges is the billing column</strong> - the rest is consumption.
+      ${r.totals.repeatOrders > 0
+        ? 'Tonight ' + r.totals.repeatOrders + ' order' + (r.totals.repeatOrders === 1 ? ' was' : 's were') + ' a repeat trip by a member already counted, and added nothing to the bill.'
         : 'Nobody ordered twice tonight.'}
+      ${unverified.length > 0
+        ? ' ' + unverified.length + ' number' + (unverified.length === 1 ? ' was' : 's were') + ' not in the member directory - the food went out anyway, but check ' + (unverified.length === 1 ? 'it' : 'them') + ' against the roster before posting: ' + unverified.map((m) => m.memberNumber).join(', ') + '.'
+        : ' Every member number was in the directory.'}
     </p>
   </section>`;
 }
@@ -357,22 +388,31 @@ function render() {
     return;
   }
 
+  const brand = activeBrand();
+
+  // Order matters, and it is the print order: who to charge, then how service
+  // ran, then what the kitchen used. A manager closing out acts on the first
+  // section and files the rest, so the billing table must not be on page two.
   el.body.innerHTML = [
+    html`<div class="rpt-printhead">
+      <span class="rpt-printhead-org">${brand.orgName || brand.venueName}</span>
+      <span>${brand.orgName ? brand.venueName + ' - ' : ''}Close-out report</span>
+    </div>`,
     html`<div class="rpt-head">
       <span class="rpt-date">${prettyDate(date)}</span>
       <span class="rpt-gen">generated ${new Date(r.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
     </div>`,
     html`<p class="rpt-headline">
-      <strong>${r.totals.covers} charges</strong> tonight - one per guest, all you can eat.
-      ${r.totals.bowls} items came out of the kitchen
-      (${r.byKind.pasta.items} bowls, ${r.byKind.pizza.items} pizzas) across
-      ${r.totals.orders} order${r.totals.orders === 1 ? '' : 's'} from
-      ${r.totals.members} member${r.totals.members === 1 ? '' : 's'}.
+      <strong>${r.totals.covers} charges</strong> tonight - one per guest, all you can eat -
+      across ${r.totals.members} member${r.totals.members === 1 ? '' : 's'}.
+      The kitchen sent ${r.totals.bowls} items
+      (${r.byKind.pasta.items} bowls, ${r.byKind.pizza.items} pizzas) on
+      ${r.totals.orders} order${r.totals.orders === 1 ? '' : 's'}.
       How much they ordered does not change what they are charged.
     </p>`,
+    membersToCharge(r),
     statTiles(r),
     serviceCurve(r),
-    memberList(r),
     menuMix(r),
     lateTable(r),
     stationsTable(r),
@@ -400,6 +440,18 @@ function toCsv(r, date) {
   push('Generated', r.generatedAt);
   push('');
 
+  push('MEMBERS TO CHARGE');
+  push('Charges to post', r.totals.covers);
+  push('Members dining', r.totals.members);
+  push('');
+  push('Member', 'Name', 'Status', 'Charges', 'Orders', 'Bowls', 'Pizzas', 'Items', 'Per cover', 'First', 'Last');
+  [...r.members]
+    .sort((a, b) => (Number(a.memberNumber) || 0) - (Number(b.memberNumber) || 0)
+      || a.memberNumber.localeCompare(b.memberNumber))
+    .forEach((m) => push(m.memberNumber, m.name, m.status, m.partySize, m.orders,
+      m.bowls, m.pizzas, m.items, m.itemsPerCover, m.firstAt, m.lastAt));
+  push('');
+
   push('TOTALS');
   push('Orders', r.totals.orders);
   push('Delivered', r.totals.delivered);
@@ -422,18 +474,12 @@ function toCsv(r, date) {
   push('On time %', r.onTime.pct == null ? '' : r.onTime.pct);
   push('');
 
-  push('MEMBERS AND COVERS');
-  push('Member', 'Name', 'Status', 'Orders', 'Covers', 'Bowls', 'Pizzas', 'Items', 'Per cover', 'First', 'Last');
-  r.members.forEach((m) => push(m.memberNumber, m.name, m.status, m.orders, m.partySize,
-    m.bowls, m.pizzas, m.items, m.itemsPerCover, m.firstAt, m.lastAt));
-  push('');
-
   push('SERVICE CURVE');
   push('Time', 'Orders', 'Bowls', 'Pizzas', 'Total items', 'Covers');
   r.curve.forEach((b) => push(b.bucket, b.orders, b.bowls, b.pizzas, b.items, b.covers));
   push('');
 
-  push('MENU MIX');
+  push('FOOD USAGE');
   push('Station', 'Group', 'Item', 'Count');
   Object.entries(r.mix).forEach(([kind, groups]) => {
     Object.entries(groups).forEach(([group, list]) => {
@@ -503,6 +549,27 @@ async function load(date) {
 }
 
 // -------------------------------------------------------------------- events
+
+/**
+ * Open every "show as a table" disclosure for the duration of a print.
+ *
+ * A printed chart cannot be hovered, so the table under it is the only way the
+ * numbers reach paper - and CSS cannot reliably reveal the contents of a
+ * closed <details>. Restored afterwards so the screen goes back to how the
+ * manager left it.
+ */
+const disclosures = () => document.querySelectorAll('#reportBody details');
+
+window.addEventListener('beforeprint', () => {
+  disclosures().forEach((d) => {
+    d.dataset.wasOpen = d.open ? '1' : '';
+    d.open = true;
+  });
+});
+
+window.addEventListener('afterprint', () => {
+  disclosures().forEach((d) => { d.open = d.dataset.wasOpen === '1'; });
+});
 
 el.datePick.addEventListener('change', () => load(el.datePick.value));
 document.getElementById('tonightBtn').addEventListener('click', () => load(serviceDate()));
