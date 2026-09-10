@@ -177,7 +177,9 @@ export async function lookupMember(raw) {
       tier: hit.tier || 'member',
       dietaryNotes: hit.dietaryNotes || '',
       defaultGuests: hit.defaultGuests || 2,
-      message: `Welcome back, ${hit.name || 'friend'}!`,
+      // The directory holds family names, not people, so the greeting is
+      // addressed to the party rather than to an individual.
+      message: hit.name ? `Buon Giorno, ${hit.name} Party!` : 'Buon Giorno!',
     };
   }
 

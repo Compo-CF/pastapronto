@@ -640,6 +640,16 @@ test('the member list is sorted by how much they ate', () => {
   assert.ok(rows[0].items > rows[1].items);
 });
 
+test('the directory holds family names, so rows read as a party', () => {
+  // Every row is a surname, which is why the greeting is addressed to the
+  // party and not to a person. Guard against a first name creeping in.
+  seed.MEMBERS.forEach((m) => {
+    assert.ok(!m.name.includes(' '), m.name + ' should be a single family name');
+    assert.strictEqual(m.name, m.name.trim());
+    assert.ok(/^[A-Z]/.test(m.name), m.name + ' should be capitalised');
+  });
+});
+
 test('the demo member directory is usable as a lookup table', () => {
   const nums = seed.MEMBERS.map((m) => m.memberNumber);
 
