@@ -371,7 +371,7 @@ import {
       </button>`;
     });
 
-    var steps = steps().map(function (s, i) {
+    var stepTabs = steps().map(function (s, i) {
       var done = i < state.buildStep;
       return html`<button class="buildstep ${done ? 'is-done' : ''}" type="button"
         data-act="gotoStep" data-id="${i}" aria-current="${i === state.buildStep ? 'true' : 'false'}">${s.label}</button>`;
@@ -410,7 +410,7 @@ import {
         <h1 class="step-title">${step.title}</h1>
         <p class="step-sub">${sub}</p>
       </div>
-      <div class="buildsteps">${steps}</div>
+      <div class="buildsteps">${stepTabs}</div>
       ${raw(body)}`;
   }
 
@@ -566,7 +566,7 @@ import {
         ${bowls}
         ${raw(allergenRow)}
         <div class="card stack">
-          <div class="summary-line"><span>Bowls</span><span>${state.bowls.length}</span></div>
+          <div class="summary-line"><span>${lane().many[0].toUpperCase() + lane().many.slice(1)}</span><span>${state.bowls.length}</span></div>
           <div class="summary-line"><span>Guests</span><span>${state.guestCount}</span></div>
           <div class="summary-line"><span>Where</span><span>${state.boot.tag ? state.boot.tag.label : 'Takeout'}</span></div>
           <div class="summary-total"><span>Cook time</span><span>${humanMins(estimate.cookEstimateSec)}</span></div>
@@ -623,8 +623,8 @@ import {
   }
 
   function screenSent() {
-    var order = state.order;
-    var stepIndex = TRACK.findIndex(function (t) { return t.status === order.status; });
+    var ticket = state.order;
+    var stepIndex = TRACK.findIndex(function (t) { return t.status === ticket.status; });
     if (stepIndex < 0) stepIndex = 0;
 
     var segs = TRACK.map(function (t, i) {
@@ -636,16 +636,16 @@ import {
     });
 
     var headline, note;
-    if (order.status === 'queued') {
+    if (ticket.status === 'queued') {
       headline = 'Sent to the kitchen!';
       note = 'A cook will pick it up in a moment.';
-    } else if (order.status === 'cooking') {
+    } else if (ticket.status === 'cooking') {
       headline = 'Your pasta is cooking';
       note = 'Water is boiling. Hang tight.';
-    } else if (order.status === 'ready') {
+    } else if (ticket.status === 'ready') {
       headline = 'Ready!';
-      note = 'A runner is bringing it to ' + order.tagLabel + '.';
-    } else if (order.status === 'delivered') {
+      note = 'A runner is bringing it to ' + ticket.tagLabel + '.';
+    } else if (ticket.status === 'delivered') {
       headline = 'Buon appetito!';
       note = 'Enjoy. Tap below to order another round.';
     } else {
@@ -654,16 +654,16 @@ import {
     }
 
     var eta = '';
-    if (order.status === 'queued' || order.status === 'cooking') {
-      var remaining = Math.max(0, (new Date(order.promisedReadyAt).getTime() - now()) / 1000);
+    if (ticket.status === 'queued' || ticket.status === 'cooking') {
+      var remaining = Math.max(0, (new Date(ticket.promisedReadyAt).getTime() - now()) / 1000);
       eta = html`<p class="eta">Ready in <strong>${humanMins(remaining)}</strong></p>`;
     }
 
-    var readyBanner = order.status === 'ready'
-      ? html`<div class="ready-banner">Ticket #${order.ticketNo} is up!</div>`
+    var readyBanner = ticket.status === 'ready'
+      ? html`<div class="ready-banner">Ticket #${ticket.ticketNo} is up!</div>`
       : '';
 
-    var bowls = order.lines.map(function (line) {
+    var bowls = ticket.lines.map(function (line) {
       return html`<div class="sentbowl">
         ${raw(art('bowl'))}
         <div class="grow">
@@ -675,13 +675,13 @@ import {
 
     return html`
       <div class="sentwrap stack">
-        ${raw(order.status === 'cooking' ? '<div class="pot">' + art('pot') + '</div>' : '')}
+        ${raw(ticket.status === 'cooking' ? '<div class="pot">' + art('pot') + '</div>' : '')}
         ${raw(readyBanner)}
         <div class="ticket">
           <div class="ticket-label">Ticket</div>
-          <div class="ticket-no">#${order.ticketNo}</div>
+          <div class="ticket-no">#${ticket.ticketNo}</div>
           <div class="ticket-label" style="margin-top:10px">Show this code if a server asks</div>
-          <div class="ticket-code">${order.claimCode}</div>
+          <div class="ticket-code">${ticket.claimCode}</div>
           <div class="track">${segs}</div>
           <div class="track-labels">${labels}</div>
         </div>
@@ -692,9 +692,9 @@ import {
         </div>
         <div class="sentbowls">${bowls}</div>
         <div class="card">
-          <div class="summary-line"><span>Table</span><span>${order.tagLabel}</span></div>
-          <div class="summary-line"><span>Guests</span><span>${order.guestCount}</span></div>
-          <div class="summary-line"><span>Bowls</span><span>${order.lines.length}</span></div>
+          <div class="summary-line"><span>Table</span><span>${ticket.tagLabel}</span></div>
+          <div class="summary-line"><span>Guests</span><span>${ticket.guestCount}</span></div>
+          <div class="summary-line"><span>${ticket.kind === 'pizza' ? 'Pizzas' : 'Bowls'}</span><span>${ticket.lines.length}</span></div>
         </div>
       </div>`;
   }
@@ -750,9 +750,9 @@ import {
   }
 
   function renderCrumbs() {
-    var order = ['member', 'guests', 'build', 'review'];
-    var idx = order.indexOf(state.screen);
-    crumbs.innerHTML = order.map(function (name, i) {
+    var sequence = ['member', 'guests', 'build', 'review'];
+    var idx = sequence.indexOf(state.screen);
+    crumbs.innerHTML = sequence.map(function (name, i) {
       var cls = idx < 0 ? '' : i < idx ? 'is-done' : i === idx ? 'is-now' : '';
       return '<span class="dot ' + cls + '"></span>';
     }).join('');
@@ -1134,6 +1134,8 @@ import {
         maxSaucesPerBowl: config.order.maxSaucesPerBowl,
         maxToppingsPerBowl: config.order.maxToppingsPerBowl,
         maxSidesPerBowl: config.order.maxSidesPerBowl,
+        maxToppingsPerPizza: config.order.maxToppingsPerPizza,
+        maxFinishersPerPizza: config.order.maxFinishersPerPizza,
       },
       sla: config.sla,
       open: isOpen(),
