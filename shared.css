@@ -407,3 +407,31 @@ button { cursor: pointer; }
   font-weight: 800;
 }
 .gate-go:hover { background: var(--tomato-dark); }
+
+/* ------------------------------------------------------- staff screen nav
+   One pill group on every staff screen, so a manager can get from the rail to
+   the close-out without going back to a URL. The current screen is marked with
+   aria-current and a filled pill, never colour alone. */
+
+.staffnav { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.staffpill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 15px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.staffpill:hover { border-color: var(--tomato); color: var(--tomato-dark); }
+.staffpill[aria-current="page"] {
+  background: var(--tomato);
+  border-color: var(--tomato);
+  color: #fff;
+}

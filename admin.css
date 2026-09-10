@@ -95,3 +95,12 @@
   color: var(--tomato-dark);
 }
 .eighty-six.is-off:hover { border-color: var(--tomato-dark); }
+
+/* The menu reference is split by station, since two cooks read it. */
+.menu-station {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 26px 0 4px;
+  font-size: 18px; font-weight: 820; letter-spacing: -0.01em;
+}
+.menu-station:first-child { margin-top: 0; }
+.menu-station-sub { font-size: 13px; font-weight: 650; color: var(--ink-faint); }

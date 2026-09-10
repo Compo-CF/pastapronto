@@ -256,3 +256,20 @@
 /* Which lane a chit came from. Colour plus the word, never colour alone. */
 .badge-kind.is-pasta { background: #3d3417; color: var(--kwarn); }
 .badge-kind.is-pizza { background: #3a1f2e; color: #ff9ecb; }
+
+/* The nav on the dark screens. Same shape, inverted surface. */
+.kds .kbar { flex-wrap: wrap; }
+.kds .staffpill {
+  min-height: 34px;
+  padding: 0 13px;
+  border-color: var(--kline);
+  background: #262c35;
+  color: var(--kmuted);
+  font-size: 13px;
+}
+.kds .staffpill:hover { border-color: var(--kok); color: var(--ktext); }
+.kds .staffpill[aria-current="page"] {
+  background: var(--ktext);
+  border-color: var(--ktext);
+  color: #14171c;
+}

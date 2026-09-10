@@ -106,11 +106,23 @@ const CATALOG = menu.catalog();
     return { seconds: secondsSince(order.submittedAt), level: '', label: '' };
   }
 
+  /**
+   * Orders this screen should show, honouring the station filter.
+   *
+   * The filter used to be applied in the server query. Once the rail moved to a
+   * single Firestore listener carrying the whole day, that stopped happening
+   * and the dropdown became decorative - it has to be applied here now.
+   */
+  function visibleOrders() {
+    if (!state.station) return state.orders;
+    return state.orders.filter(function (o) { return o.station === state.station; });
+  }
+
   function laneOrders(lane) {
     // Held orders live at the foot of the New Orders lane. Parking a ticket
     // must not make it disappear - an invisible order is a lost order.
     var wanted = lane === 'queued' ? ['queued', 'held'] : [lane];
-    return state.orders
+    return visibleOrders()
       .filter(function (o) { return wanted.indexOf(o.status) !== -1; })
       .sort(function (a, b) {
         if ((a.status === 'held') !== (b.status === 'held')) return a.status === 'held' ? 1 : -1;
@@ -265,6 +277,9 @@ const CATALOG = menu.catalog();
 
   function render() {
     keyMap();
+    // Recompute here rather than only on snapshot, so switching station
+    // updates the header instead of leaving the whole room's numbers up.
+    renderCounts(orderLib.metrics(visibleOrders(), config.sla).counts);
     LANES.forEach(function (lane) {
       var orders = laneOrders(lane);
       document.getElementById('count-' + lane).textContent = orders.length;
@@ -283,9 +298,15 @@ const CATALOG = menu.catalog();
   }
 
   function emptyText(lane) {
-    if (lane === 'queued') return 'No new orders';
-    if (lane === 'cooking') return 'Nothing on the stove';
-    return 'Nothing waiting on a runner';
+    var here = state.station ? ' for ' + stationLabel(state.station) : '';
+    if (lane === 'queued') return 'No new orders' + here;
+    if (lane === 'cooking') return 'Nothing cooking' + here;
+    return 'Nothing waiting on a runner' + here;
+  }
+
+  function stationLabel(id) {
+    var hit = config.kitchen.stations.filter(function (x) { return x.id === id; })[0];
+    return hit ? hit.label : id;
   }
 
   function renderCounts(counts) {
@@ -453,7 +474,6 @@ const CATALOG = menu.catalog();
     state.orders.forEach(function (o) { previous[o.id] = o.status; });
 
     state.orders = orders;
-    renderCounts(orderLib.metrics(orders, config.sla).counts);
     render();
     tick();
 

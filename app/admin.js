@@ -147,14 +147,15 @@ const CATALOG = menu.catalog();
       <caption>${caption}</caption>
       <thead><tr>
         <th>Item</th><th>Allergens</th>
-        <th class="num">${secLabel}</th><th>Kid menu</th><th class="num">86</th>
+        ${raw(secField ? '<th class="num">' + escapeHtml(secLabel) + '</th>' : '')}
+        <th>Kid menu</th><th class="num">86</th>
       </tr></thead>
       <tbody>
         ${items.map(function (i) {
           return html`<tr>
             <td>${i.name}</td>
             <td class="allerg">${allergenCodes(i)}</td>
-            <td class="num">${i[secField] != null ? mmss(i[secField]) : '-'}</td>
+            ${raw(secField ? '<td class="num">' + (i[secField] != null ? mmss(i[secField]) : '-') + '</td>' : '')}
             <td>${i.kid ? 'yes' : ''}</td>
             <td class="num">${raw(eightySixToggle(i))}</td>
           </tr>`;
@@ -183,19 +184,42 @@ const CATALOG = menu.catalog();
     el86.textContent = '86 right now (' + names.length + '): ' + names.join(', ');
   }
 
+  /**
+   * The chef's reference and the 86 switches, split by station.
+   *
+   * Both lanes must appear here or half the menu cannot be taken off - the
+   * pizza groups were missing at first, which meant no way to 86 pepperoni.
+   */
   function renderMenu() {
     var m = CATALOG;
+
+    var pastaTables = [
+      menuTable('Pasta (boil time, parcooked)', m.pastas, 'boilSec', 'Boil'),
+      menuTable('Pasta sauces (finish time)', m.sauces, 'finishSec', 'Finish'),
+      menuTable('Proteins', m.proteins, 'addSec', 'Add'),
+      menuTable('Pasta toppings', m.toppings, 'addSec', 'Prep'),
+      menuTable('Sides', m.sides, 'cookSec', 'Cook'),
+    ].join('');
+
+    var pizzaTables = [
+      menuTable('Pizza sauces', m.pizzaSauces, null, ''),
+      menuTable('Pizza toppings', m.pizzaToppings, 'addSec', 'Prep'),
+      menuTable('Finishers (after the bake)', m.finishers, null, ''),
+    ].join('');
+
     el.menuRef.innerHTML =
-      '<div class="mtable-wrap">' +
-      menuTable('Pasta (boil time)', m.pastas, 'boilSec', 'Boil') +
-      menuTable('Sauces (finish time)', m.sauces, 'finishSec', 'Finish') +
-      menuTable('Proteins', m.proteins, 'addSec', 'Add') +
-      menuTable('Toppings', m.toppings, 'addSec', 'Prep') +
-      menuTable('Sides', m.sides, 'cookSec', 'Cook') +
-      '</div>' +
+      '<h3 class="menu-station">Pasta station</h3>' +
+      '<div class="mtable-wrap">' + pastaTables + '</div>' +
+      '<h3 class="menu-station">Pizza station' +
+      '<span class="menu-station-sub">every pizza is a 12" ' +
+      escapeHtml(m.pizzaBase.name.replace('12" ', '')) + ' base &middot; ' +
+      Math.round(m.pizzaBase.bakeSec / 60) + ' min bake &middot; ' +
+      'carries ' + m.pizzaBase.allergens.join(', ') +
+      '</span></h3>' +
+      '<div class="mtable-wrap">' + pizzaTables + '</div>' +
       '<p class="muted" style="font-size:14px;margin:14px 0 0">' +
       'Allergen codes: ' +
-      m.allergens.map(function (a) { return a.code + ' = ' + a.name; }).join(' \u00b7 ') +
+      m.allergens.map(function (a) { return a.code + ' = ' + a.name; }).join(' · ') +
       '</p>';
   }
 

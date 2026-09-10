@@ -324,7 +324,7 @@ import {
       <div class="step-head">
         <p class="step-kicker">Step 2 of 4</p>
         <h1 class="step-title">How many are eating?</h1>
-        <p class="step-sub">We will build one bowl per person. You can change it later.</p>
+        <p class="step-sub">We will build one ${lane().one} per person. You can change it later.</p>
       </div>
       <div class="stack">
         <div class="tiles tiles-sm">${counts}</div>
@@ -381,7 +381,8 @@ import {
     if (step.id === 'toppings') body = buildToppings(bowl);
     else if (step.id === 'finish') body = buildFinish(bowl);
     else if (step.id === 'finishers') {
-      body = tileGrid('finishers', { act: 'toggleFinisher', value: bowl.finishers, multi: true, small: true });
+      body = tileGrid('finishers', { act: 'toggleFinisher', value: bowl.finishers, multi: true, small: true })
+        + detailPanel(bowl);
     } else if (step.id === 'sauces') {
       body = tileGrid(step.group, { act: 'toggleSauce', value: bowl.sauces, multi: true });
     } else {
@@ -438,35 +439,50 @@ import {
       ${raw(sides)}`;
   }
 
+  /**
+   * The pro-mode detail panel: who it is for, and anything the kitchen needs to
+   * know. Shared by both lanes - it used to live inside the pasta-only size
+   * step, which left a pizza guest with no way to leave a note at all.
+   *
+   * Spice level is pasta-only; on a pizza the heat comes from a topping or a
+   * finisher, so asking twice would be noise.
+   */
+  function detailPanel(bowl) {
+    if (state.mode !== 'pro') {
+      return html`<div class="chips" style="margin-top:18px">
+        <button class="chip" type="button" data-act="mode" data-id="pro">Add a note${bowl.kind === 'pizza' ? '' : ' or spice level'}</button>
+      </div>`;
+    }
+
+    var spice = bowl.kind === 'pizza' ? '' : html`<div class="field">
+        <label>Spice level</label>
+        <div class="chips">
+          ${state.boot.menu.spice.map(function (x) {
+            return html`<button class="chip" type="button" data-act="setSpice" data-id="${x.id}"
+              aria-pressed="${bowl.spice === x.id ? 'true' : 'false'}">${x.name}</button>`;
+          })}
+        </div>
+      </div>`;
+
+    return html`<div class="card stack" style="margin-top:22px">
+      <div class="field">
+        <label for="whoName">Who is this ${lane().one} for?</label>
+        <input class="input" id="whoName" type="text" maxlength="24" value="${bowl.guestLabel}"
+          data-act="setName" placeholder="Name or seat">
+      </div>
+      ${raw(spice)}
+      <div class="field">
+        <label for="bowlNotes">Notes for the kitchen</label>
+        <textarea class="textarea" id="bowlNotes" maxlength="140" data-act="setNotes"
+          placeholder="${bowl.kind === 'pizza' ? 'Well done, light sauce, cut in squares...' : 'Sauce on the side, no onions, allergy details...'}">${bowl.notes}</textarea>
+      </div>
+    </div>`;
+  }
+
   function buildFinish(bowl) {
-    // Pasta only - a pizza never reaches this step.
+    // Pasta only - a pizza has one size, so it never reaches this step.
     var portions = tileGrid('portions', { act: 'pick', value: bowl.portion, multi: false });
-    var extras = state.mode === 'pro'
-      ? html`<div class="card stack" style="margin-top:22px">
-          <div class="field">
-            <label for="whoName">Who is this bowl for?</label>
-            <input class="input" id="whoName" type="text" maxlength="24" value="${bowl.guestLabel}"
-              data-act="setName" placeholder="Name or seat">
-          </div>
-          <div class="field">
-            <label>Spice level</label>
-            <div class="chips">
-              ${state.boot.menu.spice.map(function (s) {
-                return html`<button class="chip" type="button" data-act="setSpice" data-id="${s.id}"
-                  aria-pressed="${bowl.spice === s.id ? 'true' : 'false'}">${s.name}</button>`;
-              })}
-            </div>
-          </div>
-          <div class="field">
-            <label for="bowlNotes">Notes for the kitchen</label>
-            <textarea class="textarea" id="bowlNotes" maxlength="140" data-act="setNotes"
-              placeholder="Sauce on the side, no onions, allergy details...">${bowl.notes}</textarea>
-          </div>
-        </div>`
-      : html`<div class="chips" style="margin-top:18px">
-          <button class="chip" type="button" data-act="mode" data-id="pro">Add a note or spice level</button>
-        </div>`;
-    return html`${raw(portions)}${raw(extras)}`;
+    return html`${raw(portions)}${raw(detailPanel(bowl))}`;
   }
 
   var estimate = { queueDepth: 0, cookEstimateSec: 0, promiseSec: 0 };
@@ -665,7 +681,7 @@ import {
 
     var bowls = ticket.lines.map(function (line) {
       return html`<div class="sentbowl">
-        ${raw(art('bowl'))}
+        ${raw(art(line.kind === 'pizza' ? 'pie' : 'bowl'))}
         <div class="grow">
           <strong>${line.guestLabel}</strong>
           <div class="muted">${line.dish}</div>
@@ -1151,7 +1167,7 @@ import {
       return;
     }
 
-    document.title = state.boot.venue.name + ' - Build Your Bowl';
+    document.title = state.boot.venue.name + ' - Order';
     state.screen = 'welcome';
     render();
 

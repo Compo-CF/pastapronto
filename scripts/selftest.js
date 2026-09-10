@@ -128,7 +128,8 @@ test('86 ingredients are refused at submit, by name', () => {
   const d = draft();
   assert.deepStrictEqual(order.validateDraft(d, config, []), [], 'nothing 86 = fine');
   const errors = order.validateDraft(d, config, ['chicken', 'butter']);
-  assert.ok(errors.some((e) => /Grilled Chicken just sold out/.test(e)), 'names the protein');
+  assert.ok(errors.some((e) => /^Bowl 2: Grilled Chicken just sold out/.test(e)), 'names the right bowl and the protein');
+  assert.ok(errors.some((e) => /^Bowl 1: Just Butter just sold out/.test(e)), 'and the right bowl for the sauce');
   assert.ok(errors.some((e) => /Just Butter just sold out/.test(e)), 'names the sauce');
   // An 86'd item nobody chose must not raise anything.
   assert.deepStrictEqual(order.validateDraft(d, config, ['shrimp', 'olives']), []);
@@ -365,6 +366,16 @@ const makePizza = (d = pizzaDraft()) => ({
     tag: { id: 'table-04', label: 'Table 4', kind: 'table' },
     serviceDate: '2026-09-10',
   }),
+});
+
+test('validation names a pizza a pizza, not a bowl', () => {
+  const d = pizzaDraft();
+  d.lines[0].sauces = [];
+  const errors = order.validateDraft(d, config);
+  assert.ok(errors.some((e) => /^Pizza 1:/.test(e)), 'says Pizza 1, got: ' + errors.join(' | '));
+  assert.ok(!errors.some((e) => /^Bowl /.test(e)), 'never says Bowl for a pizza');
+  const sold = order.validateDraft(pizzaDraft(), config, ['pepperoni']);
+  assert.ok(sold.some((e) => /^Pizza 2: Pepperoni just sold out/.test(e)), sold.join(' | '));
 });
 
 test('a pizza is built with no portion, protein or sides', () => {

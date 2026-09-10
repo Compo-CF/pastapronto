@@ -96,7 +96,9 @@ export function validateDraft(draft, cfg, unavailable = []) {
     errors.push('Send pasta and pizza as separate orders - they cook at different stations.');
   }
   lines.forEach((line, i) => {
-    menu.validateLine(line, cfg.order).forEach((e) => errors.push(`Bowl ${i + 1}: ${e}`));
+    // Name the thing the guest is looking at: "Pizza 2", not "Bowl 2".
+    const label = (menu.kindOf(line) === 'pizza' ? 'Pizza ' : 'Bowl ') + (i + 1);
+    menu.validateLine(line, cfg.order).forEach((e) => errors.push(`${label}: ${e}`));
 
     if (unavailable.length) {
       const chosen = [
@@ -109,7 +111,7 @@ export function validateDraft(draft, cfg, unavailable = []) {
       const gone = [...new Set(chosen.filter((id) => unavailable.includes(id)))];
       gone.forEach((id) => {
         const item = menu.findAnywhere(id);
-        errors.push(`Bowl ${i + 1}: ${item ? item.name : id} just sold out - please pick something else.`);
+        errors.push(`${label}: ${item ? item.name : id} just sold out - please pick something else.`);
       });
     }
   });
