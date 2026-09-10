@@ -10,14 +10,49 @@
 import { config, tagById, serviceDate } from './config.js';
 import * as order from './order.js';
 
-/** Seeded into the `members` collection so the keypad can resolve names. */
+/**
+ * Demo member directory - 30 members, seeded into the `members` collection so
+ * the guest keypad resolves a number to a name.
+ *
+ * Numbers are four digits, matching config.order.memberNumberPattern. The ones
+ * the demo orders below reference (2087, 3150, 4421, 5007, 6123) are kept here
+ * on purpose so those chits show a name rather than an unverified badge.
+ *
+ * 7890 is deliberately ABSENT: one demo order uses it, which is what exercises
+ * the "member unverified" path - the order is still taken so nobody goes
+ * hungry, and the chit carries the badge for a server to sort out.
+ */
 export const MEMBERS = [
-  { memberNumber: '1043', name: 'Compofelice', tier: 'gold',   dietaryNotes: 'Shellfish allergy on file', defaultGuests: 4 },
-  { memberNumber: '2087', name: 'Nakamura',    tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
-  { memberNumber: '3150', name: 'Okonkwo',     tier: 'gold',   dietaryNotes: 'Gluten free - Sam', defaultGuests: 5 },
-  { memberNumber: '4421', name: 'Delgado',     tier: 'bronze', dietaryNotes: '', defaultGuests: 3 },
-  { memberNumber: '5007', name: 'Whitfield',   tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
-  { memberNumber: '6123', name: 'Petrov',      tier: 'gold',   dietaryNotes: 'No dairy - Ana', defaultGuests: 6 },
+  { memberNumber: '1043', name: 'Hollingsworth', tier: 'gold',   dietaryNotes: '', defaultGuests: 4 },
+  { memberNumber: '1188', name: 'Abernathy',     tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '1276', name: 'Vasquez',       tier: 'bronze', dietaryNotes: '', defaultGuests: 3 },
+  { memberNumber: '1352', name: 'Nazarian',      tier: 'gold',   dietaryNotes: 'Tree nut allergy - Leila', defaultGuests: 6 },
+  { memberNumber: '1409', name: 'Kirkpatrick',   tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '1567', name: 'Castellanos',   tier: 'gold',   dietaryNotes: '', defaultGuests: 5 },
+  { memberNumber: '1631', name: 'Easton',        tier: 'bronze', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '1794', name: 'Compofelice',   tier: 'gold',   dietaryNotes: 'Shellfish allergy on file', defaultGuests: 4 },
+  { memberNumber: '1852', name: 'Goswami',       tier: 'silver', dietaryNotes: 'Vegetarian - no meat proteins', defaultGuests: 4 },
+  { memberNumber: '1937', name: 'Bellamy',       tier: 'gold',   dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '2087', name: 'Nakamura',      tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '2214', name: 'Rasmussen',     tier: 'bronze', dietaryNotes: '', defaultGuests: 4 },
+  { memberNumber: '2368', name: 'Ibarra',        tier: 'silver', dietaryNotes: '', defaultGuests: 3 },
+  { memberNumber: '2475', name: 'Thackeray',     tier: 'gold',   dietaryNotes: '', defaultGuests: 8 },
+  { memberNumber: '2590', name: 'Ueda',          tier: 'silver', dietaryNotes: 'No pork', defaultGuests: 2 },
+  { memberNumber: '2643', name: 'Pemberton',     tier: 'bronze', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '2781', name: 'Sandoval',      tier: 'gold',   dietaryNotes: '', defaultGuests: 5 },
+  { memberNumber: '2896', name: 'Lindqvist',     tier: 'silver', dietaryNotes: '', defaultGuests: 3 },
+  { memberNumber: '3150', name: 'Okonkwo',       tier: 'gold',   dietaryNotes: 'Gluten free - Sam', defaultGuests: 5 },
+  { memberNumber: '3274', name: 'Mancuso',       tier: 'bronze', dietaryNotes: '', defaultGuests: 4 },
+  { memberNumber: '3388', name: 'Fairbanks',     tier: 'gold',   dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '3465', name: 'Quintero',      tier: 'silver', dietaryNotes: '', defaultGuests: 6 },
+  { memberNumber: '3519', name: 'Ashworth',      tier: 'bronze', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '3627', name: 'Oyelaran',      tier: 'gold',   dietaryNotes: '', defaultGuests: 4 },
+  { memberNumber: '4421', name: 'Delgado',       tier: 'bronze', dietaryNotes: '', defaultGuests: 3 },
+  { memberNumber: '4738', name: 'Devereaux',     tier: 'gold',   dietaryNotes: 'Dairy free', defaultGuests: 2 },
+  { memberNumber: '4906', name: 'Yamamoto',      tier: 'silver', dietaryNotes: '', defaultGuests: 4 },
+  { memberNumber: '5007', name: 'Whitfield',     tier: 'silver', dietaryNotes: '', defaultGuests: 2 },
+  { memberNumber: '5182', name: 'Wentworth',     tier: 'gold',   dietaryNotes: '', defaultGuests: 6 },
+  { memberNumber: '6123', name: 'Petrov',        tier: 'gold',   dietaryNotes: 'No dairy - Ana', defaultGuests: 6 },
 ];
 
 const DRAFTS = [

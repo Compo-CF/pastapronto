@@ -10,6 +10,7 @@ import { config } from '../app/config.js';
 import * as order from '../app/order.js';
 import * as cooktime from '../app/cooktime.js';
 import * as menu from '../app/menu.js';
+import * as seed from '../app/seed.js';
 
 const { STATUS } = order;
 const sla = config.sla;
@@ -27,7 +28,7 @@ function test(name, fn) {
 }
 
 const draft = () => ({
-  memberNumber: '1043',
+  memberNumber: '1794',
   memberName: 'Compofelice',
   memberStatus: 'verified',
   guestCount: 2,
@@ -409,7 +410,7 @@ test('shift report survives an empty day', () => {
 });
 
 const pizzaDraft = () => ({
-  memberNumber: '1043',
+  memberNumber: '1794',
   memberName: 'Compofelice',
   memberStatus: 'verified',
   guestCount: 2,
@@ -637,6 +638,36 @@ test('the member list is sorted by how much they ate', () => {
   const rows = order.memberRollup([light, heavy]);
   assert.strictEqual(rows[0].memberNumber, '2002', 'heaviest eater first');
   assert.ok(rows[0].items > rows[1].items);
+});
+
+test('the demo member directory is usable as a lookup table', () => {
+  const nums = seed.MEMBERS.map((m) => m.memberNumber);
+
+  assert.strictEqual(seed.MEMBERS.length, 30);
+  // Every number must be enterable on the keypad, or the row is unreachable.
+  nums.forEach((n) => assert.ok(config.order.memberNumberPattern.test(n), n + ' is not four digits'));
+  assert.strictEqual(new Set(nums).size, nums.length, 'numbers are unique');
+  assert.strictEqual(new Set(seed.MEMBERS.map((m) => m.name)).size, 30, 'names are unique');
+
+  const anthony = seed.MEMBERS.find((m) => m.memberNumber === '1794');
+  assert.ok(anthony, '1794 is in the directory');
+  assert.strictEqual(anthony.name, 'Compofelice');
+
+  seed.MEMBERS.forEach((m) => {
+    assert.ok(m.name && m.name.length > 1, 'every row has a name');
+    assert.ok(['gold', 'silver', 'bronze'].includes(m.tier), m.name + ' tier');
+    assert.ok(Number.isInteger(m.defaultGuests) && m.defaultGuests >= 1
+      && m.defaultGuests <= config.order.maxGuests, m.name + ' default guests');
+  });
+
+  // Any member the seeded orders reference must resolve to a name, or the demo
+  // rail shows unverified badges that are not demonstrating anything. Checked
+  // against the orders that actually get written, not the draft table.
+  const referenced = [...new Set(seed.buildDemoOrders().map((o) => o.memberNumber))].sort();
+  const missing = referenced.filter((n) => !nums.includes(n));
+  assert.deepStrictEqual(missing, ['7890'],
+    'only 7890 should be absent - it is what exercises the unverified path, got '
+    + JSON.stringify(missing));
 });
 
 test('menu catalog exposes every group the screens render', () => {
