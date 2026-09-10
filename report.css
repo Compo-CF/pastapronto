@@ -12,27 +12,43 @@
 .rpt-empty { padding: 22px; border: 2px dashed var(--line-strong); border-radius: var(--radius); color: var(--ink-soft); font-weight: 650; text-align: center; }
 
 /* ---------------------------------------------------------- service curve
-   One series (bowls per quarter-hour), so no legend: the heading names it.
-   Single hue, recessive baseline, only the peak is labelled. */
+   Two series (bowls, pizzas) stacked per quarter-hour. Legend always present
+   because identity must never rest on colour alone; only the peak column
+   carries a value label. The pair was checked with the palette validator
+   against this surface - CVD separation dE 16.4, normal vision 23.0. */
+
+.curve-legend { display: flex; gap: 16px; margin: 0 0 12px; }
+.curve-key { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.curve-key i { width: 12px; height: 12px; border-radius: 3px; }
+.curve-key i.is-pasta { background: #d33f30; }
+.curve-key i.is-pizza { background: #6b4b8a; }
 
 .curve { display: flex; align-items: flex-end; gap: 2px; height: 172px; padding: 0 2px; border-bottom: 1px solid var(--line-strong); }
-.curve-col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; min-width: 0; height: 100%; position: relative; }
-.curve-bar {
-  background: var(--tomato);
-  border-radius: 4px 4px 0 0;   /* rounded data-end, anchored to the baseline */
-  min-height: 2px;
-  transition: filter 120ms ease;
+.curve-col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; height: 100%; position: relative; }
+
+/* Rounded data-end on the stack, anchored to the baseline. */
+.curve-stack {
+  display: flex; flex-direction: column; justify-content: flex-end;
+  height: 100%;
+  gap: 2px;                  /* surface gap between stacked segments */
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
 }
-.curve-col:hover .curve-bar { filter: brightness(1.15); }
-.curve-col[data-peak="true"] .curve-bar { background: var(--tomato-dark); }
+.curve-seg { min-height: 2px; transition: filter 120ms ease; }
+.curve-seg.is-pasta { background: #d33f30; }
+.curve-seg.is-pizza { background: #6b4b8a; }
+.curve-col:hover .curve-seg { filter: brightness(1.12); }
+.curve-col[data-peak="true"] .curve-seg.is-pasta { background: #a82a1e; }
+.curve-col[data-peak="true"] .curve-seg.is-pizza { background: #513868; }
+
 .curve-peak {
   position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; font-weight: 800; color: var(--tomato-dark); white-space: nowrap;
+  font-size: 11px; font-weight: 800; color: var(--ink); white-space: nowrap;
 }
 .curve-axis { display: flex; gap: 2px; padding: 6px 2px 0; }
 .curve-axis span { flex: 1 1 0; font-size: 10px; color: var(--ink-faint); text-align: center; min-width: 0; overflow: hidden; }
 
-/* Hover tooltip, per the interaction rules - an HTML chart is interactive. */
+/* Hover tooltip - an HTML chart is interactive by default. */
 .curve-col .curve-tip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(-6px);
   z-index: 5;
@@ -82,3 +98,7 @@
   font-size: 18px; font-weight: 800; letter-spacing: -0.01em;
 }
 .rpt-lane-sub { font-size: 13px; font-weight: 650; color: var(--ink-faint); }
+
+/* Member numbers read as data, so they get the mono face. */
+.rpt-table td.mono { font-family: var(--mono); font-size: 14px; }
+.rpt-table tfoot th { border-top: 2px solid var(--line-strong); border-bottom: 0; font-size: 13px; color: var(--ink); text-transform: none; letter-spacing: 0; }

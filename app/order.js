@@ -282,6 +282,70 @@ export function publicView(order) {
   };
 }
 
+/**
+ * One row per member number for a service date.
+ *
+ * The venue is all-you-can-eat: one price covers pasta AND pizza, so the
+ * billable unit is a PERSON, not an order. A party of four that orders pasta
+ * and later comes back for pizza is still four covers and one charge.
+ *
+ * That means party size is the LARGEST head count a member reported that
+ * night, not the sum across their orders - summing bills the same table twice,
+ * once per trip to the app. Everything else (orders, bowls, pizzas) is a
+ * consumption signal rather than a billing one.
+ */
+export function memberRollup(orders) {
+  const live = orders.filter((o) => o.status !== STATUS.VOIDED);
+  const byMember = new Map();
+
+  live.forEach((o) => {
+    const key = String(o.memberNumber || 'unknown');
+    if (!byMember.has(key)) {
+      byMember.set(key, {
+        memberNumber: key,
+        name: '',
+        status: 'unverified',
+        orders: 0,
+        partySize: 0,
+        bowls: 0,
+        pizzas: 0,
+        items: 0,
+        firstAt: o.submittedAt,
+        lastAt: o.submittedAt,
+        kinds: new Set(),
+      });
+    }
+    const m = byMember.get(key);
+    m.orders += 1;
+    m.partySize = Math.max(m.partySize, Number(o.guestCount) || 0);
+
+    const isPizza = (o.kind || 'pasta') === 'pizza';
+    m[isPizza ? 'pizzas' : 'bowls'] += o.lines.length;
+    m.items += o.lines.length;
+    m.kinds.add(isPizza ? 'pizza' : 'pasta');
+
+    if (o.memberName && !m.name) m.name = o.memberName;
+    if (o.memberStatus === 'verified') m.status = 'verified';
+    if (new Date(o.submittedAt) < new Date(m.firstAt)) m.firstAt = o.submittedAt;
+    if (new Date(o.submittedAt) > new Date(m.lastAt)) m.lastAt = o.submittedAt;
+  });
+
+  return [...byMember.values()]
+    .map((m) => ({
+      ...m,
+      kinds: [...m.kinds].sort(),
+      itemsPerCover: m.partySize ? Math.round((m.items / m.partySize) * 10) / 10 : 0,
+    }))
+    .sort((a, b) => b.items - a.items
+      || b.partySize - a.partySize
+      || a.memberNumber.localeCompare(b.memberNumber));
+}
+
+/** Billable AYCE covers: each member's party counted once, however many trips. */
+export function billableCovers(orders) {
+  return memberRollup(orders).reduce((a, m) => a + m.partySize, 0);
+}
+
 const average = (list) => (list.length ? Math.round(list.reduce((a, b) => a + b, 0) / list.length) : 0);
 
 function percentile(list, p) {
@@ -326,7 +390,10 @@ export function metrics(orders, sla) {
       held: count(STATUS.HELD),
       voided: count(STATUS.VOIDED),
     },
-    covers: alive.reduce((a, o) => a + o.guestCount, 0),
+    // Billable covers, not a sum of guest counts: a member who orders pasta and
+    // then pizza is one party on one AYCE charge, not two.
+    covers: billableCovers(orders),
+    guestCountEntries: alive.reduce((a, o) => a + o.guestCount, 0),
     bowls: alive.reduce((a, o) => a + o.lines.length, 0),
     timings: {
       avgQueueSec: average(queueWaits),
@@ -411,17 +478,23 @@ export function shiftReport(orders, sla) {
   const onTimeCount = done.filter((o) => o.acceptedAt && o.readyAt).length - late.length;
 
   // ---- service curve in quarter-hours -----------------------------------
+  // Split the curve by kind: a manager wants to see that the pizza rush lands
+  // later than the pasta rush, which a single total hides.
   const buckets = {};
   alive.forEach((o) => {
     const d = new Date(o.submittedAt);
     const key = `${String(d.getHours()).padStart(2, '0')}:${String(Math.floor(d.getMinutes() / 15) * 15).padStart(2, '0')}`;
-    if (!buckets[key]) buckets[key] = { bucket: key, orders: 0, bowls: 0, covers: 0 };
+    if (!buckets[key]) {
+      buckets[key] = { bucket: key, orders: 0, bowls: 0, pizzas: 0, items: 0, covers: 0 };
+    }
+    const isPizza = (o.kind || 'pasta') === 'pizza';
     buckets[key].orders += 1;
-    buckets[key].bowls += o.lines.length;
+    buckets[key][isPizza ? 'pizzas' : 'bowls'] += o.lines.length;
+    buckets[key].items += o.lines.length;
     buckets[key].covers += o.guestCount;
   });
   const curve = Object.values(buckets).sort((a, b) => a.bucket.localeCompare(b.bucket));
-  const peak = curve.reduce((best, b) => (!best || b.bowls > best.bowls ? b : best), null);
+  const peak = curve.reduce((best, b) => (!best || b.items > best.items ? b : best), null);
 
   // ---- what actually sold, which is what drives tomorrow's prep ---------
   //
@@ -487,7 +560,8 @@ export function shiftReport(orders, sla) {
   });
 
   const bowls = alive.reduce((a, o) => a + o.lines.length, 0);
-  const covers = alive.reduce((a, o) => a + o.guestCount, 0);
+  const members = memberRollup(orders);
+  const covers = members.reduce((a, m) => a + m.partySize, 0);
 
   return {
     serviceDate: orders.length ? orders[0].serviceDate : null,
@@ -499,9 +573,12 @@ export function shiftReport(orders, sla) {
       held: held.length,
       stillOpen: alive.filter((o) => LIVE_STATUSES.includes(o.status)).length,
       covers,
+      members: members.length,
+      repeatOrders: Math.max(0, alive.length - members.length),
       bowls,
       bowlsPerCover: covers ? Math.round((bowls / covers) * 100) / 100 : 0,
     },
+    members,
     timings: {
       avgQueueSec: average(queueWaits),
       avgCookSec: average(cookTimes),

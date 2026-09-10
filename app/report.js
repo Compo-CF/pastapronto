@@ -41,10 +41,17 @@ function prettyDate(dateStr) {
 
 function statTiles(r) {
   const tiles = [
-    { label: 'Covers', value: r.totals.covers, note: r.totals.bowlsPerCover + ' bowls per cover' },
+    {
+      label: 'Covers (billable)', value: r.totals.covers,
+      note: r.totals.members + ' member' + (r.totals.members === 1 ? '' : 's') + ' · AYCE, one charge each',
+    },
     {
       label: 'Items', value: r.totals.bowls,
       note: (r.byKind.pasta.items || 0) + ' bowls / ' + (r.byKind.pizza.items || 0) + ' pizzas',
+    },
+    {
+      label: 'Items per cover', value: r.totals.bowlsPerCover,
+      note: 'how much the room ate',
     },
     { label: 'Delivered', value: r.totals.delivered, note: r.totals.stillOpen + ' still open' },
     {
@@ -68,38 +75,61 @@ function statTiles(r) {
 }
 
 /**
- * Service curve: bowls per quarter-hour. One series, so no legend - the heading
- * names it - and only the peak carries a direct label. Each column has a hover
- * tooltip, and the same numbers are available as a table underneath for anyone
- * who cannot use the chart.
+ * Service curve: bowls and pizzas per quarter-hour, stacked.
+ *
+ * Two series now, so a legend is always present and both are named in it -
+ * identity is never carried by colour alone. Only the peak column gets a value
+ * label rather than every bar. The pair (#d33f30 / #6b4b8a) was checked with
+ * the palette validator against this light surface: CVD separation dE 16.4,
+ * normal-vision 23.0, both well clear of the floor.
+ *
+ * The same numbers are available as a table underneath for anyone who cannot
+ * use the chart.
  */
 function serviceCurve(r) {
   if (!r.curve.length) return '';
-  const max = Math.max(...r.curve.map((b) => b.bowls));
+  const max = Math.max(...r.curve.map((b) => b.items));
   const showLabel = (i) => r.curve.length <= 12 || i % Math.ceil(r.curve.length / 12) === 0;
+  const pct = (n) => (n > 0 ? Math.max(2, Math.round((n / max) * 100)) : 0);
+  const anyPizza = r.curve.some((b) => b.pizzas > 0);
 
   return html`<section class="rpt-section">
-    <h2 class="sec-title">Bowls per 15 minutes</h2>
+    <h2 class="sec-title">Bowls and pizzas per 15 minutes</h2>
     <div class="card">
+      <div class="curve-legend">
+        <span class="curve-key"><i class="is-pasta"></i>Bowls</span>
+        <span class="curve-key"><i class="is-pizza"></i>Pizzas</span>
+      </div>
+
       <div class="curve" role="img"
-        aria-label="${'Bowls per quarter hour. Peak ' + r.peak.bowls + ' bowls at ' + r.peak.bucket + '.'}">
+        aria-label="${'Bowls and pizzas per quarter hour. Peak ' + r.peak.items + ' items at ' + r.peak.bucket + ', being ' + r.peak.bowls + ' bowls and ' + r.peak.pizzas + ' pizzas.'}">
         ${r.curve.map((b) => html`<div class="curve-col" tabindex="0" data-peak="${b === r.peak ? 'true' : 'false'}">
-          ${raw(b === r.peak ? '<span class="curve-peak">' + b.bowls + '</span>' : '')}
-          <span class="curve-tip">${b.bucket} &middot; ${b.bowls} bowls &middot; ${b.orders} orders &middot; ${b.covers} covers</span>
-          <div class="curve-bar" style="height:${Math.max(2, Math.round((b.bowls / max) * 100))}%"></div>
+          ${raw(b === r.peak ? '<span class="curve-peak">' + b.items + '</span>' : '')}
+          <span class="curve-tip">${b.bucket} &middot; ${b.bowls} bowls &middot; ${b.pizzas} pizzas &middot; ${b.orders} orders</span>
+          <div class="curve-stack">
+            ${raw(b.pizzas > 0 ? '<div class="curve-seg is-pizza" style="height:' + pct(b.pizzas) + '%"></div>' : '')}
+            ${raw(b.bowls > 0 ? '<div class="curve-seg is-pasta" style="height:' + pct(b.bowls) + '%"></div>' : '')}
+          </div>
         </div>`)}
       </div>
       <div class="curve-axis">
         ${r.curve.map((b, i) => html`<span>${showLabel(i) ? b.bucket : ''}</span>`)}
       </div>
+
+      ${raw(anyPizza ? '' : '<p class="muted" style="margin:12px 0 0;font-size:14px">No pizzas on this service date.</p>')}
+
       <details style="margin-top:14px">
         <summary class="muted" style="cursor:pointer;font-size:14px">Show as a table</summary>
         <div class="mtable-wrap" style="margin-top:10px">
           <table class="rpt-table">
-            <thead><tr><th>Time</th><th class="num">Orders</th><th class="num">Bowls</th><th class="num">Covers</th></tr></thead>
+            <thead><tr>
+              <th>Time</th><th class="num">Orders</th><th class="num">Bowls</th>
+              <th class="num">Pizzas</th><th class="num">Total</th><th class="num">Covers</th>
+            </tr></thead>
             <tbody>${r.curve.map((b) => html`<tr>
               <td>${b.bucket}</td><td class="num">${b.orders}</td>
-              <td class="num">${b.bowls}</td><td class="num">${b.covers}</td>
+              <td class="num">${b.bowls}</td><td class="num">${b.pizzas}</td>
+              <td class="num">${b.items}</td><td class="num">${b.covers}</td>
             </tr>`)}</tbody>
           </table>
         </div>
@@ -161,6 +191,71 @@ function menuMix(r) {
       Sauce counts exceed item counts where something was mixed - a bowl or a
       pizza can carry up to ${config.order.maxSaucesPerBowl} sauces. Finishers
       go on after the bake, so they cost nothing on the oven clock.
+    </p>
+  </section>`;
+}
+
+/**
+ * Who ate, and how much.
+ *
+ * The venue is all-you-can-eat - one price covers pasta and pizza - so the
+ * billable unit is a person, not an order. A party that orders pasta and comes
+ * back for pizza is still one charge, which is why "party" here is the largest
+ * head count that member reported and not the sum of their orders. Orders and
+ * items are consumption, useful for spotting a table that ran the kitchen hard.
+ */
+function memberList(r) {
+  if (!r.members.length) return '';
+
+  const maxItems = Math.max(...r.members.map((m) => m.items));
+
+  return html`<section class="rpt-section">
+    <h2 class="sec-title">Members and covers</h2>
+    <div class="card mtable-wrap">
+      <table class="rpt-table">
+        <thead><tr>
+          <th>Member</th><th>Name</th>
+          <th class="num">Orders</th><th class="num">Covers</th>
+          <th class="num">Bowls</th><th class="num">Pizzas</th>
+          <th class="num">Items</th><th class="num">Per cover</th>
+          <th>Ate</th>
+        </tr></thead>
+        <tbody>
+          ${r.members.map((m) => html`<tr>
+            <td class="mono">${m.memberNumber}</td>
+            <td>${m.name || (m.status === 'unverified' ? '(unverified)' : '-')}</td>
+            <td class="num">${m.orders}</td>
+            <td class="num"><b>${m.partySize}</b></td>
+            <td class="num">${m.bowls || ''}</td>
+            <td class="num">${m.pizzas || ''}</td>
+            <td class="num">${m.items}</td>
+            <td class="num">${m.itemsPerCover}</td>
+            <td>
+              <span class="mixbar" style="display:block;width:70px">
+                <i style="width:${Math.round((m.items / maxItems) * 100)}%"></i>
+              </span>
+            </td>
+          </tr>`)}
+        </tbody>
+        <tfoot><tr>
+          <th>${r.members.length} members</th><th></th>
+          <th class="num">${r.totals.orders}</th>
+          <th class="num">${r.totals.covers}</th>
+          <th class="num">${r.byKind.pasta.items}</th>
+          <th class="num">${r.byKind.pizza.items}</th>
+          <th class="num">${r.totals.bowls}</th>
+          <th class="num">${r.totals.bowlsPerCover}</th>
+          <th></th>
+        </tr></tfoot>
+      </table>
+    </div>
+    <p class="muted" style="font-size:14px;margin:12px 0 0">
+      <strong>Covers is what you charge.</strong> One price per person covers both
+      pasta and pizza, so a member who orders twice is still one party on one
+      charge - the covers column is the largest head count they reported, not the
+      sum of their orders. ${r.totals.repeatOrders > 0
+        ? 'Tonight ' + r.totals.repeatOrders + ' order' + (r.totals.repeatOrders === 1 ? ' was' : 's were') + ' a repeat trip by a member already counted.'
+        : 'Nobody ordered twice tonight.'}
     </p>
   </section>`;
 }
@@ -268,6 +363,7 @@ function render() {
     </div>`,
     statTiles(r),
     serviceCurve(r),
+    memberList(r),
     menuMix(r),
     lateTable(r),
     stationsTable(r),
@@ -300,7 +396,9 @@ function toCsv(r, date) {
   push('Delivered', r.totals.delivered);
   push('Still open', r.totals.stillOpen);
   push('Voided', r.totals.voided);
-  push('Covers', r.totals.covers);
+  push('Covers (billable, AYCE)', r.totals.covers);
+  push('Members', r.totals.members);
+  push('Repeat orders', r.totals.repeatOrders);
   push('Bowls', r.totals.bowls);
   push('Bowls per cover', r.totals.bowlsPerCover);
   push('');
@@ -315,9 +413,15 @@ function toCsv(r, date) {
   push('On time %', r.onTime.pct == null ? '' : r.onTime.pct);
   push('');
 
+  push('MEMBERS AND COVERS');
+  push('Member', 'Name', 'Status', 'Orders', 'Covers', 'Bowls', 'Pizzas', 'Items', 'Per cover', 'First', 'Last');
+  r.members.forEach((m) => push(m.memberNumber, m.name, m.status, m.orders, m.partySize,
+    m.bowls, m.pizzas, m.items, m.itemsPerCover, m.firstAt, m.lastAt));
+  push('');
+
   push('SERVICE CURVE');
-  push('Time', 'Orders', 'Bowls', 'Covers');
-  r.curve.forEach((b) => push(b.bucket, b.orders, b.bowls, b.covers));
+  push('Time', 'Orders', 'Bowls', 'Pizzas', 'Total items', 'Covers');
+  r.curve.forEach((b) => push(b.bucket, b.orders, b.bowls, b.pizzas, b.items, b.covers));
   push('');
 
   push('MENU MIX');

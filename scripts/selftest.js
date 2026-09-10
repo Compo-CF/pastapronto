@@ -277,8 +277,12 @@ test('metrics roll up a finished day', () => {
   const m = order.metrics(orders, sla);
   assert.strictEqual(m.counts.total, 5);
   assert.strictEqual(m.counts.delivered, 5);
-  assert.strictEqual(m.covers, 10);
-  assert.strictEqual(m.bowls, 10);
+  // All five orders are the same member with a party of two. AYCE bills per
+  // person, so that is TWO covers on one charge - not ten. Summing guest counts
+  // over orders is exactly the double-bill this replaced.
+  assert.strictEqual(m.covers, 2, 'billable covers, not a sum over orders');
+  assert.strictEqual(m.guestCountEntries, 10, 'the raw sum is still available');
+  assert.strictEqual(m.bowls, 10, 'ten bowls were still cooked');
   assert.ok(!('revenue' in m), 'metrics carry no money');
   assert.strictEqual(m.timings.avgQueueSec, 45);
   assert.strictEqual(m.timings.avgRunnerSec, 30);
@@ -309,7 +313,9 @@ test('shift report totals, mix and exceptions', () => {
   assert.strictEqual(r.totals.delivered, 4);
   assert.strictEqual(r.totals.voided, 1);
   assert.strictEqual(r.totals.held, 1);
-  assert.strictEqual(r.totals.covers, 10, '5 live orders x 2 guests');
+  assert.strictEqual(r.totals.covers, 2, 'one member, one party of two, one charge');
+  assert.strictEqual(r.totals.members, 1);
+  assert.strictEqual(r.totals.repeatOrders, 4, 'four of the five were repeat trips');
   assert.strictEqual(r.totals.bowls, 10);
 
   assert.strictEqual(r.late.length, 1, 'exactly one late ticket');
@@ -324,8 +330,10 @@ test('shift report totals, mix and exceptions', () => {
   assert.strictEqual(r.byKind.pasta.items, 10);
   assert.strictEqual(r.byKind.pizza.items, 0, 'no pizzas in this fixture');
 
-  // The curve accounts for every live bowl.
-  assert.strictEqual(r.curve.reduce((a, b) => a + b.bowls, 0), 10);
+  // The curve accounts for every live item, split by kind.
+  assert.strictEqual(r.curve.reduce((a, b) => a + b.items, 0), 10);
+  assert.strictEqual(r.curve.reduce((a, b) => a + b.bowls, 0), 10, 'all pasta in this fixture');
+  assert.strictEqual(r.curve.reduce((a, b) => a + b.pizzas, 0), 0);
   assert.ok(r.peak && r.peak.bowls > 0);
 
   assert.strictEqual(r.exceptions.voided.length, 1);
@@ -462,6 +470,87 @@ test('shift report splits the prep guide by station', () => {
   assert.ok(!r.mix.pasta.sauces.some((x) => x.name === 'BBQ'), 'BBQ never lands in the pasta list');
   assert.strictEqual(r.mix.pizza.sauces.reduce((a, x) => a + x.count, 0), 6, '2 orders x (1 + 2 sauces)');
   assert.ok(r.mix.pizza.finishers.length > 0, 'finishers tallied');
+
+  // The service curve separates the two, and the totals reconcile.
+  const bowls = r.curve.reduce((a, b) => a + b.bowls, 0);
+  const pizzas = r.curve.reduce((a, b) => a + b.pizzas, 0);
+  const items = r.curve.reduce((a, b) => a + b.items, 0);
+  assert.strictEqual(bowls, 2, 'one pasta order of two bowls');
+  assert.strictEqual(pizzas, 4, 'two pizza orders of two pies');
+  assert.strictEqual(items, bowls + pizzas, 'total is the sum of the two series');
+  assert.strictEqual(items, r.totals.bowls, 'and matches the day total');
+  // The peak is chosen on the stacked total, not on either series alone.
+  assert.ok(r.peak.items >= r.peak.bowls && r.peak.items >= r.peak.pizzas);
+});
+
+test('AYCE billing counts a person once, however many orders they place', () => {
+  // A party of four eats pasta, then comes back for pizza. One price covers
+  // both, so this is four covers and one charge - not eight.
+  const pasta = make();
+  pasta.memberNumber = '31500';
+  pasta.memberName = 'Okonkwo';
+  pasta.guestCount = 4;
+
+  const pizza = makePizza();
+  pizza.memberNumber = '31500';
+  pizza.memberName = 'Okonkwo';
+  pizza.guestCount = 4;
+
+  const rows = order.memberRollup([pasta, pizza]);
+  assert.strictEqual(rows.length, 1, 'one member, one row');
+  const m = rows[0];
+  assert.strictEqual(m.memberNumber, '31500');
+  assert.strictEqual(m.name, 'Okonkwo');
+  assert.strictEqual(m.orders, 2, 'two trips to the app');
+  assert.strictEqual(m.partySize, 4, 'still four people');
+  assert.strictEqual(m.bowls, 2);
+  assert.strictEqual(m.pizzas, 2);
+  assert.strictEqual(m.items, 4);
+  assert.deepStrictEqual(m.kinds, ['pasta', 'pizza'], 'ate both');
+  assert.strictEqual(order.billableCovers([pasta, pizza]), 4, 'four covers, not eight');
+});
+
+test('a bigger second party raises the billable count', () => {
+  // Two joined them for round two, so the party genuinely grew.
+  const first = make();
+  first.memberNumber = '44219';
+  first.guestCount = 2;
+  const second = makePizza();
+  second.memberNumber = '44219';
+  second.guestCount = 5;
+  assert.strictEqual(order.billableCovers([first, second]), 5, 'take the largest head count');
+});
+
+test('separate members are billed separately, and voids are excluded', () => {
+  const a = make(); a.memberNumber = '10001'; a.guestCount = 3;
+  const b = make(); b.memberNumber = '10002'; b.guestCount = 2;
+  const voided = order.applyTransition(make(), 'void', { sla });
+  voided.memberNumber = '10003';
+  voided.guestCount = 9;
+
+  assert.strictEqual(order.billableCovers([a, b, voided]), 5, '3 + 2, void not charged');
+  const rows = order.memberRollup([a, b, voided]);
+  assert.strictEqual(rows.length, 2, 'the voided member does not appear');
+});
+
+test('an unverified member still appears on the list', () => {
+  const o = make();
+  o.memberNumber = '78901';
+  o.memberName = '';
+  o.memberStatus = 'unverified';
+  const m = order.memberRollup([o])[0];
+  assert.strictEqual(m.status, 'unverified');
+  assert.strictEqual(m.name, '', 'no name to show, so the report says so');
+  assert.strictEqual(m.partySize, 2, 'still billable');
+});
+
+test('the member list is sorted by how much they ate', () => {
+  const light = make(); light.memberNumber = '20001';
+  const heavy = make(); heavy.memberNumber = '20002';
+  heavy.lines = heavy.lines.concat(heavy.lines);
+  const rows = order.memberRollup([light, heavy]);
+  assert.strictEqual(rows[0].memberNumber, '20002', 'heaviest eater first');
+  assert.ok(rows[0].items > rows[1].items);
 });
 
 test('menu catalog exposes every group the screens render', () => {
