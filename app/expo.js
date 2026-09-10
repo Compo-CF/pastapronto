@@ -187,7 +187,7 @@ const CATALOG = menu.catalog();
     if (!db.isConfigured) {
       throw new Error('Firebase is not configured yet - see app/firebase-config.js');
     }
-    if (!requireStaff()) {
+    if (!(await requireStaff())) {
       throw new Error('Staff passcode required.');
     }
 

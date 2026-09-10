@@ -353,3 +353,57 @@ button { cursor: pointer; }
 .conn::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-faint); }
 .conn.is-live::before { background: var(--basil); box-shadow: 0 0 0 4px rgba(47, 125, 79, 0.18); }
 .conn.is-down::before { background: var(--late); box-shadow: 0 0 0 4px rgba(207, 45, 32, 0.18); }
+
+/* ------------------------------------------------------------- staff gate
+   Replaces window.prompt(), which is blocked in sandboxed frames and several
+   in-app webviews. Fixed colours so it reads the same over the light manager
+   screen and the dark kitchen rail. */
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(20, 23, 28, 0.94);
+  backdrop-filter: blur(6px);
+}
+.gate-card {
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 26px;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-lift);
+  text-align: center;
+}
+.gate-title { margin: 0; font-size: 26px; font-weight: 820; letter-spacing: -0.02em; color: var(--ink); }
+.gate-sub { margin: 0; font-size: 15px; color: var(--ink-soft); }
+.gate-input {
+  min-height: 62px;
+  padding: 0 18px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-align: center;
+  color: var(--ink);
+}
+.gate-input:focus { border-color: var(--grape); outline: none; }
+.gate-error { margin: 0; font-size: 14px; font-weight: 700; color: var(--tomato-dark); }
+.gate-go {
+  min-height: 62px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--tomato);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 800;
+}
+.gate-go:hover { background: var(--tomato-dark); }

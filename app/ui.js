@@ -165,15 +165,50 @@ export function toast(message, bad = false) {
  * guesses the URL does not land on the rail. It is NOT security - the passcode
  * ships in config.js and anyone can read it. What actually protects the data is
  * firestore.rules; see the security note in README.md.
+ *
+ * Rendered as an in-page overlay rather than window.prompt(). prompt() is
+ * blocked outright in sandboxed frames and several in-app webviews - exactly
+ * what a kitchen tablet or a link opened from a chat app tends to be - and
+ * there it throws, leaving a dead screen. This also gives a numeric keypad and
+ * a target big enough for a cook with wet hands.
+ *
+ * @returns {Promise<boolean>} resolves true once unlocked
  */
 export function requireStaff() {
-  if (recall('staff', false) === true) return true;
-  const entered = window.prompt('Staff passcode');
-  if (entered === null) return false;
-  if (entered.trim() === config.kitchen.staffPasscode) {
-    remember('staff', true);
-    return true;
-  }
-  window.alert('That passcode is not right.');
-  return false;
+  if (recall('staff', false) === true) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'gate';
+    overlay.innerHTML = [
+      '<form class="gate-card" autocomplete="off">',
+      '  <h1 class="gate-title">Staff screen</h1>',
+      '  <p class="gate-sub">Ask a manager for the passcode.</p>',
+      '  <input class="gate-input" type="password" inputmode="numeric" ',
+      '         autocomplete="off" aria-label="Staff passcode" placeholder="Passcode">',
+      '  <p class="gate-error" role="alert" hidden>That passcode is not right.</p>',
+      '  <button class="gate-go" type="submit">Unlock</button>',
+      '</form>',
+    ].join('');
+
+    const form = overlay.querySelector('form');
+    const input = overlay.querySelector('.gate-input');
+    const error = overlay.querySelector('.gate-error');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (input.value.trim() === config.kitchen.staffPasscode) {
+        remember('staff', true);
+        overlay.remove();
+        resolve(true);
+        return;
+      }
+      error.hidden = false;
+      input.value = '';
+      input.focus();
+    });
+
+    document.body.appendChild(overlay);
+    input.focus();
+  });
 }

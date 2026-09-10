@@ -259,7 +259,7 @@ const CATALOG = menu.catalog();
   async function boot() {
     document.getElementById('brandMark').innerHTML = art('mark');
 
-    if (!requireStaff()) {
+    if (!(await requireStaff())) {
       throw new Error('Staff passcode required.');
     }
 
