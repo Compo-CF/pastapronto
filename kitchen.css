@@ -72,6 +72,18 @@
   font-weight: 650;
   border-radius: var(--radius-pill);
 }
+/* A native <select> paints its dropdown list using the OS popup background -
+   white on every platform we care about - while the options inherit their
+   colour from the control. Light text on a dark control therefore turns into
+   white-on-white the instant it opens, which is invisible. The options need
+   their own colours, stated explicitly so neither the theme nor the OS can
+   decide for us. This bites the default dark rail and every brand alike. */
+.kselect .select option {
+  background-color: #ffffff;
+  color: #14171c;
+  font-weight: 650;
+}
+
 .kclock { font-size: 22px; font-weight: 750; }
 .kds .conn { color: var(--kmuted); }
 
