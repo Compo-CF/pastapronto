@@ -10,6 +10,7 @@ import * as menu from './menu.js';
 import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
+import { mastheadHtml, pageTitle } from './brand.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
   remember, recall, chime, unlockAudio, toast, requireStaff,
@@ -187,7 +188,8 @@ const CATALOG = menu.catalog();
   }
 
   async function boot() {
-    document.getElementById('brandMark').innerHTML = art('mark');
+    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), 'Expo & Runners');
+    document.title = pageTitle('Expo & Runners');
 
     if (!db.isConfigured) {
       throw new Error('Firebase is not configured yet - see app/firebase-config.js');

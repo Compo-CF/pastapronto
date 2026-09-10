@@ -13,6 +13,7 @@ import { config, serviceDate } from './config.js';
 import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
+import { mastheadHtml, pageTitle } from './brand.js';
 import { html, raw, mmss, escapeHtml, toast, requireStaff } from './ui.js';
 
 const el = {
@@ -512,7 +513,8 @@ document.getElementById('printBtn').addEventListener('click', () => window.print
 // ---------------------------------------------------------------------- boot
 
 async function boot() {
-  document.getElementById('brandMark').innerHTML = art('mark');
+  document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), 'Close-out');
+    document.title = pageTitle('Close-out');
 
   if (!db.isConfigured) {
     throw new Error('Firebase is not configured yet - see app/firebase-config.js.');

@@ -1,0 +1,200 @@
+/* ===========================================================================
+   The Club at Carlton Woods - Neapolitan Night
+   ===========================================================================
+   Palette and type taken from the club's own site
+   (clubessential.s3.amazonaws.com/sites/Carlton+Woods+2019/CSS):
+
+     #530000   deep maroon  - h2/h4 colour and the site header background
+     #420101   darker maroon
+     #8e8f6b   sage         - secondary accent on their forms
+     #2d2d2d   h1 ink
+     #444444   body ink
+     #f1f1f1   light section ground
+     Lora / Montserrat      - their serif and sans
+
+   Their logo is white on transparent, so the chrome has to be maroon for it to
+   read. Everything below is custom-property overrides plus that chrome - no
+   screen logic knows a brand exists.
+   =========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap');
+
+:root[data-brand="carltonwoods"] {
+  --cw-maroon: #530000;
+  --cw-maroon-dark: #420101;
+  --cw-maroon-mid: #5c1515;
+  --cw-sage: #8e8f6b;
+
+  /* The accent the app already uses everywhere becomes their maroon. */
+  --tomato: #530000;
+  --tomato-dark: #420101;
+  --tomato-wash: #f4ecec;
+
+  /* Sage carries the "go" states - accept, ready, send. */
+  --basil: #6f7052;
+  --basil-wash: #eef0e7;
+
+  --semolina: #a8792a;
+  --semolina-wash: #f7f1e4;
+  --grape: #5c1515;
+
+  --ink: #2d2d2d;
+  --ink-soft: #444444;
+  --ink-faint: #8a8580;
+
+  --paper: #f7f5f2;
+  --card: #ffffff;
+  --line: #e5e0d9;
+  --line-strong: #cec8bf;
+
+  --ok: #6f7052;
+  --warn: #a8792a;
+  --late: #8c1a10;
+
+  --font: 'Montserrat', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Lora', Georgia, 'Times New Roman', serif;
+
+  /* A club reads as squarer than a pasta bar. */
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+/* Display type on the things that carry the voice. */
+:root[data-brand="carltonwoods"] .step-title,
+:root[data-brand="carltonwoods"] .hero h1,
+:root[data-brand="carltonwoods"] .lanetile-title,
+:root[data-brand="carltonwoods"] .statusline,
+:root[data-brand="carltonwoods"] .ticket-no,
+:root[data-brand="carltonwoods"] .rpt-date,
+:root[data-brand="carltonwoods"] .sec-title,
+:root[data-brand="carltonwoods"] .menu-station,
+:root[data-brand="carltonwoods"] .rpt-lane-head {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+:root[data-brand="carltonwoods"] .sec-title {
+  letter-spacing: 0.14em;
+  font-weight: 600;
+}
+:root[data-brand="carltonwoods"] .step-kicker {
+  letter-spacing: 0.18em;
+  color: var(--cw-sage);
+}
+
+/* -------------------------------------------------------- masthead (light)
+   Maroon bar so their white logo reads, on the guest and manager screens. */
+
+:root[data-brand="carltonwoods"] .appbar {
+  background: var(--cw-maroon);
+  border-bottom: 3px solid var(--cw-sage);
+  backdrop-filter: none;
+}
+:root[data-brand="carltonwoods"] .brand { color: #fff; gap: 14px; }
+:root[data-brand="carltonwoods"] .brand-logo { height: 40px; width: auto; display: block; }
+:root[data-brand="carltonwoods"] .brand-event {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  color: #fff;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+}
+:root[data-brand="carltonwoods"] .brand-screen {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  letter-spacing: 0.05em;
+}
+:root[data-brand="carltonwoods"] .appbar .pill {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+:root[data-brand="carltonwoods"] .appbar .staffpill {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+}
+:root[data-brand="carltonwoods"] .appbar .staffpill:hover {
+  border-color: #fff;
+  color: #fff;
+}
+:root[data-brand="carltonwoods"] .appbar .staffpill[aria-current="page"] {
+  background: #fff;
+  border-color: #fff;
+  color: var(--cw-maroon);
+}
+:root[data-brand="carltonwoods"] .modeswitch {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+:root[data-brand="carltonwoods"] .dot { background: rgba(255, 255, 255, 0.35); }
+:root[data-brand="carltonwoods"] .dot.is-done { background: var(--cw-sage); }
+:root[data-brand="carltonwoods"] .dot.is-now { background: #fff; }
+
+/* --------------------------------------------------------- masthead (dark)
+   The kitchen and expo rails are already dark; give them the maroon bar. */
+
+:root[data-brand="carltonwoods"] .kds .kbar {
+  background: var(--cw-maroon);
+  border-bottom: 3px solid var(--cw-sage);
+}
+:root[data-brand="carltonwoods"] .kbrand { color: #fff; }
+:root[data-brand="carltonwoods"] .kds .brand-logo { height: 34px; width: auto; }
+:root[data-brand="carltonwoods"] .kds .brand-event {
+  font-family: var(--font-display);
+  font-size: 17px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+}
+:root[data-brand="carltonwoods"] .kds .brand-screen { color: rgba(255, 255, 255, 0.72); }
+:root[data-brand="carltonwoods"] .kds .kcount { background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.8); }
+:root[data-brand="carltonwoods"] .kds .kcount b { color: #fff; }
+:root[data-brand="carltonwoods"] .kds .kbtn,
+:root[data-brand="carltonwoods"] .kds .kselect .select {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+:root[data-brand="carltonwoods"] .kds .kclock { color: #fff; }
+:root[data-brand="carltonwoods"] .kds .staffpill {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.85);
+}
+:root[data-brand="carltonwoods"] .kds .staffpill[aria-current="page"] {
+  background: #fff; border-color: #fff; color: var(--cw-maroon);
+}
+
+/* The go-button on a chit is sage rather than a bright green. */
+:root[data-brand="carltonwoods"] .kact-primary { background: #7c7d5c; color: #fff; }
+:root[data-brand="carltonwoods"] .rcard-go { background: #7c7d5c; color: #fff; }
+:root[data-brand="carltonwoods"] .lane[data-lane="ready"] .lane-head { color: #b7b892; }
+:root[data-brand="carltonwoods"] .chit-timer[data-late=""] { color: #f2f5f8; }
+
+/* Guest welcome: a club, not a takeaway counter. */
+:root[data-brand="carltonwoods"] .hero h1 em { color: var(--cw-maroon); }
+:root[data-brand="carltonwoods"] .wherecard {
+  background: var(--basil-wash);
+  color: #4a4b33;
+}
+:root[data-brand="carltonwoods"] .howto .n { background: var(--cw-maroon); }
+:root[data-brand="carltonwoods"] .ticket { border-color: var(--line-strong); }
+
+/* ------------------------------------------------------------ narrow phone
+   At 375px the logo, the event name and the mode switch do not all fit. The
+   logo carries the identity on its own, so the event name is what gives way -
+   it is repeated on the welcome screen anyway. */
+
+@media (max-width: 480px) {
+  :root[data-brand="carltonwoods"] .brand-event {
+    display: none;
+  }
+  :root[data-brand="carltonwoods"] .brand-logo { height: 34px; }
+  :root[data-brand="carltonwoods"] .brand { gap: 8px; }
+}
+
+@media (max-width: 380px) {
+  :root[data-brand="carltonwoods"] .brand-logo { height: 30px; }
+}

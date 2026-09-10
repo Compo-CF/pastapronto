@@ -11,6 +11,7 @@ import * as order from './order.js';
 import * as db from './db.js';
 import * as seed from './seed.js';
 import { art } from './art.js';
+import { mastheadHtml, pageTitle } from './brand.js';
 import * as QR from './qr.js';
 import {
   html, raw, mmss, escapeHtml, remember, recall, toast, requireStaff,
@@ -284,7 +285,8 @@ const CATALOG = menu.catalog();
   // ---------------------------------------------------------------------- boot
 
   async function boot() {
-    document.getElementById('brandMark').innerHTML = art('mark');
+    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), 'Manager');
+    document.title = pageTitle('Manager');
 
     if (!(await requireStaff())) {
       throw new Error('Staff passcode required.');

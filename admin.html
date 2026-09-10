@@ -11,12 +11,28 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="PastaPresto">
+<script>
+/* Attach the brand stylesheet before first paint, so a branded screen never
+   flashes the default palette. The id is sanitised because it comes from the
+   query string. */
+(function () {
+  try {
+    var q = new URLSearchParams(location.search).get('brand');
+    if (q) localStorage.setItem('pp.brand', q);
+    var id = (q || localStorage.getItem('pp.brand') || 'default').replace(/[^a-z0-9-]/gi, '');
+    if (id && id !== 'default') {
+      document.documentElement.setAttribute('data-brand', id);
+      document.write('<link rel="stylesheet" href="brands/' + id + '.css">');
+    }
+  } catch (e) { /* private mode: stay unbranded */ }
+})();
+</script>
 </head>
 <body>
 
 <header class="appbar no-print">
   <div class="wrap appbar-inner">
-    <div class="brand"><span class="brand-mark" id="brandMark"></span> Pasta<em>Presto!</em></div>
+    <div class="brand" id="masthead"></div>
     <span class="pill">Manager</span>
     <div class="grow"></div>
     <nav class="staffnav" aria-label="Staff screens">

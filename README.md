@@ -135,6 +135,50 @@ built to be printed for the folder or exported to a spreadsheet.
 The arithmetic is `order.shiftReport()`, a pure function with its own tests, so
 the numbers on this page are checked without a database.
 
+## Venue branding
+
+The app ships unbranded. A venue brand is **data plus a stylesheet of
+custom-property overrides** - no screen logic knows a brand exists.
+
+| Brand | Guest link |
+| --- | --- |
+| Default (PastaPresto) | `/?t=table-12` |
+| The Club at Carlton Woods | `/?t=table-12&brand=carltonwoods` |
+
+`?brand=<id>` is remembered per device, so staff screens stay branded once set.
+`?brand=default` clears it.
+
+### Adding a brand
+
+1. Add an entry to `BRANDS` in [app/brand.js](app/brand.js): venue name, org
+   name, tagline, logo path.
+2. Add `brands/<id>.css` overriding the custom properties in
+   [shared.css](shared.css) under `:root[data-brand="<id>"]`.
+3. Drop any logo in `brands/<id>/`.
+
+The stylesheet is attached by a small inline script in each page's `<head>`
+rather than by the app, so a branded screen never flashes the default palette
+before repainting.
+
+### The Carlton Woods brand
+
+Palette and type were taken from the club's own site, not invented:
+
+| Token | Value | Where it came from |
+| --- | --- | --- |
+| primary | `#530000` | their `h2`/`h4` colour and site header background |
+| secondary | `#8e8f6b` | sage accent on their forms |
+| ink | `#2d2d2d` / `#444444` | their `h1` and body text |
+| display type | Lora | on their site |
+| UI type | Montserrat | on their site |
+
+Their logo is **white on transparent**, which is why the branded chrome is
+maroon - it is the background the mark was drawn for.
+
+**The logo is their trademark**, included here for a pitch demo. Get the club's
+sign-off before running a branded build anywhere they might read as official,
+and note this repo is public.
+
 ## Covers are charges, not orders
 
 The venue is **all-you-can-eat: one price per person covers both pasta and

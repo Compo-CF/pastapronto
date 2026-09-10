@@ -184,3 +184,13 @@
   .lanetile { flex-direction: column; text-align: center; min-height: 240px; justify-content: center; }
   .lanetile-art { flex: 0 0 96px; height: 96px; }
 }
+
+/* The venue above the question, when a brand supplies one. */
+.hero-org {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}

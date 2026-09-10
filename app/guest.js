@@ -15,6 +15,7 @@ import * as cooktime from './cooktime.js';
 import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
+import { mastheadHtml, pageTitle, activeBrand } from './brand.js';
 import {
   html, raw, humanMins, escapeHtml,
   remember, recall, chime, unlockAudio, toast, now,
@@ -234,8 +235,11 @@ import {
 
     return html`
       <div class="hero">
+        ${raw(state.boot.venue.orgName
+          ? '<p class="hero-org">' + escapeHtml(state.boot.venue.orgName) + '</p>'
+          : '')}
         <h1>What are we making?</h1>
-        <p>Two lanes, same idea: pick your bits and we cook it fresh.</p>
+        <p>${state.boot.venue.tagline}</p>
         ${raw(where)}
       </div>
 
@@ -1156,7 +1160,8 @@ import {
   // ------------------------------------------------------------------------ boot
 
   async function boot() {
-    document.getElementById('brandMark').innerHTML = art('mark');
+    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), '');
+    document.title = pageTitle('');
 
     // On a static host there is no server to route /t/<tag>, so the QR codes
     // carry the table as a query parameter: ...?t=table-12
@@ -1169,8 +1174,14 @@ import {
     }
 
     // What used to be GET /api/bootstrap is now assembled on the device.
+    var brand = activeBrand();
     state.boot = {
-      venue: config.venue,
+      venue: {
+        ...config.venue,
+        name: brand.venueName,
+        orgName: brand.orgName,
+        tagline: brand.tagline,
+      },
       limits: {
         maxGuests: config.order.maxGuests,
         maxSaucesPerBowl: config.order.maxSaucesPerBowl,
@@ -1194,7 +1205,7 @@ import {
       return;
     }
 
-    document.title = state.boot.venue.name + ' - Order';
+    document.title = pageTitle('Order');
     state.screen = 'welcome';
     render();
 
