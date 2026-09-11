@@ -1173,7 +1173,11 @@ import {
       // Back to the lane picker, because the usual second order is the other
       // kind - the table that just had pasta now wants a pizza.
       state.kind = null;
-      state.screen = 'member';
+      // The same party is still at the same table, so they do not re-enter the
+      // number they just typed. Only a guest who never got one is sent back to
+      // the keypad. (This said 'member' for one build, which was the lane
+      // screen's old name - the comment above was right and the code was not.)
+      state.screen = state.member ? 'lane' : 'member';
       render();
     },
   };

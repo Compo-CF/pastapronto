@@ -88,6 +88,13 @@ segment animating. Live over SSE, scoped to this one ticket:
 | ready | Ready! | green pulsing "Ticket #14 is up!", chime + vibrate |
 | delivered | Buon appetito! | offers another round |
 
+**Start another order** returns to the **lane** screen, not the keypad. The
+same party is still at the same table and has already identified itself, so it
+picks pasta or pizza and goes. That is the common second order - the table that
+just had pasta now wants a pizza - and under AYCE it adds nothing to their
+bill, so the path should be short. A guest who somehow has no member on file
+is sent back to the keypad instead.
+
 ## 2. Kitchen chit rail - `kitchen.html`
 
 Dark, dense, readable at 6-8 feet. `app/kitchen.js`. Behind the staff
