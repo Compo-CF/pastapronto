@@ -37,12 +37,19 @@ export const BRANDS = {
   },
 };
 
+/**
+ * Where the choice is remembered. The inline <head> script on every page has
+ * to repeat this literal - it runs before any module is loaded, which is the
+ * whole point of it - so if this ever changes, those change with it.
+ */
+export const BRAND_KEY = 'pp.brand';
+
 /** The brand this page is running under. Falls back to default. */
 export function activeBrand() {
   let id = 'default';
   try {
     const q = new URLSearchParams(location.search).get('brand');
-    id = q || localStorage.getItem('pp.brand') || 'default';
+    id = q || localStorage.getItem(BRAND_KEY) || 'default';
   } catch {
     id = 'default';
   }
@@ -50,6 +57,56 @@ export function activeBrand() {
 }
 
 export const isBranded = () => activeBrand().id !== 'default';
+
+/**
+ * Switch the brand for this device and reload into it.
+ *
+ * A reload rather than a live swap, because the brand stylesheet is attached
+ * by the inline <head> script before first paint - that is what stops a
+ * branded screen flashing the default palette, and it is not worth giving up
+ * to save a page load on a screen only staff see.
+ *
+ * The brand query parameter is stripped on the way out. It wins over storage
+ * by design, so leaving ?brand=carltonwoods in the address bar would quietly
+ * undo a switch back to default on the very next load.
+ */
+export function switchBrand(id) {
+  if (!BRANDS[id]) return false;
+  try {
+    localStorage.setItem(BRAND_KEY, id);
+  } catch {
+    // Private mode: the switch cannot be remembered, so carry it in the URL
+    // instead and let this load be the whole of its life.
+    const url = new URL(location.href);
+    url.searchParams.set('brand', id);
+    location.replace(url.toString());
+    return true;
+  }
+  const url = new URL(location.href);
+  url.searchParams.delete('brand');
+  location.replace(url.toString());
+  return true;
+}
+
+/**
+ * The brand query string to hang off a URL that leaves this device - a QR
+ * code, a printed tent. Empty for the default brand, so an unbranded venue's
+ * codes stay clean.
+ */
+export function brandParam() {
+  const id = activeBrand().id;
+  return id === 'default' ? '' : '&brand=' + encodeURIComponent(id);
+}
+
+/** Every brand, for a chooser. Default first, then the venues. */
+export function brandList() {
+  return Object.values(BRANDS).map((b) => ({
+    id: b.id,
+    label: b.orgName || b.venueName,
+    sub: b.orgName ? b.venueName : 'Unbranded',
+    active: b.id === activeBrand().id,
+  }));
+}
 
 /**
  * The masthead for a screen: a venue's logo when it has one, otherwise the

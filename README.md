@@ -148,6 +148,22 @@ custom-property overrides** - no screen logic knows a brand exists.
 `?brand=<id>` is remembered per device, so staff screens stay branded once set.
 `?brand=default` clears it.
 
+### Switching brands
+
+There is a **Branding** toggle in the quiet corner at the bottom of the
+[Manager screen](admin.html) - the settings end of the app, below everything a
+live service needs. Pick a brand and the page reloads into it.
+
+Staff-only on purpose, and only on that one screen. A guest should never meet a
+control that changes whose restaurant they think they are in.
+
+The choice is per device, which is what makes it safe to flip on a laptop
+mid-pitch without touching anyone's phone. It also gets **printed into the QR
+codes** on the same screen (`&brand=<id>`), because a guest's phone has never
+been to the site and so has nothing in storage to brand itself from - without
+that, codes printed for a branded venue would open the default palette at every
+table. The printable table tents follow the active brand's wordmark too.
+
 ### Adding a brand
 
 1. Add an entry to `BRANDS` in [app/brand.js](app/brand.js): venue name, org

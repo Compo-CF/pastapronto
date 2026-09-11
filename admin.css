@@ -118,3 +118,57 @@
 }
 .menu-station:first-child { margin-top: 0; }
 .menu-station-sub { font-size: 13px; font-weight: 650; color: var(--ink-faint); }
+
+/* ------------------------------------------------------------ quiet corner
+   Settings a manager touches once when the venue is installed. Deliberately
+   the least loud thing on the page: it sits under everything, in muted type,
+   so it never competes with a live service. */
+
+.quiet {
+  margin-top: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.quiet-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap;
+}
+.quiet-title {
+  margin: 0; font-size: 13px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint);
+}
+.quiet-note {
+  margin: 5px 0 0; max-width: 46ch;
+  font-size: 13px; line-height: 1.5; color: var(--ink-faint);
+}
+
+/* Two cards rather than a switch: the label on a switch has to be read as
+   either the current state or the thing it would do, and people read it both
+   ways. Which one is pressed is never in doubt. */
+.brandswitch { display: flex; gap: 8px; flex-wrap: wrap; }
+.brandopt {
+  display: flex; flex-direction: column; gap: 1px;
+  min-height: 44px; padding: 9px 16px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--card); color: var(--ink-soft);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.brandopt:hover { border-color: var(--ink-faint); }
+.brandopt-name { font-size: 15px; font-weight: 750; }
+.brandopt-sub { font-size: 12px; color: var(--ink-faint); }
+
+.brandopt[aria-pressed="true"] {
+  border-color: var(--tomato);
+  border-width: 2px;
+  padding: 8px 15px;
+  background: var(--card);
+  color: var(--ink);
+}
+/* Pressed state carries a mark as well as a colour, so it survives both a
+   greyscale screen and the palette of whichever brand is active. */
+.brandopt[aria-pressed="true"] .brandopt-name::after {
+  content: ' \2713';
+  color: var(--tomato);
+}
+.brandopt[aria-pressed="true"] .brandopt-sub { color: var(--ink-soft); }

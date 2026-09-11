@@ -11,7 +11,8 @@ npm-debug.log*
 Thumbs.db
 desktop.ini
 
-# Editors
+# Editors and agent tooling
 .vscode/
 .idea/
+.claude/
 *.swp
