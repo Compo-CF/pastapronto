@@ -350,6 +350,35 @@ npm test
   Reed-Solomon syndrome check, and the payload parsed back - across all ten
   supported versions.
 
+### Saving the close-out as a PDF
+
+**Save PDF** on the close-out screen writes `close-out-YYYY-MM-DD.pdf` - a
+fixed Letter document with the venue in the header, page numbers, and the
+tables repeated with their headers across pages. Print still works and still
+reaches the browser's own "Save as PDF", but that route stamps the browser's
+header and footer on every page, names the file after the tab, and reflows to
+whatever paper the dialog happens to be set to.
+
+[app/pdf.js](app/pdf.js) is a hand-written PDF writer - no dependency, no build
+step, no CDN - for the same reason [app/qr.js](app/qr.js) is: this document is
+a club's billing sheet, and the member list should not have to leave the
+building to become a file. It works with the wifi unplugged.
+
+Two rules if you touch the layout in [app/report-pdf.js](app/report-pdf.js):
+
+- **Numbers are Courier and right-aligned; prose is Helvetica and left.**
+  Courier is exactly 0.6em per character, so alignment is arithmetic. This repo
+  has no Helvetica metrics, so nothing in Helvetica is ever right-aligned or
+  centred - a guessed centre is worse than an honest left edge.
+- **Coordinates are top-down.** PDF's own origin is bottom-left; `pdf.js` flips
+  it at the last moment so the layout code reads the way the page does.
+
+The tests parse the generated file back: xref offsets must land on their
+objects, nothing may print outside the margins, every member number must appear
+on the sheet, and adjacent columns must keep at least 3pt of air - that last
+one because the first version shipped a legal 2pt gap that read as one run of
+words.
+
 ## What runs on what
 
 Each screen is built for the device it actually runs on, and the layouts were

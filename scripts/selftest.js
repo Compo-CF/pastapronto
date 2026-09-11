@@ -12,6 +12,8 @@ import * as cooktime from '../app/cooktime.js';
 import * as menu from '../app/menu.js';
 import * as seed from '../app/seed.js';
 import { art, has as hasArt } from '../app/art.js';
+import * as pdf from '../app/pdf.js';
+import { buildReportPdf } from '../app/report-pdf.js';
 
 const { STATUS } = order;
 const sla = config.sla;
@@ -897,6 +899,175 @@ test('items in one list do not share a glyph', () => {
     });
   });
   assert.deepStrictEqual(clashes, [], 'these render identically in one list');
+});
+
+/**
+ * Pull every text run out of a generated PDF's content streams, in PDF
+ * coordinates. Used by the layout tests below.
+ */
+function pdfTextRuns(bytes) {
+  const whole = Buffer.from(bytes).toString('latin1');
+  // Per content stream, because y alone is not a line: every page has a
+  // header at the same y, and comparing across pages reports every one of
+  // them as a collision with itself.
+  const streams = [...whole.matchAll(/stream\n([\s\S]*?)endstream/g)].map((m) => m[1]);
+  const re = /BT \/(F\d) ([\d.]+) Tf [\d.]+ [\d.]+ [\d.]+ rg (-?[\d.]+) (-?[\d.]+) Td \((.*?)\) Tj ET/g;
+  const runs = [];
+  streams.forEach((src, pageIndex) => {
+  re.lastIndex = 0;
+  let m = re.exec(src);
+  while (m) {
+    const font = m[1];
+    const size = Number(m[2]);
+    const body = m[5].replace(/\\([()\\])/g, '$1');
+    const mono = font === 'F3' || font === 'F4';
+    runs.push({
+      page: pageIndex,
+      font,
+      mono,
+      size,
+      x: Number(m[3]),
+      y: Number(m[4]),
+      // Courier is exact. For Helvetica this deliberately UNDER-estimates, so
+      // an overlap it reports is a real one and not a metric guess.
+      width: body.length * (mono ? 0.6 : 0.45) * size,
+      text: body,
+    });
+    m = re.exec(src);
+  }
+  });
+  return runs;
+}
+
+const demoReport = () => order.shiftReport(seed.buildDemoOrders(), config.sla);
+
+test('the close-out PDF is a structurally valid file', () => {
+  const bytes = buildReportPdf(demoReport(), '2026-09-11', { orgName: 'Test Club' });
+  const src = Buffer.from(bytes).toString('latin1');
+
+  assert.strictEqual(src.slice(0, 8), '%PDF-1.4');
+  assert.ok(src.trimEnd().endsWith('%%EOF'), 'ends with the EOF marker');
+
+  // Every byte must be a byte. The writer assembles the file as characters and
+  // converts one to one, so a stray multi-byte character would shift every
+  // xref offset after it and make the file unopenable.
+  assert.ok(bytes.every((b) => b >= 0 && b <= 255), 'all bytes in range');
+
+  // The xref offsets have to land on their objects. This is the single thing
+  // most likely to be quietly wrong in a hand-written PDF, and a reader
+  // refuses the whole file rather than rendering it crooked.
+  const offsets = [...src.matchAll(/^(\d{10}) 00000 n $/gm)].map((x) => Number(x[1]));
+  assert.ok(offsets.length >= 5, 'xref has entries, got ' + offsets.length);
+  offsets.forEach((off, i) => {
+    assert.ok(src.slice(off).startsWith((i + 1) + ' 0 obj'),
+      'xref entry ' + (i + 1) + ' points at ' + off + ', which is not its object');
+  });
+
+  const startxref = Number(/startxref\s+(\d+)/.exec(src)[1]);
+  assert.strictEqual(src.slice(startxref, startxref + 4), 'xref', 'startxref finds the table');
+
+  const declared = Number(/\/Count (\d+)/.exec(src)[1]);
+  const actual = (src.match(/\/Type \/Page[^s]/g) || []).length;
+  assert.strictEqual(actual, declared, 'declared page count matches the pages present');
+});
+
+test('columns in the PDF keep enough air to read as columns', () => {
+  // This bug shipped once and was only visible by opening the file: a
+  // right-aligned value sat 2pt from the next column, so a row read
+  // "17 one AYCE charge per guest" as one run of words.
+  const bytes = buildReportPdf(demoReport(), '2026-09-11', {
+    orgName: 'The Club at Carlton Woods', venueName: 'Neapolitan Night',
+  });
+  const byLine = new Map();
+  pdfTextRuns(bytes).forEach((r) => {
+    const key = r.page + '@' + r.y.toFixed(1);
+    if (!byLine.has(key)) byLine.set(key, []);
+    byLine.get(key).push(r);
+  });
+
+  // Enough air that two columns read as two columns. The failure this guards
+  // against was not an overlap - it was a legal 2pt gap that a reader saw as
+  // one sentence.
+  const MIN_GAP = 3;
+  const collisions = [];
+  byLine.forEach((list) => {
+    list.sort((a, b) => a.x - b.x);
+    for (let i = 0; i < list.length - 1; i += 1) {
+      const a = list[i];
+      const b = list[i + 1];
+      const gap = b.x - (a.x + a.width);
+      if (gap < MIN_GAP) {
+        collisions.push(JSON.stringify(a.text) + ' is ' + gap.toFixed(1)
+          + 'pt from ' + JSON.stringify(b.text));
+      }
+    }
+  });
+  assert.deepStrictEqual(collisions, []);
+});
+
+test('nothing in the PDF is printed outside the margins', () => {
+  const bytes = buildReportPdf(demoReport(), '2026-09-11', { orgName: 'Test Club' });
+  const runs = pdfTextRuns(bytes);
+  assert.ok(runs.length > 100, 'the report has content, got ' + runs.length + ' runs');
+
+  const MARGIN = 44;
+  const outside = runs.filter((r) => r.x < MARGIN - 1
+    || r.x + r.width > 612 - MARGIN + 1
+    || r.y < 12
+    || r.y > 792 - 12);
+  assert.deepStrictEqual(
+    outside.map((r) => r.text + ' @' + r.x.toFixed(0) + ',' + r.y.toFixed(0)), [],
+  );
+});
+
+test('the PDF carries the billing numbers the screen shows', () => {
+  const r = demoReport();
+  const runs = pdfTextRuns(buildReportPdf(r, '2026-09-11', { orgName: 'Test Club' }));
+  const said = (s) => runs.some((x) => x.text === String(s));
+
+  assert.ok(said(r.totals.covers), 'charges to post appears');
+  assert.ok(said(r.totals.members), 'member count appears');
+  r.members.forEach((m) => {
+    assert.ok(said(m.memberNumber), 'member ' + m.memberNumber + ' is on the sheet');
+  });
+  // An unverified number has to be flagged where it gets read, not only in the
+  // exceptions list at the end.
+  if (r.members.some((m) => m.status !== 'verified')) {
+    assert.ok(said('CHECK'), 'an unconfirmed member is marked on its own row');
+  }
+});
+
+test('an empty service date still produces an openable PDF', () => {
+  const bytes = buildReportPdf(order.shiftReport([], config.sla), '2026-09-11', {});
+  const src = Buffer.from(bytes).toString('latin1');
+  assert.strictEqual(src.slice(0, 8), '%PDF-1.4');
+  assert.ok(src.includes('No orders on this service date'));
+  assert.strictEqual((src.match(/\/Type \/Page[^s]/g) || []).length, 1, 'one page');
+});
+
+test('PDF text escaping cannot break the file', () => {
+  // An unbalanced parenthesis or backslash ends a PDF string early and
+  // corrupts everything after it. Non-Latin1 has to collapse to one byte too,
+  // or every xref offset past it is wrong by however many bytes it took.
+  assert.strictEqual(pdf.winAnsi('a(b)c\\d'), 'a\\(b\\)c\\\\d');
+  assert.strictEqual(pdf.winAnsi('café').length, 4, 'latin1 stays one byte per character');
+  assert.strictEqual(pdf.winAnsi('中文'), '??', 'no multi-byte sequence reaches the page');
+
+  const doc = pdf.create();
+  doc.text('Members (7890) \\ unconfirmed', { x: 44, y: 60 });
+  const out = Buffer.from(doc.build()).toString('latin1');
+  assert.ok(out.includes('(Members \\(7890\\) \\\\ unconfirmed) Tj'));
+});
+
+test('Courier widths are exact, which is what lets a column right-align', () => {
+  assert.strictEqual(pdf.monoWidth('1234', 10), 24);
+  assert.strictEqual(pdf.monoWidth('', 10), 0);
+  // A column trims rather than spilling into its neighbour.
+  assert.strictEqual(pdf.fitMono('Compofelice', 10, 30), 'Comp.');
+  assert.strictEqual(pdf.fitMono('abc', 10, 100), 'abc');
+  // Wrapping never exceeds the width it was handed.
+  pdf.wrap('the quick brown fox jumps over the lazy dog again and again', 9, 120)
+    .forEach((line) => assert.ok(line.length * 0.52 * 9 <= 129, 'line fits: ' + line));
 });
 
 test('menu catalog exposes every group the screens render', () => {

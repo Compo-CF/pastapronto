@@ -14,6 +14,7 @@ import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
 import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
+import { buildReportPdf } from './report-pdf.js';
 import { html, raw, mmss, escapeHtml, toast, requireStaff } from './ui.js';
 
 const el = {
@@ -533,6 +534,53 @@ function downloadCsv() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Hex from the brand stylesheet, as the 0-1 components a PDF wants. */
+function accentRgb() {
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue('--tomato').trim();
+  const m = /^#?([0-9a-f]{6})$/i.exec(raw);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+
+/**
+ * Save the report as a PDF.
+ *
+ * Print already reaches "Save as PDF" through the browser dialog, but that
+ * route stamps the browser's own header and footer on every page, names the
+ * file after the tab, and re-flows to whatever paper the dialog is set to.
+ * This is a fixed Letter document with the venue on it - a thing to file or
+ * attach to an email - built in the browser, so the member list never leaves
+ * the building to become a file.
+ */
+function downloadPdf() {
+  if (!current.report || !current.report.totals.orders) {
+    toast('Nothing to export for this date.', true);
+    return;
+  }
+  try {
+    const brand = activeBrand();
+    const bytes = buildReportPdf(current.report, current.date, {
+      orgName: brand.orgName,
+      venueName: brand.venueName,
+      accent: accentRgb(),
+    });
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'close-out-' + current.date + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Saved close-out-' + current.date + '.pdf');
+  } catch (err) {
+    toast('Could not build the PDF: ' + err.message, true);
+  }
+}
+
 // ----------------------------------------------------------------- data load
 
 async function load(date) {
@@ -576,6 +624,7 @@ el.datePick.addEventListener('change', () => load(el.datePick.value));
 document.getElementById('tonightBtn').addEventListener('click', () => load(serviceDate()));
 document.getElementById('yesterdayBtn').addEventListener('click', () => load(shiftDate(serviceDate(), -1)));
 document.getElementById('csvBtn').addEventListener('click', downloadCsv);
+document.getElementById('pdfBtn').addEventListener('click', downloadPdf);
 document.getElementById('printBtn').addEventListener('click', () => window.print());
 
 // ---------------------------------------------------------------------- boot

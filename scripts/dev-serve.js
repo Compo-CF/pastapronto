@@ -23,6 +23,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf',
 };
 
 const server = http.createServer((req, res) => {

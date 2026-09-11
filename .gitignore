@@ -1,6 +1,11 @@
 # Runtime service state: the live order rail is a snapshot, not source.
 data/
 
+# Generated close-out exports, never source.
+close-out-*.pdf
+closeout-*.pdf
+preview-*.pdf
+
 # Node
 node_modules/
 npm-debug.log*
