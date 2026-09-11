@@ -69,12 +69,41 @@ from that answer.
 | --- | --- | --- |
 | Stations | `PASTA-1`, `PASTA-2` | `PIZZA-1`, `PIZZA-2` |
 | Equipment | 3 pans per station | 2-deck oven, one 12" pie per deck |
-| Build steps | pasta, sauce, protein, toppings, size | sauce, protein, toppings, finish |
-| Sauces | 8, pick up to 3 | marinara, BBQ, white - pick up to 3 |
+| Build steps | pasta, sauce, protein, toppings, size | sauce, **cheese**, protein, toppings, finish |
+| Sauces | 8, pick up to 3 | 4, pick up to 3, plus No / Light / Heavy |
+| Cheese | (part of toppings) | 3, pick up to 3, plus No / Light / Heavy |
 | Proteins | 5, pick up to 3 | 6, pick up to 3 |
 | Size | kid / regular / large | one size, always |
-| Extras | sides, spice level | finishers: parmesan, red pepper flakes, flake salt, oregano |
-| Topping cap | 4 | 5 (vegetables and cheese only - meats are proteins) |
+| Extras | sides, spice level | finishers: flake salt, oregano |
+| Topping cap | 4 | 5 vegetables (meats are proteins, cheese is its own step) |
+
+### "No Sauce", "Light", "Heavy"
+
+Sauce and cheese each carry their amount **in the same list**, because "Heavy
+Sauce" is how a guest says it and a separate amount control is one more thing
+to find. Two kinds of entry therefore share one group, marked in the data
+rather than guessed from the name:
+
+- `exclusive: true` - **No Sauce** and **No Cheese** answer the whole question.
+  Choosing one clears and greys out everything else in that group.
+- `amount: 'light' | 'heavy'` - modifies a choice instead of being one. It
+  needs a base alongside it, and rules out the other amount; nothing is both
+  light and heavy.
+
+The cap counts real choices, so Marinara + Alfredo + Heavy is **two** sauces,
+not three.
+
+[`menu.groupRules()`](app/menu.js) is the only implementation of those rules,
+and both `validateLine()` and the guest tiles call it - so what a screen greys
+out and what the database refuses cannot drift apart. If you add another group
+that mixes "none" with amounts, give its entries the same two flags and it
+works with no new code.
+
+Three vegetables - **basil, arugula, red pepper flakes** - are marked
+`postBake`. They go on after the pie leaves the oven (basil and arugula would
+wilt to nothing, the flakes would scorch), so they buy no oven time, exactly
+the way a finisher does. **Heavy cheese** is the one amount that does change
+the bake: more cheese is more moisture.
 
 Sauces and proteins are both multi-select on both lanes: chicken *and*
 meatballs, pepperoni *and* bacon. Selecting nothing on the protein step is how

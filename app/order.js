@@ -120,6 +120,7 @@ export function validateDraft(draft, cfg, unavailable = []) {
       const chosen = [
         line.pasta,
         ...menu.saucesOf(line),
+        ...menu.cheesesOf(line),
         ...menu.proteinsOf(line),
         ...(line.toppings || []),
         ...(line.sides || []),
@@ -168,7 +169,7 @@ export function buildOrder(draft, ctx) {
     if (kind === 'pizza') {
       // No portion (every pizza is the same size), no protein or sides - meats
       // are just toppings on a pizza - and finishers instead of a spice level.
-      return { ...common, finishers: line.finishers || [] };
+      return { ...common, cheeses: menu.cheesesOf(line), finishers: line.finishers || [] };
     }
 
     return {
@@ -548,6 +549,7 @@ export function shiftReport(orders, sla) {
     },
     pizza: {
       sauces: tally(pizzaLines, (l) => menu.saucesOf(l)),
+      cheeses: tally(pizzaLines, (l) => menu.cheesesOf(l)),
       proteins: tally(pizzaLines, (l) => menu.proteinsOf(l)),
       toppings: tally(pizzaLines, (l) => l.toppings || []),
       finishers: tally(pizzaLines, (l) => l.finishers || []),

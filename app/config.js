@@ -49,6 +49,7 @@ export const config = {
     maxToppingsPerBowl: 4,
     // Pizzas are all one size, so the only limit that matters is how much you
     // can pile on before the middle goes soggy.
+    maxCheesesPerPizza: 3,
     maxToppingsPerPizza: 5,
     maxFinishersPerPizza: 4,
     // A bowl can be half-and-half, or a three-way. More than this and the

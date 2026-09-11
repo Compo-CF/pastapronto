@@ -10,7 +10,7 @@
  *            a compact review, for adults and staff taking an order
  */
 import { config, tagById, isOpen } from './config.js';
-import { catalog as menuCatalog, saucesOf } from './menu.js';
+import { catalog as menuCatalog, saucesOf, groupRules } from './menu.js';
 import * as cooktime from './cooktime.js';
 import * as order from './order.js';
 import * as db from './db.js';
@@ -37,7 +37,8 @@ import {
       { id: 'finish', label: 'Size', group: 'portions', title: 'How big?', sub: '' },
     ],
     pizza: [
-      { id: 'sauces', label: 'Sauce', group: 'pizzaSauces', title: 'Pick your sauce', sub: '', multi: true },
+      { id: 'sauces', label: 'Sauce', group: 'pizzaSauces', title: 'Pick your sauce', sub: 'Light or heavy goes on top of your pick.', multi: true },
+      { id: 'cheeses', label: 'Cheese', group: 'pizzaCheeses', title: 'And the cheese', sub: 'Light or heavy goes on top of your pick.', multi: true },
       { id: 'proteins', label: 'Protein', group: 'pizzaProteins', title: 'Add a protein?', sub: '', multi: true },
       { id: 'toppings', label: 'Toppings', group: 'pizzaToppings', title: 'Toppings!', sub: '' },
       { id: 'finishers', label: 'Finish', group: 'finishers', title: 'Anything on top?', sub: 'Added after it comes out of the oven.', multi: true },
@@ -122,7 +123,7 @@ import {
       toppings: [],
       notes: '',
     };
-    if (state.kind === 'pizza') return Object.assign(base, { finishers: [] });
+    if (state.kind === 'pizza') return Object.assign(base, { cheeses: [], finishers: [] });
     return Object.assign(base, {
       pasta: null, sides: [], portion: null, spice: 'mild',
     });
@@ -134,7 +135,7 @@ import {
 
   function bowlComplete(bowl) {
     if (!bowl) return false;
-    if (bowl.kind === 'pizza') return bowl.sauces.length > 0;
+    if (bowl.kind === 'pizza') return bowl.sauces.length > 0 && bowl.cheeses.length > 0;
     return Boolean(bowl.pasta && bowl.sauces.length > 0 && bowl.portion);
   }
 
@@ -143,6 +144,56 @@ import {
   }
 
   /** Items to show for a group, honouring simple mode and the "more" toggle. */
+  /**
+   * Sub-heading for a step whose list mixes choices with "none" and amounts.
+   * Says back what was picked, because a guest who taps Heavy Sauce wants to
+   * see that it landed on something.
+   */
+  function amountSub(groupKey, chosen, one, many, empty) {
+    var rule = groupRules(groupKey, chosen);
+    if (rule.exclusive) return rule.exclusive.name + ' it is.';
+    if (!rule.bases.length) return empty;
+    var names = rule.bases.map(function (id) { return (item(groupKey, id) || {}).name || id; });
+    var text = names.length > 1
+      ? 'Mixing ' + names.length + ' ' + many
+      : names[0];
+    if (rule.amount) text += ', ' + rule.amount.amount;
+    return text + ' - tap Next when you are happy.';
+  }
+
+  /**
+   * Toggle inside a group where some entries cancel others.
+   *
+   * Tapping "No Sauce" clears the rest rather than refusing the tap, and
+   * tapping a sauce afterwards clears "No Sauce" - a guest changing their mind
+   * should not have to undo first. Light and Heavy swap for each other. The
+   * cap counts real choices, so Marinara + Alfredo + Heavy is two sauces.
+   */
+  function toggleRuled(bowl, field, groupKey, id, cap, capMessage) {
+    var chosen = bowl[field];
+    var i = chosen.indexOf(id);
+    if (i !== -1) { chosen.splice(i, 1); return true; }
+
+    var entry = item(groupKey, id) || {};
+
+    if (entry.exclusive) { bowl[field] = [id]; return true; }
+
+    // Anything else cancels the "none" answer and any competing amount.
+    bowl[field] = chosen.filter(function (other) {
+      var o = item(groupKey, other) || {};
+      if (o.exclusive) return false;
+      if (entry.amount && o.amount) return false;
+      return true;
+    });
+
+    if (!entry.amount && groupRules(groupKey, bowl[field]).bases.length >= cap) {
+      toast(capMessage);
+      return false;
+    }
+    bowl[field].push(id);
+    return true;
+  }
+
   function choicesFor(group) {
     var all = menu(group);
     if (state.mode === 'pro' || state.showAll) return all;
@@ -183,12 +234,17 @@ import {
   function tile(entry, opts) {
     var soldOut = state.unavailable.indexOf(entry.id) !== -1;
     var clash = conflicts(entry);
-    var blocked = soldOut || clash.length > 0;
+    // A third reason a tile can be unavailable: the choices already made in
+    // this group rule it out - "No Sauce" greys the sauces, "Light" greys
+    // "Heavy". The caller works that out through menu.groupRules() so the
+    // screen and the validator are reading the same rulebook.
+    var ruledOut = opts.ruledOut || '';
+    var blocked = soldOut || clash.length > 0 || !!ruledOut;
     // Never silently hide a choice. A child who wants shrimp should see that
     // shrimp exists and is sold out, not wonder where it went.
     var reason = soldOut
       ? 'sold out'
-      : (clash.length ? 'has ' + clash.map(allergenName).join(', ') : '');
+      : (clash.length ? 'has ' + clash.map(allergenName).join(', ') : ruledOut);
     var meta = [];
     if (state.mode === 'pro') {
       if (entry.boilSec) meta.push(Math.round(entry.boilSec / 60) + ' min');
@@ -216,6 +272,7 @@ import {
         : opts.value === entry.id;
       return tile(entry, {
         act: opts.act, group: group, multi: opts.multi, selected: selected,
+        ruledOut: (opts.blocked || {})[entry.id] || '',
       });
     });
     var more = hasHiddenChoices(group)
@@ -390,7 +447,15 @@ import {
       body = tileGrid('finishers', { act: 'toggleFinisher', value: bowl.finishers, multi: true, small: true })
         + detailPanel(bowl);
     } else if (step.id === 'sauces') {
-      body = tileGrid(step.group, { act: 'toggleSauce', value: bowl.sauces, multi: true });
+      body = tileGrid(step.group, {
+        act: 'toggleSauce', value: bowl.sauces, multi: true,
+        blocked: groupRules(step.group, bowl.sauces).blocked,
+      });
+    } else if (step.id === 'cheeses') {
+      body = tileGrid(step.group, {
+        act: 'toggleCheese', value: bowl.cheeses, multi: true,
+        blocked: groupRules(step.group, bowl.cheeses).blocked,
+      });
     } else if (step.id === 'proteins') {
       body = tileGrid(step.group, { act: 'toggleProtein', value: bowl.proteins, multi: true });
     } else {
@@ -412,9 +477,12 @@ import {
         : 'Pick as many as you like, or skip it - totally fine.';
     }
     if (step.id === 'sauces') {
-      sub = bowl.sauces.length > 1
-        ? 'Mixing ' + bowl.sauces.length + ' sauces - tap Next when you are happy.'
-        : 'Pick one, or tap two to mix them.';
+      sub = amountSub(step.group, bowl.sauces, 'sauce', 'sauces',
+        'Pick one, or tap two to mix them.');
+    }
+    if (step.id === 'cheeses') {
+      sub = amountSub(step.group, bowl.cheeses, 'cheese', 'cheeses',
+        'Pick one, or mix them. No Cheese is fine too.');
     }
 
     return html`
@@ -549,7 +617,8 @@ import {
     });
 
     // Roll the allergens up from whichever groups this lane actually uses,
-    // plus the crust for a pizza - every pie carries its gluten and cheese.
+    // plus the crust for a pizza - every pie carries the crust's gluten, and
+    // its dairy now comes from whichever cheese was chosen.
     var allergens = [];
     var addAll = function (list) {
       list.forEach(function (a) { if (allergens.indexOf(a) === -1) allergens.push(a); });
@@ -561,7 +630,9 @@ import {
 
       if (isPizza) {
         addAll(state.boot.menu.pizzaBase.allergens);
-        entries = entries.concat((b.finishers || []).map(function (f) { return item('finishers', f); }));
+        entries = entries
+          .concat((b.cheeses || []).map(function (c) { return item('pizzaCheeses', c); }))
+          .concat((b.finishers || []).map(function (f) { return item('finishers', f); }));
       } else {
         entries = entries
           .concat([item('pastas', b.pasta), item('proteins', b.protein)])
@@ -616,9 +687,20 @@ import {
       .map(nameIn(isPizza ? 'pizzaProteins' : 'proteins')).filter(Boolean);
 
     if (isPizza) {
+      var sauceRule = groupRules('pizzaSauces', bowl.sauces);
+      var cheeseRule = groupRules('pizzaCheeses', bowl.cheeses || []);
+      var qualify = function (text, rule) {
+        return rule.amount && text ? text + ' (' + rule.amount.amount + ')' : text;
+      };
+      var sauceLabel = sauceRule.exclusive ? 'No-sauce'
+        : qualify(sauceRule.bases.map(nameIn('pizzaSauces')).filter(Boolean).join(' + '), sauceRule);
+      var cheeseLabel = cheeseRule.exclusive ? 'no cheese'
+        : qualify(cheeseRule.bases.map(nameIn('pizzaCheeses')).filter(Boolean).join(' + '), cheeseRule);
+
       var on = proteins.concat(bowl.toppings.map(nameIn('pizzaToppings')).filter(Boolean));
-      var out = [sauceText ? sauceText + ' Pizza' : 'Pizza'];
-      if (on.length) out.push('w/ ' + on.join(', '));
+      var out = [sauceLabel ? sauceLabel + ' Pizza' : 'Pizza'];
+      if (cheeseLabel) out.push('w/ ' + cheeseLabel);
+      if (on.length) out.push((cheeseLabel ? '+ ' : 'w/ ') + on.join(', '));
       return out.join(' ');
     }
 
@@ -757,6 +839,7 @@ import {
       var chosen = step.id === 'toppings' || step.id === 'proteins' || step.id === 'finishers' ? true
         : step.id === 'finish' ? Boolean(bowl.portion)
         : step.id === 'sauces' ? bowl.sauces.length > 0
+        : step.id === 'cheeses' ? bowl.cheeses.length > 0
         : Boolean(bowl[step.id]);
       var lastStep = state.buildStep === steps().length - 1;
       var lastBowl = state.activeBowl === state.bowls.length - 1;
@@ -942,16 +1025,19 @@ import {
 
     toggleSauce: function (el) {
       var bowl = currentBowl();
-      var id = el.dataset.id;
-      var i = bowl.sauces.indexOf(id);
-      if (i !== -1) {
-        bowl.sauces.splice(i, 1);
-      } else if (bowl.sauces.length >= state.boot.limits.maxSaucesPerBowl) {
-        toast('Up to ' + state.boot.limits.maxSaucesPerBowl + ' sauces in one bowl. Tap one to swap it.');
-        return;
-      } else {
-        bowl.sauces.push(id);
-      }
+      var cap = state.boot.limits.maxSaucesPerBowl;
+      var group = state.kind === 'pizza' ? 'pizzaSauces' : 'sauces';
+      if (!toggleRuled(bowl, 'sauces', group, el.dataset.id, cap,
+        'Up to ' + cap + ' sauces. Tap one to swap it.')) return;
+      state.showAll = false;
+      render({ keepScroll: true });
+    },
+
+    toggleCheese: function (el) {
+      var bowl = currentBowl();
+      var cap = state.boot.limits.maxCheesesPerPizza;
+      if (!toggleRuled(bowl, 'cheeses', 'pizzaCheeses', el.dataset.id, cap,
+        'Up to ' + cap + ' cheeses. Tap one to swap it.')) return;
       state.showAll = false;
       render({ keepScroll: true });
     },
@@ -1190,6 +1276,7 @@ import {
         maxSidesPerBowl: config.order.maxSidesPerBowl,
         maxToppingsPerPizza: config.order.maxToppingsPerPizza,
         maxFinishersPerPizza: config.order.maxFinishersPerPizza,
+        maxCheesesPerPizza: config.order.maxCheesesPerPizza,
       },
       sla: config.sla,
       open: isOpen(),

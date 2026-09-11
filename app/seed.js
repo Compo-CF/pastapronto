@@ -127,9 +127,9 @@ const DRAFTS = [
     memberNumber: '2087', memberName: 'Nakamura', memberStatus: 'verified',
     guestCount: 4, tag: 'table-04',
     lines: [
-      { guestLabel: 'Kenji', kind: 'pizza', sauces: ['pz_marinara'], proteins: ['pepperoni'], toppings: ['pz_mushroom'], finishers: ['fin_parm', 'fin_oregano'] },
-      { guestLabel: 'Yuki', kind: 'pizza', sauces: ['pz_white'], proteins: [], toppings: ['pz_spinach', 'ricotta'], finishers: ['fin_chili'] },
-      { guestLabel: 'Rin', kind: 'pizza', sauces: ['pz_bbq'], proteins: ['pz_chicken', 'bacon'], toppings: ['red_onion'], finishers: ['fin_salt'] },
+      { guestLabel: 'Kenji', kind: 'pizza', sauces: ['pz_marinara'], cheeses: ['pz_shred_mozz'], proteins: ['pepperoni'], toppings: ['pz_mushroom'], finishers: ['fin_oregano'] },
+      { guestLabel: 'Yuki', kind: 'pizza', sauces: ['pz_alfredo'], cheeses: ['pz_fresh_mozz', 'pz_cheese_light'], proteins: [], toppings: ['pz_arugula', 'pz_chili'], finishers: [] },
+      { guestLabel: 'Rin', kind: 'pizza', sauces: ['pz_bbq'], cheeses: ['pz_shred_mozz', 'pz_cheese_heavy'], proteins: ['pz_chicken', 'bacon'], toppings: ['red_onion'], finishers: ['fin_salt'] },
     ],
   },
   {
@@ -138,8 +138,8 @@ const DRAFTS = [
     guestCount: 2, tag: 'patio-a', avoidAllergens: ['pork'],
     notes: 'No pork on either pizza',
     lines: [
-      { guestLabel: 'Rosa', kind: 'pizza', sauces: ['pz_marinara'], proteins: [], toppings: ['pz_pepper', 'pz_olives', 'pz_tomatoes'], finishers: ['fin_oregano'], notes: 'NO PORK' },
-      { guestLabel: 'Mateo', kind: 'pizza', sauces: ['pz_marinara', 'pz_bbq'], proteins: ['pz_chicken', 'ham'], toppings: ['pineapple'], finishers: [] },
+      { guestLabel: 'Rosa', kind: 'pizza', sauces: ['pz_marinara'], cheeses: ['pz_no_cheese'], proteins: [], toppings: ['pz_pepper', 'pz_olives', 'pz_tomatoes', 'pz_basil'], finishers: ['fin_oregano'], notes: 'NO PORK - NO CHEESE' },
+      { guestLabel: 'Mateo', kind: 'pizza', sauces: ['pz_marinara', 'pz_bbq'], cheeses: ['pz_shred_mozz'], proteins: ['pz_chicken', 'ham'], toppings: ['pineapple'], finishers: [] },
     ],
   },
   {
@@ -147,7 +147,7 @@ const DRAFTS = [
     memberNumber: '6123', memberName: 'Petrov', memberStatus: 'verified',
     guestCount: 1, tag: 'pool-bar',
     lines: [
-      { guestLabel: 'Guest 1', kind: 'pizza', sauces: ['pz_white'], proteins: ['pz_sausage'], toppings: ['extra_mozz', 'jalapeno'], finishers: ['fin_chili', 'fin_salt'] },
+      { guestLabel: 'Guest 1', kind: 'pizza', sauces: ['pz_pesto', 'pz_sauce_light'], cheeses: ['pz_grated_parm'], proteins: ['pz_sausage'], toppings: ['jalapeno', 'pz_artichoke'], finishers: ['fin_salt'] },
     ],
   },
 ];

@@ -212,6 +212,7 @@ const CATALOG = menu.catalog();
 
     var pizzaTables = [
       menuTable('Pizza sauces', m.pizzaSauces, null, ''),
+      menuTable('Pizza cheeses', m.pizzaCheeses, 'addSec', 'Bake'),
       menuTable('Pizza proteins', m.pizzaProteins, 'addSec', 'Prep'),
       menuTable('Pizza toppings', m.pizzaToppings, 'addSec', 'Prep'),
       menuTable('Finishers (after the bake)', m.finishers, null, ''),

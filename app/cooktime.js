@@ -61,11 +61,18 @@ export function lineCookSec(line) {
   if (kind === 'pizza') {
     // On a pizza, meats are just more load on the pie - they go on before the
     // bake like everything else.
+    // Vegetables marked postBake go on after the pie leaves the oven, so they
+    // buy no oven time - the same reason finishers never counted.
     const on = (line.toppings || []).map((id) => menu.find('pizzaToppings', id))
       .concat(menu.proteinsOf(line).map((id) => menu.find('pizzaProteins', id)))
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter((t) => !t.postBake);
+    const cheese = menu.cheesesOf(line).map((id) => menu.find('pizzaCheeses', id)).filter(Boolean);
     const load = on.reduce((a, t) => a + (t.addSec || 0), 0)
-      + on.length * MODEL.pizza.perToppingSec;
+      + on.length * MODEL.pizza.perToppingSec
+      // Cheese is spread, not placed, so it costs what it costs and no
+      // per-item handling. Heavy cheese is wetter and genuinely bakes longer.
+      + cheese.reduce((a, c) => a + (c.addSec || 0), 0);
     // Sauce is spread before the bake, so it does not extend the oven clock.
     return menu.PIZZA_BASE.bakeSec + load;
   }
