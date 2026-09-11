@@ -61,6 +61,14 @@
 .ncard-eta { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--kmuted); font-variant-numeric: tabular-nums; }
 .ncard-eta.is-over { color: var(--klate); }
 
+/* An iPad in landscape leaves 638px for the ready grid. At a 320px minimum
+   that is one card per row with 300px of it empty; at 296 it is two, which
+   doubles what a runner sees without leaning in. */
+@media (max-width: 1400px) {
+  .expo-grid { grid-template-columns: repeat(auto-fill, minmax(296px, 1fr)); gap: 12px; }
+  .expo-main { gap: 12px; padding: 12px; grid-template-columns: 1fr 300px; }
+}
+
 @media (max-width: 900px) {
   .expo-main { grid-template-columns: 1fr; }
   .expo-next { max-height: 30vh; }

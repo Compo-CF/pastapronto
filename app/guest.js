@@ -542,7 +542,7 @@ import {
           <div class="bowl-extras">${extras.filter(Boolean).join(' · ')}</div>
         </div>
         <div style="text-align:right">
-          <button class="btn btn-ghost" style="min-height:40px;padding:0 14px;font-size:14px"
+          <button class="btn btn-ghost btn-sm"
             type="button" data-act="editBowl" data-id="${i}">Change</button>
         </div>
       </div>`;

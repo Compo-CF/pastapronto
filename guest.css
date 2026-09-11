@@ -144,11 +144,39 @@
   .brand { font-size: 19px; }
   .brand-mark { width: 28px; height: 28px; }
   .crumbs { display: none; }
-  .modeswitch { padding: 0 12px; min-height: 40px; }
+  .modeswitch { padding: 0 12px; }
 }
 
 @media (max-width: 340px) {
   .modeswitch #modeLabel { display: none; }
+}
+
+/* --------------------------------------------------------- phone ergonomics
+   Walked end to end on a 375x667 iPhone. Nothing overflowed sideways, but two
+   things were wrong.
+
+   Several controls sat under the 44px minimum a fingertip needs: the step
+   tabs were 38px, the chips and the mode switch 40-41px. They are all hit
+   repeatedly while building a bowl, so they are the ones that matter.
+
+   And "How many are eating?" ran 426px past the fold, because eight 156px
+   tiles only fit two to a row. Three shorter ones to a row puts every choice
+   on screen at once, which is the whole point of a tile grid - a child
+   scrolling to find "6 people" is a child who picks 4. */
+
+@media (max-width: 480px) {
+  .buildstep { min-height: 44px; }
+  .chip { min-height: 44px; }
+  .modeswitch { min-height: 44px; }
+
+  /* Browser default for <small> lands at 11.4px here, under the 12.5px floor
+     for a label someone reads at arm's length. */
+  .bowltab small { font-size: 12.5px; }
+
+  .tiles-sm { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tiles-sm .tile { min-height: 104px; gap: 5px; padding: 12px 6px; }
+  .tiles-sm .tile-art { width: 42px; height: 42px; }
+  .tiles-sm .tile-meta { font-size: 12.5px; }
 }
 
 /* -------------------------------------------------------------- lane picker

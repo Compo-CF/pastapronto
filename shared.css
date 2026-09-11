@@ -94,6 +94,7 @@ button { cursor: pointer; }
 .btn-ghost { background: transparent; border-color: var(--line-strong); box-shadow: none; }
 .btn-ghost:hover { background: #fff; }
 .btn-lg { min-height: 76px; font-size: 24px; padding: 0 40px; }
+.btn-sm { min-height: 44px; font-size: 14px; padding: 0 14px; }
 .btn-block { width: 100%; }
 
 /* -------------------------------------------------------------------- layout */
@@ -122,6 +123,7 @@ button { cursor: pointer; }
   gap: 14px;
 }
 .tiles-sm { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+.tile-label, .tile-meta { max-width: 100%; overflow-wrap: break-word; }
 
 .tile {
   position: relative;
@@ -130,6 +132,7 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: center;
   gap: 10px;
+  min-width: 0;
   min-height: 132px;
   padding: 16px 12px;
   border: 3px solid var(--line);
@@ -400,7 +403,7 @@ button { cursor: pointer; }
 .staffpill {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 15px;
   border: 2px solid var(--line-strong);
   border-radius: var(--radius-pill);

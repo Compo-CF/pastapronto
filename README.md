@@ -293,6 +293,27 @@ npm test
   Reed-Solomon syndrome check, and the payload parsed back - across all ten
   supported versions.
 
+## What runs on what
+
+Each screen is built for the device it actually runs on, and the layouts were
+measured on those sizes rather than guessed at.
+
+| Screen | Device | What it is tuned for |
+|---|---|---|
+| `index.html` | Guest's phone, 320-430px | Every control at the 44px a fingertip needs, and each step on one screen where it fits. No horizontal scroll down to 320px. |
+| `kitchen.html` | iPad, landscape | One full-height column per state at 1024px and up, a single-row topbar, and chits compact enough that a whole ticket is visible at once. |
+| `expo.html` | iPad, either way up | Two ready cards per row from 1024px, single-row topbar. |
+| `admin.html`, `report.html` | Laptop | Also printed - see [End of the night](#end-of-the-night). |
+
+Two rules worth knowing before changing any of it. **The kitchen and expo
+topbars have to hold one row** - they wrapped to three and ate 115-158px of a
+768px-tall iPad, which is rail the cook needs. Anything added there has to earn
+its width or drop out below 1400px, which is why the bar's queue/cooking/ready
+counts are hidden on a tablet: the lane heads a few centimetres below already
+say the same thing. And **`kitchen.css` keeps its media queries at the very
+end**, because the file has plain rules after them and an equal-specificity
+rule later in the file silently wins.
+
 ## Layout
 
 ```

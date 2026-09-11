@@ -238,14 +238,7 @@
   color: var(--ktext);
 }
 
-@media (max-width: 1100px) {
-  .lanes { grid-template-columns: 1fr 1fr; }
-  .lane[data-lane="ready"] { grid-column: span 2; }
-}
-@media (max-width: 720px) {
-  .lanes { grid-template-columns: 1fr; overflow-y: auto; }
-  .lane[data-lane="ready"] { grid-column: span 1; }
-  .kfoot { display: none; }
+
 }
 
 /* A parked ticket stays visible but visibly inactive. */
@@ -285,3 +278,88 @@
   border-color: var(--ktext);
   color: #14171c;
 }
+
+/* --------------------------------------------------------------- tablet KDS
+   Measured on the iPads this actually runs on. At 1024x768 the rail was close
+   to unusable: the topbar wrapped to three rows and ate 115px, the 1100px
+   breakpoint dropped the lanes to two columns stacked in two rows, and each
+   lane ended up 291px tall - shorter than a single chit, which runs 440-780px.
+   The cook could not see one whole ticket.
+
+   Three fixes. The lanes stay in three columns down to 900px, so an iPad in
+   landscape gets one full-height column per state, which is how a KDS is read.
+   The topbar is held to one row. And the chits lose chrome, not words. */
+
+@media (max-width: 1400px) {
+  .kbar { flex-wrap: nowrap; gap: 10px; padding: 8px 12px; }
+
+  /* The lane heads already carry Queued / Cooking / Ready with their counts,
+     a few centimetres below. Repeating them in the bar cost 418px of the
+     1024 available - by far the most expensive thing up there, and the only
+     one that says nothing new. */
+  .kcounts { display: none; }
+
+  /* Identity stays; the venue name beside it is the part that does not fit. */
+  .kds .brand-event, .kbrand-sub { display: none; }
+
+  .kbtn { padding: 0 13px; font-size: 16px; }
+  .kbtn .kbtn-label { display: none; }
+  .kclock { font-size: 19px; }
+  .kselect .select { max-width: 150px; }
+
+  /* A tablet rail is touched, so the nav goes up to a finger-sized target
+     even though the bar is tight. */
+  .kds .staffpill { min-height: 44px; padding: 0 11px; font-size: 13px; }
+}
+
+/* Portrait has 256px less to give than landscape. */
+@media (max-width: 820px) {
+  .kbar { gap: 8px; padding: 8px 10px; }
+  .kds .staffpill { padding: 0 9px; font-size: 12px; }
+  .kselect .select { max-width: 116px; font-size: 13px; }
+
+  /* The last two things to go, in this order, because a tablet already shows
+     the time in its own status bar and the connection dot says "live" without
+     the word next to it. */
+  .kclock { display: none; }
+  .kds .conn { font-size: 0; gap: 0; }
+}
+
+/* Chits on a tablet: same words, less packaging. The dish line keeps its size
+   because that is what the cook is reading. */
+@media (max-width: 1400px) {
+  .chit-top { padding: 7px 10px; gap: 8px; }
+  .chit-no { font-size: 24px; }
+  .chit-timer { font-size: 18px; padding: 4px 10px; }
+  .chit-badges { padding: 6px 10px 0; gap: 5px; }
+  .badge { padding: 2px 8px; }
+  .chit-alert { margin: 6px 10px 0; padding: 7px 10px; font-size: 13px; }
+  .chit-lines { padding: 6px 10px 3px; gap: 6px; }
+  .cline { gap: 8px; padding-bottom: 6px; }
+  .cline-art { flex: 0 0 28px; height: 28px; }
+}
+
+@media (max-width: 1100px) {
+  .cline-art { display: none; }
+  .cline { gap: 0; }
+  .cline-add { font-size: 13px; line-height: 1.35; }
+  .chit-note { padding: 6px 10px; }
+  .chit-actions { padding: 9px 10px; gap: 6px; }
+  .lanes { gap: 10px; padding: 10px 12px; }
+  .lane-head { margin-bottom: 7px; font-size: 14px; }
+  .lane-body { gap: 10px; }
+}
+
+/* Keyboard hints on a screen with no keyboard are just a strip of lost rail. */
+@media (hover: none) {
+  .kfoot { display: none; }
+}
+
+@media (max-width: 900px) {
+  .lanes { grid-template-columns: 1fr 1fr; }
+  .lane[data-lane="ready"] { grid-column: span 2; }
+}
+@media (max-width: 720px) {
+  .lanes { grid-template-columns: 1fr; overflow-y: auto; }
+  .lane[data-lane="ready"] { grid-column: span 1; }
+  .kfoot { display: none; }
