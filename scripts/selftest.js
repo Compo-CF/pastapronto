@@ -11,6 +11,7 @@ import * as order from '../app/order.js';
 import * as cooktime from '../app/cooktime.js';
 import * as menu from '../app/menu.js';
 import * as seed from '../app/seed.js';
+import { art, has as hasArt } from '../app/art.js';
 
 const { STATUS } = order;
 const sla = config.sla;
@@ -852,6 +853,50 @@ test('an order keeps the cheese the guest chose', () => {
   });
   assert.deepStrictEqual(o.lines[0].cheeses, ['pz_fresh_mozz', 'pz_cheese_light']);
   assert.match(o.lines[0].dish, /Fresh Mozzarella \(light\)/);
+});
+
+test('every menu item resolves to a real glyph', () => {
+  // The glyph set had no coverage at all until a malformed one took the whole
+  // app down while every test stayed green - the suite imported menu.js and
+  // never art.js. Importing it here means a syntax error fails the run, and
+  // walking the menu means a typo'd icon key does too.
+  const c = menu.catalog();
+  const groups = [
+    'pastas', 'sauces', 'proteins', 'toppings', 'sides',
+    'pizzaSauces', 'pizzaCheeses', 'pizzaProteins', 'pizzaToppings',
+  ];
+  const broken = [];
+  groups.forEach((g) => {
+    assert.ok(Array.isArray(c[g]), g + ' is a group');
+    c[g].forEach((x) => {
+      const key = x.shape || x.icon;
+      assert.ok(key, x.name + ' names an icon');
+      // hasArt(), not just "did something render" - an unknown key silently
+      // falls back to the crossed-out "no" glyph, which on a tile reads as a
+      // deliberate choice rather than a missing picture. Grilled Artichokes
+      // shipped looking exactly like that.
+      if (!hasArt(key)) broken.push(g + '/' + x.name + ' -> ' + key + ' (falls back)');
+    });
+  });
+  assert.deepStrictEqual(broken, [], 'menu items pointing at nothing drawable');
+});
+
+test('items in one list do not share a glyph', () => {
+  // Two tiles side by side with identical artwork is a tile a guest cannot
+  // tell apart. It happened to shredded vs fresh mozzarella, and to the red
+  // pepper flakes vs the jalapenos.
+  const c = menu.catalog();
+  const clashes = [];
+  ['pizzaSauces', 'pizzaCheeses', 'pizzaToppings', 'pizzaProteins', 'toppings'].forEach((g) => {
+    const byArt = new Map();
+    c[g].forEach((x) => {
+      const svg = art(x.shape || x.icon);
+      const seen = byArt.get(svg);
+      if (seen) clashes.push(g + ': ' + seen + ' and ' + x.name);
+      else byArt.set(svg, x.name);
+    });
+  });
+  assert.deepStrictEqual(clashes, [], 'these render identically in one list');
 });
 
 test('menu catalog exposes every group the screens render', () => {

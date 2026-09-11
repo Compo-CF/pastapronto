@@ -99,6 +99,14 @@ var ICONS = {
   chili:
     '<path d="M42 14c2 12-2 26-14 32-8 4-14 0-14-6 0-9 12-12 18-20" fill="none" stroke="#cf3327" stroke-width="11" stroke-linecap="round"/>' +
     '<path d="M42 14c0-4 3-6 6-6" fill="none" stroke="#3f8b45" stroke-width="5" stroke-linecap="round"/>',
+  flakes:
+    '<rect x="19" y="25" width="26" height="31" rx="5" fill="#f7f1e2" stroke="#e0d5bd" stroke-width="1.6"/><g fill="#cf3327"><rect x="23" y="33" width="7" height="3" rx="1.5" transform="rotate(-24 26 34)"/><rect x="33" y="36" width="6" height="3" rx="1.5" transform="rotate(18 36 37)"/><rect x="24" y="42" width="6" height="3" rx="1.5" transform="rotate(12 27 43)"/><rect x="33" y="46" width="7" height="3" rx="1.5" transform="rotate(-16 36 47)"/><rect x="25" y="50" width="6" height="3" rx="1.5" transform="rotate(-6 28 51)"/></g><rect x="17" y="13" width="30" height="12" rx="4" fill="#8c4a3f"/><g fill="#f7f1e2"><circle cx="25" cy="19" r="1.7"/><circle cx="32" cy="19" r="1.7"/><circle cx="39" cy="19" r="1.7"/></g>',
+  jalapeno:
+    '<path d="M32 19c7 0 12 6 12 14 0 13-5 23-12 23s-12-10-12-23c0-8 5-14 12-14z" fill="#4a9a3f"/><path d="M26 27c-2 7-2 15 0 21" fill="none" stroke="#7bc06a" stroke-width="3" stroke-linecap="round" opacity=".75"/><ellipse cx="32" cy="19" rx="8" ry="3.4" fill="#2f6b34"/><path d="M32 17c1-5 4-8 8-8" fill="none" stroke="#2f6b34" stroke-width="4" stroke-linecap="round"/>',
+  oregano:
+    '<path d="M32 56V20" fill="none" stroke="#6b7a3e" stroke-width="3" stroke-linecap="round"/><g fill="#7f9149"><ellipse cx="23" cy="26" rx="7" ry="4.5" transform="rotate(-28 23 26)"/><ellipse cx="41" cy="30" rx="7" ry="4.5" transform="rotate(28 41 30)"/><ellipse cx="23" cy="37" rx="6.5" ry="4.2" transform="rotate(-24 23 37)"/><ellipse cx="41" cy="41" rx="6.5" ry="4.2" transform="rotate(24 41 41)"/><ellipse cx="25" cy="47" rx="5.5" ry="3.6" transform="rotate(-20 25 47)"/></g><ellipse cx="32" cy="19" rx="5" ry="3.4" fill="#6b7a3e"/>',
+  artichoke:
+    '<path d="M32 56c-9 0-15-7-15-17 0-13 7-24 15-30 8 6 15 17 15 30 0 10-6 17-15 17z" fill="#7f9149"/><g fill="#94a65c" stroke="#5f7238" stroke-width="1.4"><path d="M32 24c-5 4-8 10-8 15 0 6 4 9 8 9s8-3 8-9c0-5-3-11-8-15z"/></g><g fill="none" stroke="#5f7238" stroke-width="2" stroke-linecap="round"><path d="M20 34c4 3 8 4 12 4s8-1 12-4M21 44c4 3 7 4 11 4s7-1 11-4"/></g><g stroke="#4a3a22" stroke-width="2.6" stroke-linecap="round" opacity=".55"><path d="M24 30h5M35 40h5M26 48h4"/></g><path d="M32 15v-6" fill="none" stroke="#5f7238" stroke-width="3.4" stroke-linecap="round"/>',
   garlic:
     '<path d="M32 14c8 6 14 16 14 24 0 9-6 14-14 14s-14-5-14-14c0-8 6-18 14-24z" fill="#f4efe4"/>' +
     '<path d="M32 16v36M23 24c-2 8-2 20 2 26M41 24c2 8 2 20-2 26" stroke="#ddd3bd" stroke-width="2.2" fill="none"/>' +
@@ -204,6 +212,9 @@ var EXTRAS = {
 function art(key, opts) {
   opts = opts || {};
   var inner = SHAPES[key] || ICONS[key] || EXTRAS[key];
+  // An unknown key falls back to the "no" glyph, which on a menu tile reads as
+  // a deliberate "none" choice rather than a missing picture. art.has() lets
+  // the test suite catch that instead of a guest finding it.
   if (!inner) inner = ICONS.none;
   var size = opts.size ? ' width="' + opts.size + '" height="' + opts.size + '"' : '';
   var cls = opts.className ? ' class="' + opts.className + '"' : '';
@@ -224,4 +235,9 @@ function escapeXml(s) {
   });
 }
 
-export { art, artFor, SHAPES, ICONS, EXTRAS };
+/** True when this key has artwork of its own rather than the fallback. */
+function has(key) {
+  return Boolean(SHAPES[key] || ICONS[key] || EXTRAS[key]);
+}
+
+export { art, artFor, has, SHAPES, ICONS, EXTRAS };

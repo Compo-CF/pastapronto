@@ -66,7 +66,7 @@ const TOPPINGS = [
   { id: 'tomatoes',   name: 'Cherry Tomatoes', icon: 'tomato',   addSec: 15, allergens: [], kid: true },
   { id: 'olives',     name: 'Olives',          icon: 'olive',    addSec: 0, allergens: [], kid: false },
   { id: 'basil',      name: 'Fresh Basil',     icon: 'herb',     addSec: 0,   allergens: [], kid: false },
-  { id: 'chili',      name: 'Chili Flakes',    icon: 'chili',    addSec: 0,   allergens: [], spicy: true, kid: false },
+  { id: 'chili',      name: 'Chili Flakes',    icon: 'flakes',    addSec: 0,   allergens: [], spicy: true, kid: false },
 ];
 
 const SIDES = [
@@ -168,12 +168,12 @@ const PIZZA_TOPPINGS = [
   { id: 'pz_artichoke', name: 'Grilled Artichokes',       icon: 'artichoke', addSec: 15, allergens: [], kid: false },
   { id: 'red_onion',    name: 'Onions',                   icon: 'onion',     addSec: 10, allergens: [], kid: false },
   { id: 'pz_tomatoes',  name: 'Sliced Heirloom Tomatoes', icon: 'tomato',    addSec: 10, allergens: [], kid: true },
-  { id: 'jalapeno',     name: 'Fresh Jalapenos',          icon: 'chili',     addSec: 5,  allergens: [], spicy: true, kid: false },
+  { id: 'jalapeno',     name: 'Fresh Jalapenos',          icon: 'jalapeno',     addSec: 5,  allergens: [], spicy: true, kid: false },
   { id: 'pz_basil',     name: 'Basil',                    icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
   { id: 'pz_arugula',   name: 'Arugula',                  icon: 'spinach',   addSec: 0,  allergens: [], kid: false, postBake: true },
-  { id: 'pz_chili',     name: 'Red Pepper Flakes',        icon: 'chili',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
+  { id: 'pz_chili',     name: 'Red Pepper Flakes',        icon: 'flakes',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
   { id: 'fin_salt',     name: 'Flake Salt',               icon: 'salt',      addSec: 0,  allergens: [], kid: true, postBake: true },
-  { id: 'fin_oregano',  name: 'Oregano',                  icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
+  { id: 'fin_oregano',  name: 'Oregano',                  icon: 'oregano',      addSec: 0,  allergens: [], kid: true, postBake: true },
 ];
 
 const GROUPS = {
