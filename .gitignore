@@ -6,6 +6,9 @@ close-out-*.pdf
 closeout-*.pdf
 preview-*.pdf
 
+# Outreach drafts, not source.
+*.eml
+
 # Node
 node_modules/
 npm-debug.log*
