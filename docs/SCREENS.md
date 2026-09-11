@@ -5,16 +5,28 @@
 Five screens, one state object, delegated events. `app/guest.js`.
 
 ```
- welcome -> member -> guests -> build (x N bowls) -> review -> sent
-                                  |                     |
-                                  +---- Change ---------+
+ member -> lane -> guests -> build (x N items) -> review -> sent
+                               |                    |
+                               +---- Change --------+
 ```
 
-### welcome
-Bowl illustration, "Build your bowl", and a green confirmation of which table
-the QR came from ("You are at Table 12"). If the code is unknown, an amber
-"Scan the QR code at your table" instead. Four numbered how-it-works steps.
-One button: **Start my order**.
+### member
+Where the QR code lands. A green confirmation of which table the code came from
+("You are at Table 12"), or an amber "Scan the QR code at your table" if the
+code is unknown, then the keypad, then four numbered how-it-works steps.
+
+The member number is asked before anything else. Two reasons: it is the one
+answer a guest can give before deciding anything, and knowing who is at the
+table is what lets the next screen greet them by name. No Back button - there
+is nowhere behind it.
+
+### lane
+"What are we making?", with **Build your Pasta** and **Build your Pizza**.
+
+Its kicker is the greeting, not a step number: a recognised member sees
+"Buonasera, Compofelice Party!" above the question. An unrecognised number
+falls back to the venue name, so the screen never looks broken for a guest
+whose number is not on the roster yet.
 
 ### member
 Big keypad display and a 3x4 keypad - no system keyboard, so a child never

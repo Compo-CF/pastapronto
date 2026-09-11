@@ -48,13 +48,13 @@ import {
   var LANES = {
     pasta: {
       one: 'bowl', many: 'bowls',
-      title: 'Build your <em>bowl</em>',
+      title: 'Build your <em>Pasta</em>',
       blurb: 'Pick a pasta, pick a sauce, pile on toppings. We cook it fresh and bring it over.',
       art: 'bowl',
     },
     pizza: {
       one: 'pizza', many: 'pizzas',
-      title: 'Build your <em>pizza</em>',
+      title: 'Build your <em>Pizza</em>',
       blurb: 'One size, three sauces, all the toppings. Straight into the oven.',
       art: 'pie',
     },
@@ -282,20 +282,38 @@ import {
 
   // --------------------------------------------------------------- screens
 
+  /**
+   * Where the QR code lands. The member number is asked first now, because
+   * knowing who is at the table is what lets every screen after this one speak
+   * to them by name - and because it is the one answer a guest can give before
+   * they have decided anything.
+   */
   function screenWelcome() {
     var tag = state.boot.tag;
-    var where = tag
+    return tag
       ? html`<div class="wherecard">${raw(art('runner', { size: 26 }))} You are at <strong>&nbsp;${tag.label}</strong></div>`
       : html`<div class="wherecard is-unknown">Scan the QR code at your table to start</div>`;
+  }
+
+  /**
+   * The fork: pasta or pizza. It sits after the member step so it can greet
+   * the party by name, which is the whole reason for the reorder - an empty
+   * "What are we making?" is a form, and "Buonasera, Compofelice Party!" is a
+   * welcome.
+   */
+  function screenLane() {
+    var m = state.member;
+    var greeting = m && m.status === 'verified' && m.message ? m.message : '';
 
     return html`
       <div class="hero">
-        ${raw(state.boot.venue.orgName
-          ? '<p class="hero-org">' + escapeHtml(state.boot.venue.orgName) + '</p>'
-          : '')}
+        ${raw(greeting
+          ? '<p class="hero-org">' + escapeHtml(greeting) + '</p>'
+          : (state.boot.venue.orgName
+            ? '<p class="hero-org">' + escapeHtml(state.boot.venue.orgName) + '</p>'
+            : ''))}
         <h1>What are we making?</h1>
         <p>${state.boot.venue.tagline}</p>
-        ${raw(where)}
       </div>
 
       <div class="lanepick">
@@ -307,14 +325,7 @@ import {
             <span class="lanetile-blurb">${l.blurb}</span>
           </button>`;
         })}
-      </div>
-
-      <ul class="howto">
-        <li><span class="n">1</span> Enter your ${state.boot.venue.memberLabel.toLowerCase()}</li>
-        <li><span class="n">2</span> Tell us how many are eating</li>
-        <li><span class="n">3</span> Build one for each person</li>
-        <li><span class="n">4</span> Send it to the kitchen</li>
-      </ul>`;
+      </div>`;
   }
 
   function screenMember() {
@@ -326,6 +337,7 @@ import {
     var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'];
 
     return html`
+      ${raw(screenWelcome())}
       <div class="step-head">
         <p class="step-kicker">Step 1 of 4</p>
         <h1 class="step-title">What is your ${state.boot.venue.memberLabel.toLowerCase()}?</h1>
@@ -340,7 +352,14 @@ import {
             return html`<button type="button" data-act="key" data-key="${k}" aria-label="${k === 'back' ? 'Delete' : k}">${raw(label)}</button>`;
           })}
         </div>
-      </div>`;
+      </div>
+
+      <ul class="howto">
+        <li><span class="n">1</span> Enter your ${state.boot.venue.memberLabel.toLowerCase()}</li>
+        <li><span class="n">2</span> Pasta or pizza?</li>
+        <li><span class="n">3</span> Tell us how many are eating</li>
+        <li><span class="n">4</span> Build one for each person and send it</li>
+      </ul>`;
   }
 
   function renderMemberResult() {
@@ -383,7 +402,7 @@ import {
 
     return html`
       <div class="step-head">
-        <p class="step-kicker">Step 2 of 4</p>
+        <p class="step-kicker">Step 3 of 4</p>
         <h1 class="step-title">How many are eating?</h1>
         <p class="step-sub">We will build one ${lane().one} per person. You can change it later.</p>
       </div>
@@ -815,20 +834,21 @@ import {
     var s = state.screen;
     var parts = '';
 
-    if (s === 'welcome') {
-      // The two lane tiles are the call to action; a button here would just be
-      // a third thing to read.
-      parts = '';
+    if (s === 'lane') {
+      // The two lane tiles are the call to action; a primary button here would
+      // just be a third thing to read. Back only, to fix a mistyped number.
+      parts = html`
+        <button class="btn btn-ghost" type="button" data-act="go" data-id="member">Back</button>`;
     } else if (s === 'member') {
-      // Any length from one digit up is a real member number.
+      // The first screen now, so there is nowhere to go back to - and any
+      // length from one digit up is a real member number.
       var ready = state.memberDigits.length >= 1;
       parts = html`
-        <button class="btn btn-ghost" type="button" data-act="go" data-id="welcome">Back</button>
-        <button class="btn btn-primary btn-lg grow" type="button" data-act="submitMember"
+        <button class="btn btn-primary btn-lg btn-block" type="button" data-act="submitMember"
           ${raw(ready && !state.busy ? '' : 'disabled')}>${state.busy ? 'Checking...' : 'Next'}</button>`;
     } else if (s === 'guests') {
       parts = html`
-        <button class="btn btn-ghost" type="button" data-act="go" data-id="member">Back</button>
+        <button class="btn btn-ghost" type="button" data-act="go" data-id="lane">Back</button>
         <button class="btn btn-primary btn-lg grow" type="button" data-act="startBuilding">
           Build ${state.guestCount} ${state.guestCount === 1 ? lane().one : lane().many}</button>`;
     } else if (s === 'build') {
@@ -862,7 +882,7 @@ import {
   }
 
   function renderCrumbs() {
-    var sequence = ['member', 'guests', 'build', 'review'];
+    var sequence = ['member', 'lane', 'guests', 'build', 'review'];
     var idx = sequence.indexOf(state.screen);
     crumbs.innerHTML = sequence.map(function (name, i) {
       var cls = idx < 0 ? '' : i < idx ? 'is-done' : i === idx ? 'is-now' : '';
@@ -874,8 +894,8 @@ import {
   // --------------------------------------------------------------------- render
 
   var SCREENS = {
-    welcome: screenWelcome,
     member: screenMember,
+    lane: screenLane,
     guests: screenGuests,
     build: screenBuild,
     review: screenReview,
@@ -923,7 +943,7 @@ import {
       state.bowls = [];
       state.activeBowl = 0;
       state.buildStep = 0;
-      state.screen = 'member';
+      state.screen = 'guests';
       render();
     },
 
@@ -962,7 +982,7 @@ import {
         if (res.status === 'verified' && res.defaultGuests) state.guestCount = res.defaultGuests;
         state.busy = false;
         if (res.status === 'invalid') return render({ keepScroll: true });
-        state.screen = 'guests';
+        state.screen = 'lane';
         return render();
       } catch (err) {
         state.busy = false;
@@ -1153,7 +1173,7 @@ import {
       // Back to the lane picker, because the usual second order is the other
       // kind - the table that just had pasta now wants a pizza.
       state.kind = null;
-      state.screen = 'welcome';
+      state.screen = 'member';
       render();
     },
   };
@@ -1279,7 +1299,7 @@ import {
     }
 
     document.title = pageTitle('Order');
-    state.screen = 'welcome';
+    state.screen = 'member';
     render();
 
     try {

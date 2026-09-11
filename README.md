@@ -1,9 +1,15 @@
 # PastaPresto!
 
 QR-to-kitchen ordering for a pasta and pizza station. A guest scans the code on
-their table, picks a lane - **build your bowl** or **build your pizza** - builds
-one per person from a limited ingredient set, and it lands as a chit on the right
-cook's screen with live timers, an accept button, and a call-runner button.
+their table, enters their member number, picks a lane - **build your Pasta** or
+**build your Pizza** - builds one per person from a limited ingredient set, and
+it lands as a chit on the right cook's screen with live timers, an accept
+button, and a call-runner button.
+
+The member number is asked **first**, before anything else, because knowing who
+is at the table is what lets the next screen open with "Buonasera, Compofelice
+Party!" rather than a blank form - and because it is the one answer a guest can
+give before they have decided anything.
 
 Simple enough that a six-year-old can drive it unaided; detailed enough that an
 adult can filter allergens, set spice and add per-bowl notes, and that a manager
