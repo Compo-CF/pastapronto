@@ -111,12 +111,25 @@ const CATALOG = menu.catalog();
       } catch (err) {
         return '';
       }
-      return html`<div class="tent">
-        <div class="tent-brand">${raw(activeBrand().wordmark)}</div>
+      // A tent is the one piece of this app a member holds in their hands, so
+      // it wears the venue's own identity rather than the app's. A brand with
+      // a logo gets a colour band behind it - Carlton Woods' mark is white on
+      // transparent and would be an empty rectangle on white paper.
+      var brand = activeBrand();
+      var crown = brand.logo
+        ? '<img class="tent-logo" src="' + escapeHtml(brand.logo) + '" alt="'
+          + escapeHtml(brand.logoAlt || brand.orgName || brand.venueName) + '">'
+        : '<div class="tent-wordmark">' + brand.wordmark + '</div>';
+
+      return html`<div class="tent ${brand.logo ? 'has-crown' : ''}">
+        <div class="tent-crown">${raw(crown)}</div>
+        ${raw(brand.logo ? '<div class="tent-event">' + escapeHtml(brand.venueName) + '</div>' : '')}
+        ${raw(brand.tagline ? '<div class="tent-tagline">' + escapeHtml(brand.tagline) + '</div>' : '')}
+        <div class="tent-rule"></div>
         <div class="tent-where">${tag.label}</div>
         ${raw(svg)}
-        <div class="tent-how">Point your phone camera at the code to build your own pasta bowl.
-          Kids can do it themselves - you will need your member number.</div>
+        <div class="tent-how">Point your phone camera at the code to build your own
+          bowl or pizza. Kids can do it themselves - you will need your member number.</div>
         <div class="tent-url">${url}</div>
         <div class="tent-fold"></div>
       </div>`;

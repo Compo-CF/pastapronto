@@ -202,6 +202,25 @@ been to the site and so has nothing in storage to brand itself from - without
 that, codes printed for a branded venue would open the default palette at every
 table. The printable table tents follow the active brand's wordmark too.
 
+### Printed table tents
+
+The tents printed from the Manager screen carry the venue's identity, not the
+app's: a brand with a logo gets it on a band in the brand's own colour, then
+the venue name in the brand's display face, its tagline, and a rule in the
+secondary colour. Without a logo the wordmark stands alone - printing the
+wordmark *and* the venue name is the same label twice when they are the same
+string.
+
+The band asks for `print-color-adjust: exact`, because browsers drop
+backgrounds when printing and a white-on-transparent logo on no band is an
+empty rectangle.
+
+**Logo resolution matters here.** Carlton Woods' supplied mark is 211x65px. A
+crisp 300dpi print at 26mm tall wants ~307px, so the tent prints it at 15mm
+where the shortfall does not show, and lets the venue name - real type, sharp
+at any size - carry the weight. Supply a vector or a 600px+ PNG and the logo
+can grow.
+
 ### Adding a brand
 
 1. Add an entry to `BRANDS` in [app/brand.js](app/brand.js): venue name, org

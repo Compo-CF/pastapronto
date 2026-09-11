@@ -72,12 +72,43 @@
     break-after: page;
     height: 250mm;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 10mm;
+    gap: 9mm;
     text-align: center;
   }
-  .tent svg { width: 105mm; height: 105mm; }
-  .tent-brand { font-size: 34pt; font-weight: 800; letter-spacing: -0.03em; }
-  .tent-brand em { font-style: normal; color: #d33f30; }
+  .tent svg { width: 100mm; height: 100mm; }
+
+  /* The band behind a venue's logo. Only drawn when a brand supplies one -
+     Carlton Woods' mark is white on transparent and would print as an empty
+     rectangle without it. Browsers drop backgrounds when printing unless the
+     page insists, and a tent with no band is the whole point missed. */
+  .tent.has-crown .tent-crown {
+    width: 100%;
+    padding: 8mm;
+    background: var(--tomato);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .tent-logo { height: 15mm; width: auto; max-width: 120mm; object-fit: contain; }
+  .tent-wordmark { font-size: 34pt; font-weight: 800; letter-spacing: -0.03em; }
+  .tent-wordmark em { font-style: normal; color: var(--tomato); }
+
+  .tent-event {
+    font-family: var(--font-display);
+    font-size: 30pt; font-weight: 700; letter-spacing: -0.01em;
+    color: var(--tomato);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .tent-tagline {
+    margin-top: -6mm;
+    font-size: 12pt; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: #6b6b6b;
+  }
+  .tent-rule {
+    width: 40mm; height: 2pt; margin: -4mm 0;
+    background: var(--basil);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+
   .tent-where { font-size: 26pt; font-weight: 800; }
   .tent-how { font-size: 13pt; color: #444; max-width: 120mm; line-height: 1.5; }
   .tent-url { font-family: var(--mono); font-size: 9pt; color: #888; }
