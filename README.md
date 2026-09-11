@@ -69,13 +69,13 @@ from that answer.
 | --- | --- | --- |
 | Stations | `PASTA-1`, `PASTA-2` | `PIZZA-1`, `PIZZA-2` |
 | Equipment | 3 pans per station | 2-deck oven, one 12" pie per deck |
-| Build steps | pasta, sauce, protein, toppings, size | sauce, **cheese**, protein, toppings, finish |
+| Build steps | pasta, sauce, protein, toppings, size | sauce, cheese, protein, toppings |
 | Sauces | 8, pick up to 3 | 4, pick up to 3, plus No / Light / Heavy |
 | Cheese | (part of toppings) | 3, pick up to 3, plus No / Light / Heavy |
 | Proteins | 5, pick up to 3 | 6, pick up to 3 |
 | Size | kid / regular / large | one size, always |
-| Extras | sides, spice level | finishers: flake salt, oregano |
-| Topping cap | 4 | 5 vegetables (meats are proteins, cheese is its own step) |
+| Extras | sides, spice level | (garnishes live in the topping list) |
+| Topping cap | 4 | 5 **baked** toppings; garnish is free (see below) |
 
 ### "No Sauce", "Light", "Heavy"
 
@@ -99,11 +99,20 @@ out and what the database refuses cannot drift apart. If you add another group
 that mixes "none" with amounts, give its entries the same two flags and it
 works with no new code.
 
-Three vegetables - **basil, arugula, red pepper flakes** - are marked
-`postBake`. They go on after the pie leaves the oven (basil and arugula would
-wilt to nothing, the flakes would scorch), so they buy no oven time, exactly
-the way a finisher does. **Heavy cheese** is the one amount that does change
-the bake: more cheese is more moisture.
+Five toppings are marked `postBake` - **basil, arugula, red pepper flakes,
+flake salt, oregano**. They go on after the pie leaves the oven (the leaves
+would wilt to nothing, the flakes would scorch), so they buy no oven time and
+**do not count against the topping cap**: the cap is about room on the pie in
+the oven, and a garnish scattered on afterwards takes none. The guest screen
+and `validateLine()` count it the same way, so nobody gets refused for an order
+the screen let them build.
+
+There used to be a separate "finisher" step for salt and oregano. It was one
+more tap for two items that behave exactly like the other post-bake toppings,
+so it is gone and they live in the topping list.
+
+**Heavy cheese** is the one amount that does change the bake: more cheese is
+more moisture.
 
 Sauces and proteins are both multi-select on both lanes: chicken *and*
 meatballs, pepperoni *and* bacon. Selecting nothing on the protein step is how

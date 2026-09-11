@@ -168,8 +168,8 @@ export function buildOrder(draft, ctx) {
 
     if (kind === 'pizza') {
       // No portion (every pizza is the same size), no protein or sides - meats
-      // are just toppings on a pizza - and finishers instead of a spice level.
-      return { ...common, cheeses: menu.cheesesOf(line), finishers: line.finishers || [] };
+      // are just toppings on a pizza - and no spice level.
+      return { ...common, cheeses: menu.cheesesOf(line) };
     }
 
     return {
@@ -293,7 +293,7 @@ export function publicView(order) {
       kind: menu.kindOf(l),
       sauces: menu.saucesOf(l),
       proteins: menu.proteinsOf(l),
-      toppings: l.toppings, finishers: l.finishers,
+      toppings: l.toppings,
       sides: l.sides, portion: l.portion,
       spice: l.spice, notes: l.notes,
     })),
@@ -552,7 +552,6 @@ export function shiftReport(orders, sla) {
       cheeses: tally(pizzaLines, (l) => menu.cheesesOf(l)),
       proteins: tally(pizzaLines, (l) => menu.proteinsOf(l)),
       toppings: tally(pizzaLines, (l) => l.toppings || []),
-      finishers: tally(pizzaLines, (l) => l.finishers || []),
     },
   };
 

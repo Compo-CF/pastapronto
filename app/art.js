@@ -152,6 +152,20 @@ var ICONS = {
     '<path d="M22 26c0-6 4-10 10-10s10 4 10 10z" fill="#c9d2da"/>' +
     '<g fill="#8d99a6"><circle cx="28" cy="20" r="1.6"/><circle cx="36" cy="20" r="1.6"/>' +
     '<circle cx="32" cy="17" r="1.6"/></g>',
+  mozz_shred:
+    '<g fill="#fbf3dd" stroke="#e2d4b4" stroke-width="1.6"><rect x="10" y="22" width="26" height="7" rx="3.5" transform="rotate(-14 23 25)"/><rect x="26" y="28" width="28" height="7" rx="3.5" transform="rotate(11 40 31)"/><rect x="12" y="36" width="25" height="7" rx="3.5" transform="rotate(7 24 39)"/><rect x="28" y="42" width="24" height="7" rx="3.5" transform="rotate(-9 40 45)"/></g>',
+  sauce_none:
+    '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><path d="M17 47 47 17" stroke="#b8ada1" stroke-width="5" stroke-linecap="round"/>',
+  sauce_light:
+    '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><g fill="#d8402f" opacity=".85"><ellipse cx="27" cy="27" rx="6" ry="4.5"/><ellipse cx="38" cy="35" rx="5" ry="4"/><ellipse cx="28" cy="39" rx="4" ry="3"/></g>',
+  sauce_heavy:
+    '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><circle cx="32" cy="32" r="17" fill="#d8402f"/><circle cx="32" cy="32" r="10" fill="#c0301f" opacity=".55"/>',
+  cheese_none:
+    '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><path d="M17 47 47 17" stroke="#b8ada1" stroke-width="5" stroke-linecap="round"/>',
+  cheese_light:
+    '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><g fill="#f4d97e" stroke="#e0bc51" stroke-width="1"><rect x="23" y="26" width="11" height="4" rx="2" transform="rotate(-18 28 28)"/><rect x="33" y="33" width="10" height="4" rx="2" transform="rotate(24 38 35)"/><rect x="24" y="38" width="9" height="4" rx="2" transform="rotate(8 28 40)"/></g>',
+  cheese_heavy:
+    '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><circle cx="32" cy="32" r="17" fill="#f4d97e"/><g fill="none" stroke="#e0bc51" stroke-width="2.6" stroke-linecap="round"><path d="M22 27h9M34 24h8M26 34h11M39 33h5M21 40h8M32 41h9"/></g>',
   none:
     '<circle cx="32" cy="32" r="19" fill="none" stroke="#b8ada1" stroke-width="5"/>' +
     '<path d="M19 45 45 19" stroke="#b8ada1" stroke-width="5" stroke-linecap="round"/>',

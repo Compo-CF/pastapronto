@@ -41,7 +41,6 @@ import {
       { id: 'cheeses', label: 'Cheese', group: 'pizzaCheeses', title: 'And the cheese', sub: 'Light or heavy goes on top of your pick.', multi: true },
       { id: 'proteins', label: 'Protein', group: 'pizzaProteins', title: 'Add a protein?', sub: '', multi: true },
       { id: 'toppings', label: 'Toppings', group: 'pizzaToppings', title: 'Toppings!', sub: '' },
-      { id: 'finishers', label: 'Finish', group: 'finishers', title: 'Anything on top?', sub: 'Added after it comes out of the oven.', multi: true },
     ],
   };
 
@@ -123,7 +122,7 @@ import {
       toppings: [],
       notes: '',
     };
-    if (state.kind === 'pizza') return Object.assign(base, { cheeses: [], finishers: [] });
+    if (state.kind === 'pizza') return Object.assign(base, { cheeses: [] });
     return Object.assign(base, {
       pasta: null, sides: [], portion: null, spice: 'mild',
     });
@@ -443,10 +442,7 @@ import {
     var body;
     if (step.id === 'toppings') body = buildToppings(bowl);
     else if (step.id === 'finish') body = buildFinish(bowl);
-    else if (step.id === 'finishers') {
-      body = tileGrid('finishers', { act: 'toggleFinisher', value: bowl.finishers, multi: true, small: true })
-        + detailPanel(bowl);
-    } else if (step.id === 'sauces') {
+    else if (step.id === 'sauces') {
       body = tileGrid(step.group, {
         act: 'toggleSauce', value: bowl.sauces, multi: true,
         blocked: groupRules(step.group, bowl.sauces).blocked,
@@ -466,10 +462,9 @@ import {
 
     var sub = step.sub;
     if (step.id === 'toppings') {
-      sub = 'Pick up to ' + toppingCap() + '. Or none at all.';
-    }
-    if (step.id === 'finishers' && bowl.finishers.length) {
-      sub = bowl.finishers.length + ' on top, added after the bake.';
+      sub = state.kind === 'pizza'
+        ? 'Pick up to ' + toppingCap() + '. Herbs and salt are free.'
+        : 'Pick up to ' + toppingCap() + '. Or none at all.';
     }
     if (step.id === 'proteins') {
       sub = bowl.proteins.length
@@ -501,6 +496,16 @@ import {
     return state.kind === 'pizza'
       ? state.boot.limits.maxToppingsPerPizza
       : state.boot.limits.maxToppingsPerBowl;
+  }
+
+  /** True for a pizza topping that goes on after the oven, so costs no slot. */
+  function isPostBake(id) {
+    return state.kind === 'pizza' && Boolean((item('pizzaToppings', id) || {}).postBake);
+  }
+
+  /** Only the toppings that actually take up room on the pie in the oven. */
+  function bakedToppings(bowl) {
+    return (bowl.toppings || []).filter(function (id) { return !isPostBake(id); });
   }
 
   function buildToppings(bowl) {
@@ -581,11 +586,6 @@ import {
         }).join(', '));
       }
       if (isPizza) {
-        if (bowl.finishers.length) {
-          extras.push('finished with ' + bowl.finishers.map(function (f) {
-            return (item('finishers', f) || {}).name || f;
-          }).join(', '));
-        }
         extras.push('12" - one size');
       } else {
         if (bowl.sides.length) {
@@ -631,8 +631,7 @@ import {
       if (isPizza) {
         addAll(state.boot.menu.pizzaBase.allergens);
         entries = entries
-          .concat((b.cheeses || []).map(function (c) { return item('pizzaCheeses', c); }))
-          .concat((b.finishers || []).map(function (f) { return item('finishers', f); }));
+          .concat((b.cheeses || []).map(function (c) { return item('pizzaCheeses', c); }));
       } else {
         entries = entries
           .concat([item('pastas', b.pasta), item('proteins', b.protein)])
@@ -836,7 +835,7 @@ import {
     } else if (s === 'build') {
       var bowl = currentBowl();
       var step = steps()[state.buildStep];
-      var chosen = step.id === 'toppings' || step.id === 'proteins' || step.id === 'finishers' ? true
+      var chosen = step.id === 'toppings' || step.id === 'proteins' ? true
         : step.id === 'finish' ? Boolean(bowl.portion)
         : step.id === 'sauces' ? bowl.sauces.length > 0
         : step.id === 'cheeses' ? bowl.cheeses.length > 0
@@ -1042,27 +1041,16 @@ import {
       render({ keepScroll: true });
     },
 
-    toggleFinisher: function (el) {
-      var bowl = currentBowl();
-      var id = el.dataset.id;
-      var i = bowl.finishers.indexOf(id);
-      if (i !== -1) {
-        bowl.finishers.splice(i, 1);
-      } else if (bowl.finishers.length >= state.boot.limits.maxFinishersPerPizza) {
-        toast('That is all four - tap one to swap it.');
-        return;
-      } else {
-        bowl.finishers.push(id);
-      }
-      render({ keepScroll: true });
-    },
-
     toggleTopping: function (el) {
       var bowl = currentBowl();
       var id = el.dataset.id;
       var i = bowl.toppings.indexOf(id);
       if (i !== -1) bowl.toppings.splice(i, 1);
-      else if (bowl.toppings.length >= toppingCap()) {
+      // The cap is about oven space, and a garnish scattered on afterwards
+      // takes none - so salt, oregano, basil, arugula and the flakes are free.
+      // validateLine() counts it the same way; the two must not disagree or a
+      // guest gets refused for an order the screen let them build.
+      else if (bakedToppings(bowl).length >= toppingCap() && !isPostBake(id)) {
         toast('That is ' + toppingCap() + ' toppings - plenty! Tap one to swap it.');
         return;
       } else bowl.toppings.push(id);
@@ -1275,7 +1263,6 @@ import {
         maxToppingsPerBowl: config.order.maxToppingsPerBowl,
         maxSidesPerBowl: config.order.maxSidesPerBowl,
         maxToppingsPerPizza: config.order.maxToppingsPerPizza,
-        maxFinishersPerPizza: config.order.maxFinishersPerPizza,
         maxCheesesPerPizza: config.order.maxCheesesPerPizza,
       },
       sla: config.sla,

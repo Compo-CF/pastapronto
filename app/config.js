@@ -51,7 +51,6 @@ export const config = {
     // can pile on before the middle goes soggy.
     maxCheesesPerPizza: 3,
     maxToppingsPerPizza: 5,
-    maxFinishersPerPizza: 4,
     // A bowl can be half-and-half, or a three-way. More than this and the
     // pan stops tasting like anything.
     maxSaucesPerBowl: 3,

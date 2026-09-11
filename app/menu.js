@@ -129,20 +129,20 @@ const PIZZA_SAUCES = [
   { id: 'pz_alfredo',     name: 'Alfredo Sauce',       icon: 'cream',  allergens: ['dairy'], kid: true },
   { id: 'pz_pesto',       name: 'Basil Pesto',         icon: 'herb',   allergens: ['dairy', 'tree_nuts'], kid: false },
   { id: 'pz_bbq',         name: 'BBQ Sauce',           icon: 'bbq',    allergens: [], kid: true },
-  { id: 'pz_no_sauce',    name: 'No Sauce',            icon: 'none',   allergens: [], kid: true, exclusive: true },
-  { id: 'pz_sauce_light', name: 'Light Sauce',         icon: 'none',   allergens: [], kid: true, amount: 'light' },
-  { id: 'pz_sauce_heavy', name: 'Heavy Sauce',         icon: 'none',   allergens: [], kid: true, amount: 'heavy' },
+  { id: 'pz_no_sauce',    name: 'No Sauce',            icon: 'sauce_none',   allergens: [], kid: true, exclusive: true },
+  { id: 'pz_sauce_light', name: 'Light Sauce',         icon: 'sauce_light',   allergens: [], kid: true, amount: 'light' },
+  { id: 'pz_sauce_heavy', name: 'Heavy Sauce',         icon: 'sauce_heavy',   allergens: [], kid: true, amount: 'heavy' },
 ];
 
 const PIZZA_CHEESES = [
-  { id: 'pz_shred_mozz',   name: 'Shredded Mozzarella', icon: 'mozz',   addSec: 0,  allergens: ['dairy'], kid: true },
+  { id: 'pz_shred_mozz',   name: 'Shredded Mozzarella', icon: 'mozz_shred',   addSec: 0,  allergens: ['dairy'], kid: true },
   { id: 'pz_fresh_mozz',   name: 'Fresh Mozzarella',    icon: 'mozz',   addSec: 20, allergens: ['dairy'], kid: true },
   { id: 'pz_grated_parm',  name: 'Grated Parmesan',     icon: 'cheese', addSec: 0,  allergens: ['dairy'], kid: true },
-  { id: 'pz_no_cheese',    name: 'No Cheese',           icon: 'none',   addSec: 0,  allergens: [], kid: true, exclusive: true },
-  { id: 'pz_cheese_light', name: 'Light Cheese',        icon: 'none',   addSec: 0,  allergens: [], kid: true, amount: 'light' },
+  { id: 'pz_no_cheese',    name: 'No Cheese',           icon: 'cheese_none',   addSec: 0,  allergens: [], kid: true, exclusive: true },
+  { id: 'pz_cheese_light', name: 'Light Cheese',        icon: 'cheese_light',   addSec: 0,  allergens: [], kid: true, amount: 'light' },
   // More cheese is more moisture, which is the one amount that genuinely
   // changes how long the pie needs in the oven.
-  { id: 'pz_cheese_heavy', name: 'Heavy Cheese',        icon: 'none',   addSec: 30, allergens: [], kid: true, amount: 'heavy' },
+  { id: 'pz_cheese_heavy', name: 'Heavy Cheese',        icon: 'cheese_heavy',   addSec: 30, allergens: [], kid: true, amount: 'heavy' },
 ];
 
 // Meats get their own step rather than competing with the vegetables for
@@ -172,14 +172,8 @@ const PIZZA_TOPPINGS = [
   { id: 'pz_basil',     name: 'Basil',                    icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
   { id: 'pz_arugula',   name: 'Arugula',                  icon: 'spinach',   addSec: 0,  allergens: [], kid: false, postBake: true },
   { id: 'pz_chili',     name: 'Red Pepper Flakes',        icon: 'chili',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
-];
-
-// Post-bake, so they cost nothing on the oven clock. Parmesan and red pepper
-// flakes used to live here too; they are now a cheese and a vegetable, and
-// listing either twice would only be two places to tap for one thing.
-const FINISHERS = [
-  { id: 'fin_salt',    name: 'Flake Salt', icon: 'salt', addSec: 0, allergens: [], kid: true },
-  { id: 'fin_oregano', name: 'Oregano',    icon: 'herb', addSec: 0, allergens: [], kid: true },
+  { id: 'fin_salt',     name: 'Flake Salt',               icon: 'salt',      addSec: 0,  allergens: [], kid: true, postBake: true },
+  { id: 'fin_oregano',  name: 'Oregano',                  icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
 ];
 
 const GROUPS = {
@@ -187,7 +181,7 @@ const GROUPS = {
   toppings: TOPPINGS, sides: SIDES, portions: PORTIONS,
   pizzaSauces: PIZZA_SAUCES, pizzaCheeses: PIZZA_CHEESES,
   pizzaProteins: PIZZA_PROTEINS,
-  pizzaToppings: PIZZA_TOPPINGS, finishers: FINISHERS,
+  pizzaToppings: PIZZA_TOPPINGS,
 };
 
 /** 'pasta' unless the line says otherwise. Old documents have no kind. */
@@ -313,7 +307,6 @@ export function allergensFor(line) {
     // actually chosen, so a no-cheese pie is genuinely dairy free.
     PIZZA_BASE.allergens.forEach((a) => out.add(a));
     cheesesOf(line).forEach((id) => add(find('pizzaCheeses', id)));
-    (line.finishers || []).forEach((id) => add(find('finishers', id)));
   } else {
     add(find('pastas', line.pasta));
     (line.sides || []).forEach((id) => add(find('sides', id)));
@@ -413,13 +406,9 @@ export function validateLine(line, limits) {
       errors.push('Up to ' + limits.maxCheesesPerPizza + ' cheeses per pizza.');
     }
 
-    if (toppings.length > limits.maxToppingsPerPizza) {
+    const baked = toppings.filter((id) => !(find('pizzaToppings', id) || {}).postBake);
+    if (baked.length > limits.maxToppingsPerPizza) {
       errors.push('Up to ' + limits.maxToppingsPerPizza + ' toppings per pizza.');
-    }
-    const finishers = line.finishers || [];
-    if (finishers.some((f) => !find('finishers', f))) errors.push('Unknown finisher.');
-    if (finishers.length > limits.maxFinishersPerPizza) {
-      errors.push('Up to ' + limits.maxFinishersPerPizza + ' finishers per pizza.');
     }
     return errors;
   }
@@ -440,7 +429,7 @@ export function validateLine(line, limits) {
 
 export {
   ALLERGENS, PASTAS, SAUCES, PROTEINS, TOPPINGS, SIDES, PORTIONS, SPICE_LEVELS,
-  PIZZA_SAUCES, PIZZA_CHEESES, PIZZA_PROTEINS, PIZZA_TOPPINGS, FINISHERS,
+  PIZZA_SAUCES, PIZZA_CHEESES, PIZZA_PROTEINS, PIZZA_TOPPINGS,
   find,
 };
 
@@ -451,7 +440,7 @@ export function catalog() {
     toppings: TOPPINGS, sides: SIDES, portions: PORTIONS, spice: SPICE_LEVELS,
     pizzaSauces: PIZZA_SAUCES, pizzaCheeses: PIZZA_CHEESES,
     pizzaProteins: PIZZA_PROTEINS,
-    pizzaToppings: PIZZA_TOPPINGS, finishers: FINISHERS,
+    pizzaToppings: PIZZA_TOPPINGS,
     pizzaBase: PIZZA_BASE,
   };
 }

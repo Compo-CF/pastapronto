@@ -181,10 +181,6 @@ const CATALOG = menu.catalog();
     if (line.toppings && line.toppings.length) {
       adds.push(line.toppings.map(function (t) { return menuName(toppingGroup(line), t); }).join(', '));
     }
-    if (isPizza && line.finishers && line.finishers.length) {
-      // Post-bake, so the cook needs it called out separately from the build.
-      adds.push('FINISH: ' + line.finishers.map(function (f) { return menuName('finishers', f); }).join(', '));
-    }
     if (!isPizza && line.sides && line.sides.length) {
       adds.push('SIDE: ' + line.sides.map(function (s) { return menuName('sides', s); }).join(', '));
     }
