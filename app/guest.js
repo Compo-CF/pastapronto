@@ -246,7 +246,6 @@ import {
       : (clash.length ? 'has ' + clash.map(allergenName).join(', ') : ruledOut);
     var meta = [];
     if (state.mode === 'pro') {
-      if (entry.boilSec) meta.push(Math.round(entry.boilSec / 60) + ' min');
       if (entry.glutenFree) meta.push('GF');
       if (entry.spicy) meta.push('spicy');
     }

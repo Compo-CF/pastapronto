@@ -1,6 +1,6 @@
 /**
  * Manager screen: service metrics, QR code generation for every table tag,
- * printable table tents, and a menu/cook-time reference for the chef.
+ * printable table tents, and a menu and allergen reference for the chef.
  *
  * The QR codes are generated in the browser by /app/qr.js - no external
  * service ever sees the venue's URLs, and it works with the wifi unplugged.
@@ -140,7 +140,7 @@ const CATALOG = menu.catalog();
     /**
    * The 86 switch. Named after the line-cook shorthand for "we are out of it".
    * Living in the menu table means a manager toggles an ingredient in the same
-   * place they read its cook time, rather than hunting a separate screen.
+   * place they read its allergens, rather than hunting a separate screen.
    */
   function eightySixToggle(item) {
     var off = state.unavailable.indexOf(item.id) !== -1;
@@ -151,20 +151,17 @@ const CATALOG = menu.catalog();
       (off ? '86' : 'on') + '</button>';
   }
 
-  function menuTable(caption, items, secField, secLabel) {
+  function menuTable(caption, items) {
     return html`<table class="mtable">
       <caption>${caption}</caption>
       <thead><tr>
-        <th>Item</th><th>Allergens</th>
-        ${raw(secField ? '<th class="num">' + escapeHtml(secLabel) + '</th>' : '')}
-        <th>Kid menu</th><th class="num">86</th>
+        <th>Item</th><th>Allergens</th><th>Kid menu</th><th class="num">86</th>
       </tr></thead>
       <tbody>
         ${items.map(function (i) {
           return html`<tr>
             <td>${i.name}</td>
             <td class="allerg">${allergenCodes(i)}</td>
-            ${raw(secField ? '<td class="num">' + (i[secField] != null ? mmss(i[secField]) : '-') + '</td>' : '')}
             <td>${i.kid ? 'yes' : ''}</td>
             <td class="num">${raw(eightySixToggle(i))}</td>
           </tr>`;
@@ -203,18 +200,18 @@ const CATALOG = menu.catalog();
     var m = CATALOG;
 
     var pastaTables = [
-      menuTable('Pasta (boil time, parcooked)', m.pastas, 'boilSec', 'Boil'),
-      menuTable('Pasta sauces (finish time)', m.sauces, 'finishSec', 'Finish'),
-      menuTable('Proteins', m.proteins, 'addSec', 'Add'),
-      menuTable('Pasta toppings', m.toppings, 'addSec', 'Prep'),
-      menuTable('Sides', m.sides, 'cookSec', 'Cook'),
+      menuTable('Pasta', m.pastas),
+      menuTable('Pasta sauces', m.sauces),
+      menuTable('Proteins', m.proteins),
+      menuTable('Pasta toppings', m.toppings),
+      menuTable('Sides', m.sides),
     ].join('');
 
     var pizzaTables = [
-      menuTable('Pizza sauces', m.pizzaSauces, null, ''),
-      menuTable('Pizza cheeses', m.pizzaCheeses, 'addSec', 'Bake'),
-      menuTable('Pizza proteins', m.pizzaProteins, 'addSec', 'Prep'),
-      menuTable('Pizza toppings', m.pizzaToppings, 'addSec', 'Prep'),
+      menuTable('Pizza sauces', m.pizzaSauces),
+      menuTable('Pizza cheeses', m.pizzaCheeses),
+      menuTable('Pizza proteins', m.pizzaProteins),
+      menuTable('Pizza toppings', m.pizzaToppings),
     ].join('');
 
     el.menuRef.innerHTML =
@@ -223,7 +220,6 @@ const CATALOG = menu.catalog();
       '<h3 class="menu-station">Pizza station' +
       '<span class="menu-station-sub">every pizza is a 12" ' +
       escapeHtml(m.pizzaBase.name.replace('12" ', '')) + ' base &middot; ' +
-      Math.round(m.pizzaBase.bakeSec / 60) + ' min bake &middot; ' +
       'carries ' + m.pizzaBase.allergens.join(', ') +
       '</span></h3>' +
       '<div class="mtable-wrap">' + pizzaTables + '</div>' +
