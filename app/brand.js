@@ -112,18 +112,21 @@ export function brandList() {
  * The masthead for a screen: a venue's logo when it has one, otherwise the
  * built-in glyph and wordmark.
  *
+ * Identity only - it does not name the screen. Every staff screen carries the
+ * staff nav, whose current-page pill already says where you are, and saying it
+ * again beside the wordmark was three "Close-out"s in one header. The screen
+ * name still reaches the browser tab through pageTitle().
+ *
  * @param {string} markSvg  inline SVG for the default brand
- * @param {string} suffix   screen label shown after the wordmark, e.g. "Kitchen"
  */
-export function mastheadHtml(markSvg, suffix = '') {
+export function mastheadHtml(markSvg) {
   const brand = activeBrand();
-  const tail = suffix ? `<span class="brand-screen">${suffix}</span>` : '';
 
   if (brand.logo) {
     return `<img class="brand-logo" src="${brand.logo}" alt="${brand.logoAlt || brand.orgName}">`
-      + `<span class="brand-event">${brand.venueName}</span>${tail}`;
+      + `<span class="brand-event">${brand.venueName}</span>`;
   }
-  return `<span class="brand-mark">${markSvg}</span><span>${brand.wordmark}</span>${tail}`;
+  return `<span class="brand-mark">${markSvg}</span><span>${brand.wordmark}</span>`;
 }
 
 /** Page title, so a branded tab does not say PastaPresto. */

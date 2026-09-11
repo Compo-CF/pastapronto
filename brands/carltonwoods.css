@@ -100,16 +100,6 @@
   border-left: 1px solid rgba(255, 255, 255, 0.35);
   white-space: nowrap;
 }
-:root[data-brand="carltonwoods"] .brand-screen {
-  font-size: 14px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.72);
-  letter-spacing: 0.05em;
-}
-:root[data-brand="carltonwoods"] .appbar .pill {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
 :root[data-brand="carltonwoods"] .appbar .staffpill {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.3);
@@ -148,7 +138,6 @@
   padding-left: 12px;
   border-left: 1px solid rgba(255, 255, 255, 0.35);
 }
-:root[data-brand="carltonwoods"] .kds .brand-screen { color: rgba(255, 255, 255, 0.72); }
 :root[data-brand="carltonwoods"] .kds .kcount { background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.8); }
 :root[data-brand="carltonwoods"] .kds .kcount b { color: #fff; }
 :root[data-brand="carltonwoods"] .kds .kbtn,

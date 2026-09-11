@@ -499,7 +499,7 @@ const CATALOG = menu.catalog();
   // ----------------------------------------------------------------------- boot
 
   async function boot() {
-    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), 'Kitchen');
+    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Kitchen');
 
     if (!db.isConfigured) {

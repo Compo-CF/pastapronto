@@ -188,7 +188,7 @@ const CATALOG = menu.catalog();
   }
 
   async function boot() {
-    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), 'Expo & Runners');
+    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Expo & Runners');
 
     if (!db.isConfigured) {

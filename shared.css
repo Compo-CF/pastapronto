@@ -164,24 +164,6 @@ button { cursor: pointer; }
 .tile.is-multi[aria-pressed="true"]::after { background-color: var(--basil); }
 .tile:disabled { opacity: 0.4; }
 
-/* --------------------------------------------------------------------- pills */
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: var(--radius-pill);
-  background: #f4ece0;
-  color: var(--ink-soft);
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.pill-warn { background: var(--semolina-wash); color: #8a5b00; }
-.pill-late { background: var(--tomato-wash); color: var(--tomato-dark); }
-.pill-ok { background: var(--basil-wash); color: var(--basil); }
-.pill-allergy { background: #4a1d18; color: #ffd9d4; }
 
 /* ------------------------------------------------------------------ app chrome */
 

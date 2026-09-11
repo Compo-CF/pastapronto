@@ -580,7 +580,7 @@ document.getElementById('printBtn').addEventListener('click', () => window.print
 // ---------------------------------------------------------------------- boot
 
 async function boot() {
-  document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), 'Close-out');
+  document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Close-out');
 
   if (!db.isConfigured) {

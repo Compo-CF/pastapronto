@@ -327,7 +327,7 @@ const CATALOG = menu.catalog();
   // ---------------------------------------------------------------------- boot
 
   async function boot() {
-    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), 'Manager');
+    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Manager');
 
     if (!(await requireStaff())) {

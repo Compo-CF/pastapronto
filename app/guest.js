@@ -1160,7 +1160,7 @@ import {
   // ------------------------------------------------------------------------ boot
 
   async function boot() {
-    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'), '');
+    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('');
 
     // On a static host there is no server to route /t/<tag>, so the QR codes
