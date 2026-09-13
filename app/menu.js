@@ -17,74 +17,74 @@
  */
 
 const ALLERGENS = [
-  { id: 'gluten', name: 'Gluten / Wheat', code: 'WH' },
-  { id: 'dairy', name: 'Dairy', code: 'DA' },
-  { id: 'egg', name: 'Egg', code: 'EG' },
-  { id: 'tree_nuts', name: 'Tree Nuts', code: 'NU' },
-  { id: 'shellfish', name: 'Shellfish', code: 'SH' },
-  { id: 'pork', name: 'Pork', code: 'PK' },
-  { id: 'soy', name: 'Soy', code: 'SY' },
+  { id: 'gluten', name: 'Gluten / Wheat', es: 'Gluten / Trigo', code: 'WH' },
+  { id: 'dairy', name: 'Dairy', es: 'Lácteos', code: 'DA' },
+  { id: 'egg', name: 'Egg', es: 'Huevo', code: 'EG' },
+  { id: 'tree_nuts', name: 'Tree Nuts', es: 'Frutos Secos', code: 'NU' },
+  { id: 'shellfish', name: 'Shellfish', es: 'Mariscos', code: 'SH' },
+  { id: 'pork', name: 'Pork', es: 'Cerdo', code: 'PK' },
+  { id: 'soy', name: 'Soy', es: 'Soya', code: 'SY' },
 ];
 
 const PASTAS = [
-  { id: 'spaghetti',  name: 'Spaghetti',           shape: 'strands', boilSec: 240, allergens: ['gluten'], kid: true },
-  { id: 'penne',      name: 'Penne',               shape: 'tube',    boilSec: 300, allergens: ['gluten'], kid: true },
-  { id: 'rigatoni',   name: 'Rigatoni',            shape: 'ridged',  boilSec: 330, allergens: ['gluten'], kid: false },
-  { id: 'fettuccine', name: 'Fettuccine',          shape: 'ribbon',  boilSec: 210, allergens: ['gluten', 'egg'], kid: false },
-  { id: 'farfalle',   name: 'Bow Ties',            shape: 'bowtie',  boilSec: 270, allergens: ['gluten'], kid: true },
-  { id: 'shells',     name: 'Shells',              shape: 'shell',   boilSec: 300, allergens: ['gluten'], kid: true },
-  { id: 'tortellini', name: 'Cheese Tortellini',   shape: 'ring',    boilSec: 120, allergens: ['gluten', 'dairy', 'egg'], kid: true },
-  { id: 'fusilli_gf', name: 'Gluten-Free Fusilli', shape: 'spiral',  boilSec: 270, allergens: [], glutenFree: true, kid: false },
+  { id: 'spaghetti',  name: 'Spaghetti', es: 'Espagueti',           shape: 'strands', boilSec: 240, allergens: ['gluten'], kid: true },
+  { id: 'penne',      name: 'Penne', es: 'Penne',               shape: 'tube',    boilSec: 300, allergens: ['gluten'], kid: true },
+  { id: 'rigatoni',   name: 'Rigatoni', es: 'Rigatoni',            shape: 'ridged',  boilSec: 330, allergens: ['gluten'], kid: false },
+  { id: 'fettuccine', name: 'Fettuccine', es: 'Fettuccine',          shape: 'ribbon',  boilSec: 210, allergens: ['gluten', 'egg'], kid: false },
+  { id: 'farfalle',   name: 'Bow Ties', es: 'Moñitos',            shape: 'bowtie',  boilSec: 270, allergens: ['gluten'], kid: true },
+  { id: 'shells',     name: 'Shells', es: 'Conchitas',              shape: 'shell',   boilSec: 300, allergens: ['gluten'], kid: true },
+  { id: 'tortellini', name: 'Cheese Tortellini', es: 'Tortellini de Queso',   shape: 'ring',    boilSec: 120, allergens: ['gluten', 'dairy', 'egg'], kid: true },
+  { id: 'fusilli_gf', name: 'Gluten-Free Fusilli', es: 'Fusilli Sin Gluten', shape: 'spiral',  boilSec: 270, allergens: [], glutenFree: true, kid: false },
 ];
 
 const SAUCES = [
-  { id: 'marinara',    name: 'Marinara',      icon: 'tomato', finishSec: 60,  allergens: [], kid: true },
-  { id: 'butter',      name: 'Just Butter',   icon: 'butter', finishSec: 30,  allergens: ['dairy'], kid: true },
-  { id: 'alfredo',     name: 'Alfredo',       icon: 'cream',  finishSec: 120, allergens: ['dairy'], kid: true },
-  { id: 'butter_parm', name: 'Butter & Parm', icon: 'cheese', finishSec: 45,  allergens: ['dairy'], kid: true },
-  { id: 'pesto',       name: 'Basil Pesto',   icon: 'herb',   finishSec: 45,  allergens: ['dairy', 'tree_nuts'], kid: false },
-  { id: 'bolognese',   name: 'Bolognese',     icon: 'meat',   finishSec: 90,  allergens: ['dairy'], kid: false },
-  { id: 'arrabbiata',  name: 'Arrabbiata',    icon: 'chili',  finishSec: 75,  allergens: [], spicy: true, kid: false },
-  { id: 'aglio_olio',  name: 'Garlic & Oil',  icon: 'garlic', finishSec: 45,  allergens: [], kid: false },
+  { id: 'marinara',    name: 'Marinara', es: 'Marinara',      icon: 'tomato', finishSec: 60,  allergens: [], kid: true },
+  { id: 'butter',      name: 'Just Butter', es: 'Solo Mantequilla',   icon: 'butter', finishSec: 30,  allergens: ['dairy'], kid: true },
+  { id: 'alfredo',     name: 'Alfredo', es: 'Alfredo',       icon: 'cream',  finishSec: 120, allergens: ['dairy'], kid: true },
+  { id: 'butter_parm', name: 'Butter & Parm', es: 'Mantequilla y Parmesano', icon: 'cheese', finishSec: 45,  allergens: ['dairy'], kid: true },
+  { id: 'pesto',       name: 'Basil Pesto', es: 'Pesto de Albahaca',   icon: 'herb',   finishSec: 45,  allergens: ['dairy', 'tree_nuts'], kid: false },
+  { id: 'bolognese',   name: 'Bolognese', es: 'Boloñesa',     icon: 'meat',   finishSec: 90,  allergens: ['dairy'], kid: false },
+  { id: 'arrabbiata',  name: 'Arrabbiata', es: 'Arrabbiata',    icon: 'chili',  finishSec: 75,  allergens: [], spicy: true, kid: false },
+  { id: 'aglio_olio',  name: 'Garlic & Oil', es: 'Ajo y Aceite',  icon: 'garlic', finishSec: 45,  allergens: [], kid: false },
 ];
 
 const PROTEINS = [
-  { id: 'chicken',   name: 'Grilled Chicken', icon: 'chicken',  addSec: 60, allergens: [], kid: true },
-  { id: 'meatballs', name: 'Meatballs',       icon: 'meatball', addSec: 90, allergens: ['gluten', 'egg'], kid: true },
-  { id: 'sausage',   name: 'Italian Sausage', icon: 'sausage',  addSec: 90, allergens: ['pork'], kid: false },
-  { id: 'shrimp',    name: 'Shrimp',          icon: 'shrimp',   addSec: 150, allergens: ['shellfish'], kid: false },
-  { id: 'beans',     name: 'White Beans',     icon: 'beans',    addSec: 45, allergens: [], kid: false },
+  { id: 'chicken',   name: 'Grilled Chicken', es: 'Pollo a la Parrilla', icon: 'chicken',  addSec: 60, allergens: [], kid: true },
+  { id: 'meatballs', name: 'Meatballs', es: 'Albóndigas',       icon: 'meatball', addSec: 90, allergens: ['gluten', 'egg'], kid: true },
+  { id: 'sausage',   name: 'Italian Sausage', es: 'Salchicha Italiana', icon: 'sausage',  addSec: 90, allergens: ['pork'], kid: false },
+  { id: 'shrimp',    name: 'Shrimp', es: 'Camarones',          icon: 'shrimp',   addSec: 150, allergens: ['shellfish'], kid: false },
+  { id: 'beans',     name: 'White Beans', es: 'Frijoles Blancos',     icon: 'beans',    addSec: 45, allergens: [], kid: false },
 ];
 
 const TOPPINGS = [
-  { id: 'parmesan',   name: 'Parmesan',        icon: 'cheese',   addSec: 0,   allergens: ['dairy'], kid: true },
-  { id: 'mozzarella', name: 'Mozzarella',      icon: 'mozz',     addSec: 20, allergens: ['dairy'], kid: true },
-  { id: 'broccoli',   name: 'Broccoli',        icon: 'broccoli', addSec: 45, allergens: [], kid: true },
-  { id: 'mushrooms',  name: 'Mushrooms',       icon: 'mushroom', addSec: 45, allergens: [], kid: false },
-  { id: 'peppers',    name: 'Sweet Peppers',   icon: 'pepper',   addSec: 45, allergens: [], kid: false },
-  { id: 'spinach',    name: 'Spinach',         icon: 'spinach',  addSec: 20, allergens: [], kid: false },
-  { id: 'tomatoes',   name: 'Cherry Tomatoes', icon: 'tomato',   addSec: 15, allergens: [], kid: true },
-  { id: 'olives',     name: 'Olives',          icon: 'olive',    addSec: 0, allergens: [], kid: false },
-  { id: 'basil',      name: 'Fresh Basil',     icon: 'herb',     addSec: 0,   allergens: [], kid: false },
-  { id: 'chili',      name: 'Chili Flakes',    icon: 'flakes',    addSec: 0,   allergens: [], spicy: true, kid: false },
+  { id: 'parmesan',   name: 'Parmesan', es: 'Parmesano',        icon: 'cheese',   addSec: 0,   allergens: ['dairy'], kid: true },
+  { id: 'mozzarella', name: 'Mozzarella', es: 'Mozzarella',      icon: 'mozz',     addSec: 20, allergens: ['dairy'], kid: true },
+  { id: 'broccoli',   name: 'Broccoli', es: 'Brócoli',        icon: 'broccoli', addSec: 45, allergens: [], kid: true },
+  { id: 'mushrooms',  name: 'Mushrooms', es: 'Champiñones',       icon: 'mushroom', addSec: 45, allergens: [], kid: false },
+  { id: 'peppers',    name: 'Sweet Peppers', es: 'Pimientos Dulces',   icon: 'pepper',   addSec: 45, allergens: [], kid: false },
+  { id: 'spinach',    name: 'Spinach', es: 'Espinacas',         icon: 'spinach',  addSec: 20, allergens: [], kid: false },
+  { id: 'tomatoes',   name: 'Cherry Tomatoes', es: 'Tomates Cherry', icon: 'tomato',   addSec: 15, allergens: [], kid: true },
+  { id: 'olives',     name: 'Olives', es: 'Aceitunas',          icon: 'olive',    addSec: 0, allergens: [], kid: false },
+  { id: 'basil',      name: 'Fresh Basil', es: 'Albahaca Fresca',     icon: 'herb',     addSec: 0,   allergens: [], kid: false },
+  { id: 'chili',      name: 'Chili Flakes', es: 'Hojuelas de Chile',    icon: 'flakes',    addSec: 0,   allergens: [], spicy: true, kid: false },
 ];
 
 const SIDES = [
-  { id: 'garlic_bread', name: 'Garlic Bread', icon: 'bread',  cookSec: 90, allergens: ['gluten', 'dairy'], kid: true },
-  { id: 'side_salad',   name: 'Side Salad',   icon: 'salad',  cookSec: 0, allergens: [], kid: true },
-  { id: 'breadsticks',  name: 'Breadsticks',  icon: 'sticks', cookSec: 75, allergens: ['gluten'], kid: true },
+  { id: 'garlic_bread', name: 'Garlic Bread', es: 'Pan de Ajo', icon: 'bread',  cookSec: 90, allergens: ['gluten', 'dairy'], kid: true },
+  { id: 'side_salad',   name: 'Side Salad', es: 'Ensalada',   icon: 'salad',  cookSec: 0, allergens: [], kid: true },
+  { id: 'breadsticks',  name: 'Breadsticks', es: 'Palitos de Pan',  icon: 'sticks', cookSec: 75, allergens: ['gluten'], kid: true },
 ];
 
 const PORTIONS = [
-  { id: 'kid',     name: 'Kid Size', factor: 0.6, extraSec: 0,  kid: true },
-  { id: 'regular', name: 'Regular',  factor: 1.0, extraSec: 0, kid: true },
-  { id: 'large',   name: 'Large',    factor: 1.4, extraSec: 45, kid: false },
+  { id: 'kid',     name: 'Kid Size', es: 'Porción Niño', factor: 0.6, extraSec: 0,  kid: true },
+  { id: 'regular', name: 'Regular', es: 'Regular',  factor: 1.0, extraSec: 0, kid: true },
+  { id: 'large',   name: 'Large', es: 'Grande',    factor: 1.4, extraSec: 45, kid: false },
 ];
 
 const SPICE_LEVELS = [
-  { id: 'mild',   name: 'Mild',   heat: 0 },
-  { id: 'medium', name: 'Medium', heat: 1 },
-  { id: 'hot',    name: 'Hot',    heat: 2 },
+  { id: 'mild',   name: 'Mild', es: 'Suave',   heat: 0 },
+  { id: 'medium', name: 'Medium', es: 'Medio', heat: 1 },
+  { id: 'hot',    name: 'Hot', es: 'Picante',    heat: 2 },
 ];
 
 
@@ -125,55 +125,55 @@ export const PIZZA_BASE = {
  */
 
 const PIZZA_SAUCES = [
-  { id: 'pz_marinara',    name: 'House Made Marinara', icon: 'tomato', allergens: [], kid: true },
-  { id: 'pz_alfredo',     name: 'Alfredo Sauce',       icon: 'cream',  allergens: ['dairy'], kid: true },
-  { id: 'pz_pesto',       name: 'Basil Pesto',         icon: 'herb',   allergens: ['dairy', 'tree_nuts'], kid: false },
-  { id: 'pz_bbq',         name: 'BBQ Sauce',           icon: 'bbq',    allergens: [], kid: true },
-  { id: 'pz_no_sauce',    name: 'No Sauce',            icon: 'sauce_none',   allergens: [], kid: true, exclusive: true },
-  { id: 'pz_sauce_light', name: 'Light Sauce',         icon: 'sauce_light',   allergens: [], kid: true, amount: 'light' },
-  { id: 'pz_sauce_heavy', name: 'Heavy Sauce',         icon: 'sauce_heavy',   allergens: [], kid: true, amount: 'heavy' },
+  { id: 'pz_marinara',    name: 'House Made Marinara', es: 'Marinara de la Casa', icon: 'tomato', allergens: [], kid: true },
+  { id: 'pz_alfredo',     name: 'Alfredo Sauce', es: 'Salsa Alfredo',       icon: 'cream',  allergens: ['dairy'], kid: true },
+  { id: 'pz_pesto',       name: 'Basil Pesto', es: 'Pesto de Albahaca',         icon: 'herb',   allergens: ['dairy', 'tree_nuts'], kid: false },
+  { id: 'pz_bbq',         name: 'BBQ Sauce', es: 'Salsa BBQ',           icon: 'bbq',    allergens: [], kid: true },
+  { id: 'pz_no_sauce',    name: 'No Sauce', es: 'Sin Salsa',            icon: 'sauce_none',   allergens: [], kid: true, exclusive: true },
+  { id: 'pz_sauce_light', name: 'Light Sauce', es: 'Poca Salsa',         icon: 'sauce_light',   allergens: [], kid: true, amount: 'light' },
+  { id: 'pz_sauce_heavy', name: 'Heavy Sauce', es: 'Extra Salsa',         icon: 'sauce_heavy',   allergens: [], kid: true, amount: 'heavy' },
 ];
 
 const PIZZA_CHEESES = [
-  { id: 'pz_shred_mozz',   name: 'Shredded Mozzarella', icon: 'mozz_shred',   addSec: 0,  allergens: ['dairy'], kid: true },
-  { id: 'pz_fresh_mozz',   name: 'Fresh Mozzarella',    icon: 'mozz',   addSec: 20, allergens: ['dairy'], kid: true },
-  { id: 'pz_grated_parm',  name: 'Grated Parmesan',     icon: 'cheese', addSec: 0,  allergens: ['dairy'], kid: true },
-  { id: 'pz_no_cheese',    name: 'No Cheese',           icon: 'cheese_none',   addSec: 0,  allergens: [], kid: true, exclusive: true },
-  { id: 'pz_cheese_light', name: 'Light Cheese',        icon: 'cheese_light',   addSec: 0,  allergens: [], kid: true, amount: 'light' },
+  { id: 'pz_shred_mozz',   name: 'Shredded Mozzarella', es: 'Mozzarella Rallada', icon: 'mozz_shred',   addSec: 0,  allergens: ['dairy'], kid: true },
+  { id: 'pz_fresh_mozz',   name: 'Fresh Mozzarella', es: 'Mozzarella Fresca',    icon: 'mozz',   addSec: 20, allergens: ['dairy'], kid: true },
+  { id: 'pz_grated_parm',  name: 'Grated Parmesan', es: 'Parmesano Rallado',     icon: 'cheese', addSec: 0,  allergens: ['dairy'], kid: true },
+  { id: 'pz_no_cheese',    name: 'No Cheese', es: 'Sin Queso',           icon: 'cheese_none',   addSec: 0,  allergens: [], kid: true, exclusive: true },
+  { id: 'pz_cheese_light', name: 'Light Cheese', es: 'Poco Queso',        icon: 'cheese_light',   addSec: 0,  allergens: [], kid: true, amount: 'light' },
   // More cheese is more moisture, which is the one amount that genuinely
   // changes how long the pie needs in the oven.
-  { id: 'pz_cheese_heavy', name: 'Heavy Cheese',        icon: 'cheese_heavy',   addSec: 30, allergens: [], kid: true, amount: 'heavy' },
+  { id: 'pz_cheese_heavy', name: 'Heavy Cheese', es: 'Extra Queso',        icon: 'cheese_heavy',   addSec: 30, allergens: [], kid: true, amount: 'heavy' },
 ];
 
 // Meats get their own step rather than competing with the vegetables for
 // topping slots - two meats on a pizza is ordinary, and it should not cost
 // half the topping allowance.
 const PIZZA_PROTEINS = [
-  { id: 'pepperoni',  name: 'Pepperoni',   icon: 'pepperoni', addSec: 15, allergens: ['pork'], kid: true },
-  { id: 'pz_sausage', name: 'Sausage',     icon: 'sausage',   addSec: 20, allergens: ['pork'], kid: true },
-  { id: 'pz_chicken', name: 'Chicken',     icon: 'chicken',   addSec: 15, allergens: [], kid: true },
-  { id: 'pz_beef',    name: 'Ground Beef', icon: 'meatball',  addSec: 20, allergens: [], kid: true },
-  { id: 'bacon',      name: 'Bacon',       icon: 'bacon',     addSec: 15, allergens: ['pork'], kid: true },
-  { id: 'ham',        name: 'Ham',         icon: 'ham',       addSec: 10, allergens: ['pork'], kid: true },
+  { id: 'pepperoni',  name: 'Pepperoni', es: 'Pepperoni',   icon: 'pepperoni', addSec: 15, allergens: ['pork'], kid: true },
+  { id: 'pz_sausage', name: 'Sausage', es: 'Salchicha',     icon: 'sausage',   addSec: 20, allergens: ['pork'], kid: true },
+  { id: 'pz_chicken', name: 'Chicken', es: 'Pollo',     icon: 'chicken',   addSec: 15, allergens: [], kid: true },
+  { id: 'pz_beef',    name: 'Ground Beef', es: 'Carne Molida', icon: 'meatball',  addSec: 20, allergens: [], kid: true },
+  { id: 'bacon',      name: 'Bacon', es: 'Tocino',       icon: 'bacon',     addSec: 15, allergens: ['pork'], kid: true },
+  { id: 'ham',        name: 'Ham', es: 'Jamón',         icon: 'ham',       addSec: 10, allergens: ['pork'], kid: true },
 ];
 
 // Vegetables. The three marked postBake go on after the pie leaves the oven -
 // basil and arugula would wilt to nothing and the flakes would scorch - so
 // they cost no oven time, exactly the way a finisher does.
 const PIZZA_TOPPINGS = [
-  { id: 'pineapple',    name: 'Pineapple',                icon: 'pineapple', addSec: 10, allergens: [], kid: true },
-  { id: 'pz_olives',    name: 'Olives',                   icon: 'olive',     addSec: 5,  allergens: [], kid: false },
-  { id: 'pz_mushroom',  name: 'Mushrooms',                icon: 'mushroom',  addSec: 15, allergens: [], kid: false },
-  { id: 'pz_pepper',    name: 'Bell Peppers',             icon: 'pepper',    addSec: 10, allergens: [], kid: false },
-  { id: 'pz_artichoke', name: 'Grilled Artichokes',       icon: 'artichoke', addSec: 15, allergens: [], kid: false },
-  { id: 'red_onion',    name: 'Onions',                   icon: 'onion',     addSec: 10, allergens: [], kid: false },
-  { id: 'pz_tomatoes',  name: 'Sliced Heirloom Tomatoes', icon: 'tomato',    addSec: 10, allergens: [], kid: true },
-  { id: 'jalapeno',     name: 'Fresh Jalapenos',          icon: 'jalapeno',     addSec: 5,  allergens: [], spicy: true, kid: false },
-  { id: 'pz_basil',     name: 'Basil',                    icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
-  { id: 'pz_arugula',   name: 'Arugula',                  icon: 'spinach',   addSec: 0,  allergens: [], kid: false, postBake: true },
-  { id: 'pz_chili',     name: 'Red Pepper Flakes',        icon: 'flakes',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
-  { id: 'fin_salt',     name: 'Flake Salt',               icon: 'salt',      addSec: 0,  allergens: [], kid: true, postBake: true },
-  { id: 'fin_oregano',  name: 'Oregano',                  icon: 'oregano',      addSec: 0,  allergens: [], kid: true, postBake: true },
+  { id: 'pineapple',    name: 'Pineapple', es: 'Piña',                icon: 'pineapple', addSec: 10, allergens: [], kid: true },
+  { id: 'pz_olives',    name: 'Olives', es: 'Aceitunas',                   icon: 'olive',     addSec: 5,  allergens: [], kid: false },
+  { id: 'pz_mushroom',  name: 'Mushrooms', es: 'Champiñones',                icon: 'mushroom',  addSec: 15, allergens: [], kid: false },
+  { id: 'pz_pepper',    name: 'Bell Peppers', es: 'Pimientos',             icon: 'pepper',    addSec: 10, allergens: [], kid: false },
+  { id: 'pz_artichoke', name: 'Grilled Artichokes', es: 'Alcachofas Asadas',       icon: 'artichoke', addSec: 15, allergens: [], kid: false },
+  { id: 'red_onion',    name: 'Onions', es: 'Cebolla',                   icon: 'onion',     addSec: 10, allergens: [], kid: false },
+  { id: 'pz_tomatoes',  name: 'Sliced Heirloom Tomatoes', es: 'Tomates Heirloom en Rodajas', icon: 'tomato',    addSec: 10, allergens: [], kid: true },
+  { id: 'jalapeno',     name: 'Fresh Jalapenos', es: 'Jalapeños Frescos',          icon: 'jalapeno',     addSec: 5,  allergens: [], spicy: true, kid: false },
+  { id: 'pz_basil',     name: 'Basil', es: 'Albahaca',                    icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
+  { id: 'pz_arugula',   name: 'Arugula', es: 'Arúgula',                  icon: 'spinach',   addSec: 0,  allergens: [], kid: false, postBake: true },
+  { id: 'pz_chili',     name: 'Red Pepper Flakes', es: 'Hojuelas de Chile',        icon: 'flakes',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
+  { id: 'fin_salt',     name: 'Flake Salt', es: 'Sal en Escamas',               icon: 'salt',      addSec: 0,  allergens: [], kid: true, postBake: true },
+  { id: 'fin_oregano',  name: 'Oregano', es: 'Orégano',                  icon: 'oregano',      addSec: 0,  allergens: [], kid: true, postBake: true },
 ];
 
 const GROUPS = {
@@ -318,10 +318,31 @@ export function allergensFor(line) {
   return [...out];
 }
 
-/** Human one-liner used on chits and review screens. */
-export function describe(line) {
+/**
+ * The display name of one item, in one language.
+ *
+ * Falls back to English when a translation is missing, so a newly added
+ * ingredient shows its English name rather than nothing at all.
+ */
+export function nameOf(group, id, lang) {
+  const item = find(group, id);
+  if (!item) return null;
+  return (lang === 'es' && item.es) ? item.es : item.name;
+}
+
+/**
+ * Human one-liner used on chits and review screens.
+ *
+ * Takes a language, and defaults to English on purpose: order.buildOrder()
+ * calls this to store `dish` on the document, and that stored string is the
+ * canonical English record the CSV, the PDF and any later audit read. A screen
+ * wanting another language recomputes from the ids it already has - which is
+ * what lets a Spanish guest's order arrive on an English kitchen rail, and
+ * the reverse.
+ */
+export function describe(line, lang) {
   const g = GROUPS_FOR[kindOf(line)];
-  const name = (group) => (id) => (find(group, id) || {}).name;
+  const name = (group) => (id) => nameOf(group, id, lang);
   const sauces = saucesOf(line).map(name(g.sauces)).filter(Boolean);
   const proteins = proteinsOf(line).map(name(g.proteins)).filter(Boolean);
   const sauceText = sauces.join(' + ');
@@ -333,21 +354,38 @@ export function describe(line) {
     // Amounts are folded into the thing they modify rather than listed beside
     // it: "Marinara (heavy)" is one instruction, "Marinara, Heavy Sauce" reads
     // like two and invites a cook to wonder which.
+    const es = lang === 'es';
     const sauceRule = groupRules('pizzaSauces', saucesOf(line));
     const cheeseRule = groupRules('pizzaCheeses', cheesesOf(line));
-    const qualify = (text, rule) => (rule.amount ? text + ' (' + rule.amount.amount + ')' : text);
+    // The amount is a word, not a token: "(heavy)" has to become "(extra)".
+    const AMOUNT = es ? { light: 'poca', heavy: 'extra' } : { light: 'light', heavy: 'heavy' };
+    const qualify = (text, rule) => (rule.amount
+      ? text + ' (' + (AMOUNT[rule.amount.amount] || rule.amount.amount) + ')'
+      : text);
 
     const sauceLabel = sauceRule.exclusive
-      ? 'No-sauce'
+      ? nameOf('pizzaSauces', sauceRule.exclusive.id, lang)
       : qualify(sauceRule.bases.map(name('pizzaSauces')).filter(Boolean).join(' + '), sauceRule);
 
     const cheeseLabel = cheeseRule.exclusive
-      ? 'no cheese'
+      ? nameOf('pizzaCheeses', cheeseRule.exclusive.id, lang)
       : qualify(cheeseRule.bases.map(name('pizzaCheeses')).filter(Boolean).join(' + '), cheeseRule);
 
     const toppings = (line.toppings || []).map(name('pizzaToppings')).filter(Boolean);
     const on = proteins.concat(toppings);
 
+    // Word order, not word substitution. English puts the sauce in front of
+    // the noun ("BBQ Pizza"); Spanish puts it after ("Pizza con salsa BBQ"),
+    // and a "no sauce" pie reads as a comma clause rather than "con Sin Salsa".
+    if (es) {
+      const parts = ['Pizza'];
+      if (sauceRule.exclusive) parts.push(sauceLabel.toLowerCase());
+      else if (sauceLabel) parts.push('con ' + sauceLabel);
+      if (cheeseRule.exclusive) parts.push('- ' + cheeseLabel.toLowerCase());
+      else if (cheeseLabel) parts.push('+ ' + cheeseLabel);
+      if (on.length) parts.push('+ ' + on.join(', '));
+      return parts.join(' ');
+    }
     const parts = [sauceLabel ? sauceLabel + ' Pizza' : 'Pizza'];
     if (cheeseLabel) parts.push('w/ ' + cheeseLabel);
     if (on.length) parts.push((cheeseLabel ? '+ ' : 'w/ ') + on.join(', '));
@@ -355,9 +393,9 @@ export function describe(line) {
   }
 
   const parts = [];
-  const pasta = find('pastas', line.pasta);
-  if (pasta) parts.push(pasta.name);
-  if (sauceText) parts.push('w/ ' + sauceText);
+  const pasta = nameOf('pastas', line.pasta, lang);
+  if (pasta) parts.push(pasta);
+  if (sauceText) parts.push((lang === 'es' ? 'con ' : 'w/ ') + sauceText);
   if (proteins.length) parts.push('+ ' + proteins.join(', '));
   return parts.join(' ');
 }

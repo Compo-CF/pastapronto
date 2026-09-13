@@ -19,6 +19,7 @@ export const BRANDS = {
     venueName: 'PastaPresto!',
     orgName: '',
     tagline: 'Build your bowl. We cook it now.',
+    taglineEs: 'Arme su plato. Lo preparamos al momento.',
     // Rendered from the inline SVG glyph set rather than an image file.
     logo: null,
     wordmark: 'Pasta<em>Presto!</em>',
@@ -29,6 +30,7 @@ export const BRANDS = {
     venueName: 'Neapolitan Night',
     orgName: 'The Club at Carlton Woods',
     tagline: 'All you can eat pizza and pasta, every Thursday',
+    taglineEs: 'Pizza y pasta a discreción, todos los jueves',
     // Their own asset: white on transparent, so it needs the maroon chrome
     // the brand stylesheet applies.
     logo: 'brands/carltonwoods/logo.png',
@@ -57,6 +59,12 @@ export function activeBrand() {
 }
 
 export const isBranded = () => activeBrand().id !== 'default';
+
+/** The brand's tagline in one language, falling back to English. */
+export function taglineFor(lang) {
+  const b = activeBrand();
+  return (lang === 'es' && b.taglineEs) ? b.taglineEs : b.tagline;
+}
 
 /**
  * Switch the brand for this device and reload into it.

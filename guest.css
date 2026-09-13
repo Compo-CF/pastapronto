@@ -222,3 +222,18 @@
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+
+/* Language switch. Shows the language it would switch TO, not the one you are
+   reading - a guest who cannot read the current language needs to recognise
+   the way out, and "ES" is legible to someone who reads neither. */
+.langswitch {
+  min-width: 48px; min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink-soft);
+  font: inherit; font-size: 15px; font-weight: 800; letter-spacing: .06em;
+}
+.langswitch:hover { border-color: var(--tomato); color: var(--tomato-dark); }
+@media (max-width: 430px) { .langswitch { min-width: 44px; padding: 0 9px; } }

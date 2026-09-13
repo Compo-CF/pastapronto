@@ -11,6 +11,7 @@ import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
 import { mastheadHtml, pageTitle } from './brand.js';
+import * as i18n from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
   remember, recall, chime, unlockAudio, toast, requireStaff,
@@ -35,9 +36,22 @@ const CATALOG = menu.catalog();
     toast: document.getElementById('toast'),
   };
 
+  var t = i18n.translator('kitchen');
+
+  /** Language switch for this rail. Shows the language it switches to. */
+  function wireLang(scope) {
+    var other = i18n.LANGS.filter(function (l) { return l.id !== t.lang; })[0];
+    var btn = document.getElementById('langSwitch');
+    if (!btn) return;
+    btn.textContent = other.short;
+    btn.setAttribute('aria-label', other.name);
+    btn.addEventListener('click', function () { i18n.setLang(scope, other.id); });
+    document.documentElement.setAttribute('lang', t.lang);
+  }
+
   function menuName(group, id) {
     var hit = (CATALOG[group] || []).filter(function (x) { return x.id === id; })[0];
-    return hit ? hit.name : id;
+    return hit ? ((t.isEs && hit.es) ? hit.es : hit.name) : id;
   }
 
   function pastaShape(id) {
@@ -91,7 +105,7 @@ const CATALOG = menu.catalog();
         ${order.lines.map(function (line) {
           return html`<div class="rcard-item">
             ${raw(art(lineGlyph(line)))}
-            <span><b>${line.guestLabel}</b> ${line.dish}</span>
+            <span><b>${line.guestLabel}</b> ${menu.describe(line, t.lang)}</span>
           </div>`;
         })}
       </div>
@@ -189,6 +203,7 @@ const CATALOG = menu.catalog();
 
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
+    wireLang('kitchen');
     document.title = pageTitle('Expo & Runners');
 
     if (!db.isConfigured) {

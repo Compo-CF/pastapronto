@@ -10,12 +10,13 @@
  *            a compact review, for adults and staff taking an order
  */
 import { config, tagById, isOpen } from './config.js';
-import { catalog as menuCatalog, saucesOf, groupRules } from './menu.js';
+import { catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine } from './menu.js';
+import * as i18n from './i18n.js';
 import * as cooktime from './cooktime.js';
 import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
-import { mastheadHtml, pageTitle, activeBrand } from './brand.js';
+import { mastheadHtml, pageTitle, activeBrand, taglineFor } from './brand.js';
 import {
   html, raw, humanMins, escapeHtml,
   remember, recall, chime, unlockAudio, toast, now,
@@ -30,32 +31,48 @@ import {
    */
   var STEPS = {
     pasta: [
-      { id: 'pasta', label: 'Pasta', group: 'pastas', title: 'Pick your pasta', sub: 'Tap the shape you want.' },
-      { id: 'sauces', label: 'Sauce', group: 'sauces', title: 'Now the sauce', sub: '', multi: true },
-      { id: 'proteins', label: 'Protein', group: 'proteins', title: 'Add a protein?', sub: '', multi: true },
-      { id: 'toppings', label: 'Toppings', group: 'toppings', title: 'Toppings!', sub: '' },
-      { id: 'finish', label: 'Size', group: 'portions', title: 'How big?', sub: '' },
+      { id: 'pasta', labelKey: 'guest.tab.pasta', group: 'pastas', titleKey: 'guest.step.pasta', subKey: 'guest.step.pasta.sub' },
+      { id: 'sauces', labelKey: 'guest.tab.sauce', group: 'sauces', titleKey: 'guest.step.sauce', subKey: '', multi: true },
+      { id: 'proteins', labelKey: 'guest.tab.protein', group: 'proteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
+      { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'toppings', titleKey: 'guest.step.toppings', subKey: '' },
+      { id: 'finish', labelKey: 'guest.tab.size', group: 'portions', titleKey: 'guest.step.size', subKey: '' },
     ],
     pizza: [
-      { id: 'sauces', label: 'Sauce', group: 'pizzaSauces', title: 'Pick your sauce', sub: 'Light or heavy goes on top of your pick.', multi: true },
-      { id: 'cheeses', label: 'Cheese', group: 'pizzaCheeses', title: 'And the cheese', sub: 'Light or heavy goes on top of your pick.', multi: true },
-      { id: 'proteins', label: 'Protein', group: 'pizzaProteins', title: 'Add a protein?', sub: '', multi: true },
-      { id: 'toppings', label: 'Toppings', group: 'pizzaToppings', title: 'Toppings!', sub: '' },
+      { id: 'sauces', labelKey: 'guest.tab.sauce', group: 'pizzaSauces', titleKey: 'guest.step.pizzasauce', subKey: 'guest.step.amountsub', multi: true },
+      { id: 'cheeses', labelKey: 'guest.tab.cheese', group: 'pizzaCheeses', titleKey: 'guest.step.cheese', subKey: 'guest.step.amountsub', multi: true },
+      { id: 'proteins', labelKey: 'guest.tab.protein', group: 'pizzaProteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
+      { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'pizzaToppings', titleKey: 'guest.step.toppings', subKey: '' },
     ],
   };
 
   /** Guest-facing words for each lane, so no screen has to branch on strings. */
+  var t = i18n.translator('guest');
+
+  /**
+   * What to call a member number on screen. English falls back to whatever the
+   * venue configured, so a club calling it something else keeps its wording.
+   */
+  function memberLabel() {
+    return t.isEs ? t('guest.memberLabel')
+      : (state.boot.venue.memberLabel || t('guest.memberLabel')).toLowerCase();
+  }
+
+  /** Menu item name in the guest's language. */
+  function itemName(group, id) {
+    return nameOf(group, id, t.lang) || id;
+  }
+
   var LANES = {
     pasta: {
       one: 'bowl', many: 'bowls',
-      title: 'Build your <em>Pasta</em>',
-      blurb: 'Pick a pasta, pick a sauce, pile on toppings. We cook it fresh and bring it over.',
+      titleKey: 'guest.lane.pasta.title',
+      blurbKey: 'guest.lane.pasta.blurb',
       art: 'bowl',
     },
     pizza: {
       one: 'pizza', many: 'pizzas',
-      title: 'Build your <em>Pizza</em>',
-      blurb: 'One size, three sauces, all the toppings. Straight into the oven.',
+      titleKey: 'guest.lane.pizza.title',
+      blurbKey: 'guest.lane.pizza.blurb',
       art: 'pie',
     },
   };
@@ -69,10 +86,10 @@ import {
   }
 
   var TRACK = [
-    { status: 'queued', label: 'Sent' },
-    { status: 'cooking', label: 'Cooking' },
-    { status: 'ready', label: 'Ready' },
-    { status: 'delivered', label: 'Enjoy' },
+    { status: 'queued', key: 'guest.track.sent' },
+    { status: 'cooking', key: 'guest.track.cooking' },
+    { status: 'ready', key: 'guest.track.ready' },
+    { status: 'delivered', key: 'guest.track.enjoy' },
   ];
 
   var state = {
@@ -150,14 +167,14 @@ import {
    */
   function amountSub(groupKey, chosen, one, many, empty) {
     var rule = groupRules(groupKey, chosen);
-    if (rule.exclusive) return rule.exclusive.name + ' it is.';
+    if (rule.exclusive) return t('guest.exclusive', { name: itemName(groupKey, rule.exclusive.id) });
     if (!rule.bases.length) return empty;
-    var names = rule.bases.map(function (id) { return (item(groupKey, id) || {}).name || id; });
+    var names = rule.bases.map(function (id) { return itemName(groupKey, id); });
     var text = names.length > 1
-      ? 'Mixing ' + names.length + ' ' + many
+      ? t('guest.sauce.mixing', { n: names.length, what: many })
       : names[0];
-    if (rule.amount) text += ', ' + rule.amount.amount;
-    return text + ' - tap Next when you are happy.';
+    if (rule.amount) text += ', ' + itemName(groupKey, rule.amount.id);
+    return t('guest.sauce.chosen', { names: text });
   }
 
   /**
@@ -242,7 +259,7 @@ import {
     // Never silently hide a choice. A child who wants shrimp should see that
     // shrimp exists and is sold out, not wonder where it went.
     var reason = soldOut
-      ? 'sold out'
+      ? t('guest.label.soldout')
       : (clash.length ? 'has ' + clash.map(allergenName).join(', ') : ruledOut);
     var meta = [];
     if (state.mode === 'pro') {
@@ -256,7 +273,7 @@ import {
       aria-pressed="${opts.selected ? 'true' : 'false'}"
       ${raw(blocked ? 'disabled aria-describedby="clash-' + entry.id + '"' : '')}>
       <span class="tile-art">${raw(art(entry.shape || entry.icon || 'none'))}</span>
-      <span class="tile-label">${entry.name}</span>
+      <span class="tile-label">${entry.es && t.isEs ? entry.es : entry.name}</span>
       ${raw(meta.length && !blocked ? '<span class="tile-meta">' + escapeHtml(meta.join(' \u00b7 ')) + '</span>' : '')}
       ${raw(reason ? '<span class="tile-warn" id="clash-' + entry.id + '">' + escapeHtml(reason) + '</span>' : '')}
     </button>`;
@@ -275,7 +292,7 @@ import {
     });
     var more = hasHiddenChoices(group)
       ? html`<div class="moretoggle"><button class="btn btn-ghost" type="button" data-act="showAll">
-          Show all ${menu(group).length} choices</button></div>`
+          ${t('guest.label.showall', { n: menu(group).length })}</button></div>`
       : '';
     return html`<div class="tiles ${opts.small ? 'tiles-sm' : ''}">${markup}</div>${raw(more)}`;
   }
@@ -291,8 +308,8 @@ import {
   function screenWelcome() {
     var tag = state.boot.tag;
     return tag
-      ? html`<div class="wherecard">${raw(art('runner', { size: 26 }))} You are at <strong>&nbsp;${tag.label}</strong></div>`
-      : html`<div class="wherecard is-unknown">Scan the QR code at your table to start</div>`;
+      ? html`<div class="wherecard">${raw(art('runner', { size: 26 }))} ${t('guest.where.at')} <strong>&nbsp;${tag.label}</strong></div>`
+      : html`<div class="wherecard is-unknown">${t('guest.where.unknown')}</div>`;
   }
 
   /**
@@ -312,8 +329,8 @@ import {
           : (state.boot.venue.orgName
             ? '<p class="hero-org">' + escapeHtml(state.boot.venue.orgName) + '</p>'
             : ''))}
-        <h1>What are we making?</h1>
-        <p>${state.boot.venue.tagline}</p>
+        <h1>${t('guest.lane.title')}</h1>
+        <p>${taglineFor(t.lang)}</p>
       </div>
 
       <div class="lanepick">
@@ -321,8 +338,8 @@ import {
           var l = LANES[k];
           return html`<button class="lanetile" type="button" data-act="pickKind" data-id="${k}">
             <span class="lanetile-art">${raw(art(l.art))}</span>
-            <span class="lanetile-title">${raw(l.title)}</span>
-            <span class="lanetile-blurb">${l.blurb}</span>
+            <span class="lanetile-title">${raw(t(l.titleKey))}</span>
+            <span class="lanetile-blurb">${t(l.blurbKey)}</span>
           </button>`;
         })}
       </div>`;
@@ -339,9 +356,9 @@ import {
     return html`
       ${raw(screenWelcome())}
       <div class="step-head">
-        <p class="step-kicker">Step 1 of 4</p>
-        <h1 class="step-title">What is your ${state.boot.venue.memberLabel.toLowerCase()}?</h1>
-        <p class="step-sub">However it reads on your card - up to four digits. A grown-up can help.</p>
+        <p class="step-kicker">${t('guest.step', { n: 1 })}</p>
+        <h1 class="step-title">${t('guest.member.title', { label: memberLabel() })}</h1>
+        <p class="step-sub">${t('guest.member.sub')}</p>
       </div>
       <div class="stack">
         <div class="memberview" aria-label="Member number entry">${boxes}</div>
@@ -355,10 +372,10 @@ import {
       </div>
 
       <ul class="howto">
-        <li><span class="n">1</span> Enter your ${state.boot.venue.memberLabel.toLowerCase()}</li>
-        <li><span class="n">2</span> Pasta or pizza?</li>
-        <li><span class="n">3</span> Tell us how many are eating</li>
-        <li><span class="n">4</span> Build one for each person and send it</li>
+        <li><span class="n">1</span> ${t('guest.howto.1', { label: memberLabel() })}</li>
+        <li><span class="n">2</span> ${t('guest.howto.2')}</li>
+        <li><span class="n">3</span> ${t('guest.howto.3')}</li>
+        <li><span class="n">4</span> ${t('guest.howto.4')}</li>
       </ul>`;
   }
 
@@ -380,15 +397,15 @@ import {
         aria-pressed="${state.guestCount === n ? 'true' : 'false'}">
         <span class="tile-art">${raw(peopleGlyph(n))}</span>
         <span class="tile-label">${n}</span>
-        <span class="tile-meta">${n === 1 ? 'just me' : 'people'}</span>
+        <span class="tile-meta">${n === 1 ? t('guest.guests.justme') : t('guest.guests.people')}</span>
       </button>`);
     }
 
     var allergenPanel = state.mode === 'pro' || state.avoid.length > 0
       ? html`<div class="card stack">
           <div>
-            <strong>Anything to avoid?</strong>
-            <p class="muted" style="margin:4px 0 0">We will grey out anything that contains it.</p>
+            <strong>${t('guest.guests.avoidTitle')}</strong>
+            <p class="muted" style="margin:4px 0 0">${t('guest.guests.avoidSub')}</p>
           </div>
           <div class="chips">
             ${state.boot.menu.allergens.map(function (a) {
@@ -398,13 +415,13 @@ import {
           </div>
         </div>`
       : html`<button class="btn btn-ghost" type="button" data-act="mode" data-id="pro">
-          Someone has a food allergy?</button>`;
+          ${t('guest.guests.allergy')}</button>`;
 
     return html`
       <div class="step-head">
-        <p class="step-kicker">Step 3 of 4</p>
-        <h1 class="step-title">How many are eating?</h1>
-        <p class="step-sub">We will build one ${lane().one} per person. You can change it later.</p>
+        <p class="step-kicker">${t('guest.step', { n: 3 })}</p>
+        <h1 class="step-title">${t('guest.guests.title')}</h1>
+        <p class="step-sub">${t('guest.guests.sub', { unit: lane().one })}</p>
       </div>
       <div class="stack">
         <div class="tiles tiles-sm">${counts}</div>
@@ -447,14 +464,14 @@ import {
       return html`<button class="bowltab ${bowlComplete(b) ? 'is-done' : ''}" type="button"
         data-act="gotoBowl" data-id="${i}" aria-current="${i === state.activeBowl ? 'true' : 'false'}">
         ${b.guestLabel}
-        <small>${bowlComplete(b) ? 'ready' : 'building'}</small>
+        <small>${bowlComplete(b) ? t('guest.tabs.ready') : t('guest.tabs.building')}</small>
       </button>`;
     });
 
     var stepTabs = steps().map(function (s, i) {
       var done = i < state.buildStep;
       return html`<button class="buildstep ${done ? 'is-done' : ''}" type="button"
-        data-act="gotoStep" data-id="${i}" aria-current="${i === state.buildStep ? 'true' : 'false'}">${s.label}</button>`;
+        data-act="gotoStep" data-id="${i}" aria-current="${i === state.buildStep ? 'true' : 'false'}">${t(s.labelKey)}</button>`;
     });
 
     var body;
@@ -478,31 +495,31 @@ import {
       });
     }
 
-    var sub = step.sub;
+    var sub = step.subKey ? t(step.subKey) : '';
     if (step.id === 'toppings') {
       sub = state.kind === 'pizza'
-        ? 'Pick up to ' + toppingCap() + '. Herbs and salt are free.'
-        : 'Pick up to ' + toppingCap() + '. Or none at all.';
+        ? t('guest.step.toppings.subPizza', { n: toppingCap() })
+        : t('guest.step.toppings.sub', { n: toppingCap() });
     }
     if (step.id === 'proteins') {
       sub = bowl.proteins.length
-        ? bowl.proteins.length + ' chosen - tap Next when you are happy.'
-        : 'Pick as many as you like, or skip it - totally fine.';
+        ? t('guest.protein.chosen', { n: bowl.proteins.length })
+        : t('guest.step.protein.sub');
     }
     if (step.id === 'sauces') {
       sub = amountSub(step.group, bowl.sauces, 'sauce', 'sauces',
-        'Pick one, or tap two to mix them.');
+        t('guest.sauce.one'));
     }
     if (step.id === 'cheeses') {
       sub = amountSub(step.group, bowl.cheeses, 'cheese', 'cheeses',
-        'Pick one, or mix them. No Cheese is fine too.');
+        t('guest.cheese.one'));
     }
 
     return html`
       <div class="bowltabs">${tabs}</div>
       <div class="step-head">
         <p class="step-kicker">${lane().one[0].toUpperCase() + lane().one.slice(1)} ${state.activeBowl + 1} of ${state.bowls.length} &middot; ${bowl.guestLabel}</p>
-        <h1 class="step-title">${step.title}</h1>
+        <h1 class="step-title">${t(step.titleKey)}</h1>
         <p class="step-sub">${sub}</p>
       </div>
       <div class="buildsteps">${stepTabs}</div>
@@ -578,7 +595,7 @@ import {
       <div class="field">
         <label for="bowlNotes">Notes for the kitchen</label>
         <textarea class="textarea" id="bowlNotes" maxlength="140" data-act="setNotes"
-          placeholder="${bowl.kind === 'pizza' ? 'Well done, light sauce, cut in squares...' : 'Sauce on the side, no onions, allergy details...'}">${bowl.notes}</textarea>
+          placeholder="${bowl.kind === 'pizza' ? t('guest.note.pizza') : t('guest.note.pasta')}">${bowl.notes}</textarea>
       </div>
     </div>`;
   }
@@ -675,9 +692,9 @@ import {
 
     return html`
       <div class="step-head">
-        <p class="step-kicker">Step 4 of 4</p>
-        <h1 class="step-title">Look good?</h1>
-        <p class="step-sub">Check it over, then send it to the cook.</p>
+        <p class="step-kicker">${t('guest.step', { n: 4 })}</p>
+        <h1 class="step-title">${t('guest.review.title')}</h1>
+        <p class="step-sub">${t('guest.review.sub')}</p>
       </div>
       <div class="stack">
         ${bowls}
@@ -687,7 +704,7 @@ import {
           <div class="summary-line"><span>Guests</span><span>${state.guestCount}</span></div>
           <div class="summary-line"><span>Where</span><span>${state.boot.tag ? state.boot.tag.label : 'Takeout'}</span></div>
           <div class="summary-total"><span>Cook time</span><span>${humanMins(estimate.cookEstimateSec)}</span></div>
-          <p class="muted" style="margin:0;font-size:14px">On ${state.boot.venue.memberLabel.toLowerCase()} ${state.memberDigits}</p>
+          <p class="muted" style="margin:0;font-size:14px">${memberLabel()} ${state.memberDigits}</p>
         </div>
         ${raw(notesField)}
       </div>`;
@@ -753,32 +770,33 @@ import {
 
   function screenSent() {
     var ticket = state.order;
-    var stepIndex = TRACK.findIndex(function (t) { return t.status === ticket.status; });
+    var tr = t;
+    var stepIndex = TRACK.findIndex(function (seg) { return seg.status === ticket.status; });
     if (stepIndex < 0) stepIndex = 0;
 
-    var segs = TRACK.map(function (t, i) {
+    var segs = TRACK.map(function (seg, i) {
       var cls = i < stepIndex ? 'is-done' : i === stepIndex ? 'is-now' : '';
       return html`<div class="track-seg ${cls}"></div>`;
     });
-    var labels = TRACK.map(function (t, i) {
-      return html`<span class="${i === stepIndex ? 'is-now' : ''}">${t.label}</span>`;
+    var labels = TRACK.map(function (seg, i) {
+      return html`<span class="${i === stepIndex ? 'is-now' : ''}">${tr(seg.key)}</span>`;
     });
 
     var headline, note;
     if (ticket.status === 'queued') {
-      headline = 'Sent to the kitchen!';
+      headline = t('guest.sent.queued');
       note = 'A cook will pick it up in a moment.';
     } else if (ticket.status === 'cooking') {
-      headline = 'Your pasta is cooking';
-      note = 'Water is boiling. Hang tight.';
+      headline = t('guest.sent.cookingSub');
+      note = t('guest.sent.queuedSub');
     } else if (ticket.status === 'ready') {
-      headline = 'Ready!';
+      headline = t('guest.sent.ready');
       note = 'A runner is bringing it to ' + ticket.tagLabel + '.';
     } else if (ticket.status === 'delivered') {
-      headline = 'Buon appetito!';
-      note = 'Enjoy. Tap below to order another round.';
+      headline = t('guest.sent.delivered');
+      note = t('guest.sent.deliveredSub');
     } else {
-      headline = 'We are on it';
+      headline = t('guest.sent.cooking');
       note = '';
     }
 
@@ -845,7 +863,7 @@ import {
       var ready = state.memberDigits.length >= 1;
       parts = html`
         <button class="btn btn-primary btn-lg btn-block" type="button" data-act="submitMember"
-          ${raw(ready && !state.busy ? '' : 'disabled')}>${state.busy ? 'Checking...' : 'Next'}</button>`;
+          ${raw(ready && !state.busy ? '' : 'disabled')}>${state.busy ? t('guest.member.checking') : 'Next'}</button>`;
     } else if (s === 'guests') {
       parts = html`
         <button class="btn btn-ghost" type="button" data-act="go" data-id="lane">Back</button>
@@ -861,7 +879,7 @@ import {
         : Boolean(bowl[step.id]);
       var lastStep = state.buildStep === steps().length - 1;
       var lastBowl = state.activeBowl === state.bowls.length - 1;
-      var label = !lastStep ? 'Next' : lastBowl ? 'Review order' : ('Next ' + lane().one);
+      var label = !lastStep ? 'Next' : lastBowl ? t('guest.review.reviewOrder') : ('Next ' + lane().one);
       parts = html`
         <button class="btn btn-ghost" type="button" data-act="buildBack">Back</button>
         <button class="btn btn-primary btn-lg grow" type="button" data-act="buildNext"
@@ -871,10 +889,10 @@ import {
         <button class="btn btn-ghost" type="button" data-act="editBowl" data-id="0">Change</button>
         <button class="btn btn-go btn-lg grow" type="button" data-act="send"
           ${raw(state.busy || !allBowlsComplete() ? 'disabled' : '')}>
-          ${state.busy ? 'Sending...' : 'Send to the kitchen'}</button>`;
+          ${state.busy ? t('guest.review.sending') : t('guest.review.send')}</button>`;
     } else if (s === 'sent') {
       parts = html`<button class="btn btn-ghost btn-block" type="button" data-act="restart">
-        Start another order</button>`;
+        ${t('guest.sent.again')}</button>`;
     }
 
     footbarInner.innerHTML = parts;
@@ -908,7 +926,7 @@ import {
     renderFootbar();
     renderCrumbs();
     document.getElementById('modeSwitch').setAttribute('aria-pressed', state.mode === 'pro' ? 'true' : 'false');
-    document.getElementById('modeLabel').textContent = state.mode === 'pro' ? 'Detailed' : 'Simple';
+    document.getElementById('modeLabel').textContent = state.mode === 'pro' ? t('guest.mode.detailed') : t('guest.mode.simple');
     if (!opts.keepScroll) window.scrollTo(0, 0);
   }
 
@@ -977,7 +995,7 @@ import {
       state.busy = true;
       render({ keepScroll: true });
       try {
-        var res = await db.lookupMember(state.memberDigits);
+        var res = await db.lookupMember(state.memberDigits, t.lang);
         state.member = res;
         if (res.status === 'verified' && res.defaultGuests) state.guestCount = res.defaultGuests;
         state.busy = false;
@@ -1258,6 +1276,14 @@ import {
 
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
+
+    var other = i18n.LANGS.filter(function (l) { return l.id !== t.lang; })[0];
+    var langBtn = document.getElementById('langSwitch');
+    langBtn.textContent = other.short;
+    langBtn.setAttribute('aria-label', other.name);
+    langBtn.setAttribute('lang', other.id);
+    langBtn.addEventListener('click', function () { i18n.setLang('guest', other.id); });
+    document.documentElement.setAttribute('lang', t.lang);
     document.title = pageTitle('');
 
     // On a static host there is no server to route /t/<tag>, so the QR codes
@@ -1309,7 +1335,7 @@ import {
     try {
       await db.ready();
     } catch (err) {
-      toast('We cannot reach the kitchen right now - ask your server.', true);
+      toast(t('guest.offline'), true);
       return;
     }
 
@@ -1322,10 +1348,10 @@ import {
     });
 
     if (state.boot.tagUnknown) {
-      toast('That table code is not one of ours - a server can sort it out.', true);
+      toast(t('guest.where.badtag'), true);
     }
     if (!state.boot.open) {
-      toast('The pasta station is closed right now.', true);
+      toast(t('guest.closed'), true);
     }
   }
 

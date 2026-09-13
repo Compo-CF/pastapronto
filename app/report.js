@@ -14,6 +14,7 @@ import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
 import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
+import * as i18n from './i18n.js';
 import { buildReportPdf } from './report-pdf.js';
 import { html, raw, mmss, escapeHtml, toast, requireStaff } from './ui.js';
 
@@ -23,6 +24,8 @@ const el = {
 };
 
 let current = { date: null, report: null, orders: [] };
+
+const t = i18n.translator('report');
 
 // ------------------------------------------------------------------ helpers
 
@@ -68,7 +71,7 @@ function statTiles(r) {
     { label: 'Avg to accept', value: mmss(r.timings.avgQueueSec), note: 'target under ' + mmss(config.sla.acceptWarnSec) },
   ];
   return html`<section class="rpt-section">
-    <h2 class="sec-title">Service stats</h2>
+    <h2 class="sec-title">${t('report.stats')}</h2>
     <div class="statgrid">
       ${tiles.map((t) => html`<div class="stat ${t.good ? 'is-good' : ''} ${t.bad ? 'is-bad' : ''}">
         <div class="stat-label">${t.label}</div>
@@ -99,7 +102,7 @@ function serviceCurve(r) {
   const anyPizza = r.curve.some((b) => b.pizzas > 0);
 
   return html`<section class="rpt-section">
-    <h2 class="sec-title">Bowls and pizzas per 15 minutes</h2>
+    <h2 class="sec-title">${t('report.curve')}</h2>
     <div class="card">
       <div class="curve-legend">
         <span class="curve-key"><i class="is-pasta"></i>Bowls</span>
@@ -191,7 +194,7 @@ function menuMix(r) {
   if (!rendered.length) return '';
 
   return html`<section class="rpt-section rpt-usage">
-    <h2 class="sec-title">Food usage - prep guide for tomorrow</h2>
+    <h2 class="sec-title">${t('report.usage')}</h2>
     ${rendered}
     <p class="muted" style="font-size:14px;margin:12px 0 0">
       Sauce counts exceed item counts where something was mixed - a bowl or a
@@ -225,7 +228,7 @@ function membersToCharge(r) {
   const maxItems = Math.max(...rows.map((m) => m.items));
 
   return html`<section class="rpt-section rpt-billing">
-    <h2 class="sec-title">Members to charge</h2>
+    <h2 class="sec-title">${t('report.members')}</h2>
 
     <div class="chargebar">
       <div class="chargebar-fig">
@@ -298,7 +301,7 @@ function membersToCharge(r) {
 function lateTable(r) {
   if (!r.late.length) {
     return html`<section class="rpt-section">
-      <h2 class="sec-title">Late tickets</h2>
+      <h2 class="sec-title">${t('report.late')}</h2>
       <div class="rpt-empty">Nothing ran late. Every delivered ticket finished inside
         ${config.sla.cookLateFactor}x its estimate.</div>
     </section>`;
@@ -325,7 +328,7 @@ function lateTable(r) {
 function stationsTable(r) {
   if (!r.stations.length) return '';
   return html`<section class="rpt-section">
-    <h2 class="sec-title">By station</h2>
+    <h2 class="sec-title">${t('report.stations')}</h2>
     <div class="card mtable-wrap">
       <table class="rpt-table">
         <thead><tr><th>Station</th><th class="num">Orders</th><th class="num">Bowls</th><th class="num">Avg cook</th></tr></thead>
@@ -363,7 +366,7 @@ function exceptions(r) {
   ];
 
   return html`<section class="rpt-section">
-    <h2 class="sec-title">Exceptions to follow up</h2>
+    <h2 class="sec-title">${t('report.exceptions')}</h2>
     <div class="exlist">
       ${boxes.map((b) => html`<div class="exbox">
         <div class="exbox-label">${b.label}</div>
@@ -562,6 +565,7 @@ function downloadPdf() {
   try {
     const brand = activeBrand();
     const bytes = buildReportPdf(current.report, current.date, {
+      lang: t.lang,
       orgName: brand.orgName,
       venueName: brand.venueName,
       accent: accentRgb(),
@@ -631,6 +635,14 @@ document.getElementById('printBtn').addEventListener('click', () => window.print
 
 async function boot() {
   document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
+
+  // The close-out has its own language, independent of the rail and the guest.
+  const other = i18n.LANGS.filter((l) => l.id !== t.lang)[0];
+  const langBtn = document.getElementById('langSwitch');
+  langBtn.textContent = other.short;
+  langBtn.setAttribute('aria-label', other.name);
+  langBtn.addEventListener('click', () => i18n.setLang('report', other.id));
+  document.documentElement.setAttribute('lang', t.lang);
     document.title = pageTitle('Close-out');
 
   if (!db.isConfigured) {

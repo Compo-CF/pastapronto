@@ -16,6 +16,7 @@
  */
 
 import * as pdf from './pdf.js';
+import { t as tr } from './i18n.js';
 
 const INK = [0.13, 0.13, 0.13];
 const SOFT = [0.42, 0.40, 0.39];
@@ -52,6 +53,11 @@ function prettyDate(dateStr) {
  * @returns {Uint8Array}
  */
 export function buildReportPdf(report, date, brand = {}) {
+  // The PDF speaks whatever the close-out screen speaks - it is the same
+  // manager reading both, and a Spanish screen that prints English is worse
+  // than either on its own.
+  const lang = brand.lang || 'en';
+  const T = (k, v) => tr(lang, k, v);
   const doc = pdf.create({ margin: 44 });
   const left = doc.margin;
   const right = doc.width - doc.margin;
@@ -185,7 +191,7 @@ export function buildReportPdf(report, date, brand = {}) {
   y = header();
 
   if (!report || !report.totals || report.totals.orders === 0) {
-    doc.text('No orders on this service date.', { x: left, y: y + 10, size: 11, color: SOFT });
+    doc.text(T('report.empty'), { x: left, y: y + 10, size: 11, color: SOFT });
     return doc.build({ title, author: brand.orgName || '' });
   }
 
@@ -200,13 +206,13 @@ export function buildReportPdf(report, date, brand = {}) {
 
   // ---- members to charge -------------------------------------------------
 
-  section('Members to charge');
+  section(T('report.members'));
 
   doc.text(String(t.covers), { x: left, y: y + 18, size: SIZE.figure, font: 'monoBold', color: accent });
-  doc.text('CHARGES TO POST', { x: left, y: y + 32, size: SIZE.small, font: 'bold', color: FAINT });
+  doc.text(T('report.chargesToPost').toUpperCase(), { x: left, y: y + 32, size: SIZE.small, font: 'bold', color: FAINT });
   const secondX = left + 160;
   doc.text(String(t.members), { x: secondX, y: y + 18, size: SIZE.figure, font: 'monoBold', color: accent });
-  doc.text('MEMBER' + (t.members === 1 ? '' : 'S') + ' DINING',
+  doc.text(T('report.membersDining').toUpperCase(),
     { x: secondX, y: y + 32, size: SIZE.small, font: 'bold', color: FAINT });
   y += 50;
 
@@ -218,15 +224,15 @@ export function buildReportPdf(report, date, brand = {}) {
   );
 
   table([
-    { label: 'Member', width: 62, get: (m) => m.memberNumber, mono: true },
-    { label: 'Name', width: 148, get: (m) => m.name || '' },
-    { label: 'Charges', width: 60, get: (m) => m.partySize, mono: true, bold: true },
-    { label: 'Orders', width: 52, get: (m) => m.orders, mono: true },
-    { label: 'Bowls', width: 48, get: (m) => m.bowls || '', mono: true },
-    { label: 'Pizzas', width: 50, get: (m) => m.pizzas || '', mono: true },
-    { label: 'Items', width: 46, get: (m) => m.items, mono: true },
+    { label: T('report.col.member'), width: 62, get: (m) => m.memberNumber, mono: true },
+    { label: T('report.col.name'), width: 148, get: (m) => m.name || '' },
+    { label: T('report.col.charges'), width: 60, get: (m) => m.partySize, mono: true, bold: true },
+    { label: T('report.col.orders'), width: 52, get: (m) => m.orders, mono: true },
+    { label: T('report.col.bowls'), width: 48, get: (m) => m.bowls || '', mono: true },
+    { label: T('report.col.pizzas'), width: 50, get: (m) => m.pizzas || '', mono: true },
+    { label: T('report.col.items'), width: 46, get: (m) => m.items, mono: true },
     { label: '/cover', width: 50, get: (m) => m.itemsPerCover, mono: true },
-    { label: 'Confirm', width: 58, get: (m) => (m.status === 'verified' ? '' : 'CHECK') },
+    { label: T('report.col.confirm'), width: 58, get: (m) => (m.status === 'verified' ? '' : T('report.confirmFlag')) },
   ], members, [
     members.length + (members.length === 1 ? ' member' : ' members'), '',
     t.covers, t.orders, k.pasta.items, k.pizza.items, t.bowls, t.bowlsPerCover, '',
@@ -247,7 +253,7 @@ export function buildReportPdf(report, date, brand = {}) {
 
   // ---- service stats -----------------------------------------------------
 
-  section('Service stats');
+  section(T('report.stats'));
   table([
     { label: 'Measure', width: 160, get: (r) => r[0] },
     { label: 'Value', width: 90, get: (r) => r[1], mono: true, bold: true },
@@ -268,7 +274,7 @@ export function buildReportPdf(report, date, brand = {}) {
   // ---- service curve -----------------------------------------------------
 
   if ((report.curve || []).length) {
-    section('Per 15 minutes');
+    section(T('report.curve'));
     table([
       { label: 'Time', width: 80, get: (b) => b.bucket, mono: true },
       { label: 'Orders', width: 70, get: (b) => b.orders, mono: true },
@@ -299,7 +305,7 @@ export function buildReportPdf(report, date, brand = {}) {
   const live = lanes.filter(([, , groups]) => groups.some(([, rows]) => (rows || []).length));
 
   if (live.length) {
-    section('Food usage - prep guide for tomorrow');
+    section(T('report.usage'));
     live.forEach(([label, kind, groups]) => {
       const kk = k[kind] || {};
       need(34);
@@ -334,7 +340,7 @@ export function buildReportPdf(report, date, brand = {}) {
 
   // ---- follow-ups --------------------------------------------------------
 
-  section('Late tickets');
+  section(T('report.late'));
   if ((report.late || []).length) {
     table([
       { label: 'Ticket', width: 60, get: (x) => '#' + x.ticketNo, mono: true },
@@ -350,7 +356,7 @@ export function buildReportPdf(report, date, brand = {}) {
   }
 
   if ((report.stations || []).length) {
-    section('By station');
+    section(T('report.stations'));
     table([
       { label: 'Station', width: 150, get: (s) => s.id },
       { label: 'Orders', width: 80, get: (s) => s.orders, mono: true },
@@ -359,7 +365,7 @@ export function buildReportPdf(report, date, brand = {}) {
     ], report.stations);
   }
 
-  section('Exceptions to follow up');
+  section(T('report.exceptions'));
   const e = report.exceptions || {};
   const list = (arr) => ((arr || []).length ? arr.map((x) => '#' + x.ticketNo).join(', ') : 'none');
   table([

@@ -51,6 +51,7 @@
     </select>
   </label>
 
+  <button class="kbtn" id="langSwitch" type="button"></button>
   <button class="kbtn" id="soundToggle" type="button" aria-pressed="false"
     title="Alert sounds" aria-label="Alert sounds">
     <span id="soundIcon">&#128263;</span><span class="kbtn-label">Sound</span>
@@ -62,15 +63,15 @@
 
 <main class="lanes" id="lanes">
   <section class="lane" data-lane="queued">
-    <h2 class="lane-head"><span>New Orders</span><span class="lane-count" id="count-queued">0</span></h2>
+    <h2 class="lane-head"><span id="lane-title-queued">New Orders</span><span class="lane-count" id="count-queued">0</span></h2>
     <div class="lane-body" id="lane-queued"></div>
   </section>
   <section class="lane" data-lane="cooking">
-    <h2 class="lane-head"><span>Cooking</span><span class="lane-count" id="count-cooking">0</span></h2>
+    <h2 class="lane-head"><span id="lane-title-cooking">Cooking</span><span class="lane-count" id="count-cooking">0</span></h2>
     <div class="lane-body" id="lane-cooking"></div>
   </section>
   <section class="lane" data-lane="ready">
-    <h2 class="lane-head"><span>Ready &middot; Call Runner</span><span class="lane-count" id="count-ready">0</span></h2>
+    <h2 class="lane-head"><span id="lane-title-ready">Ready &middot; Call Runner</span><span class="lane-count" id="count-ready">0</span></h2>
     <div class="lane-body" id="lane-ready"></div>
   </section>
 </main>

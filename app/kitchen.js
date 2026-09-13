@@ -17,6 +17,7 @@ import * as orderLib from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
 import { mastheadHtml, pageTitle } from './brand.js';
+import * as i18n from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
   remember, recall, chime, unlockAudio, toast, requireStaff,
@@ -39,9 +40,9 @@ const CATALOG = menu.catalog();
   var LANES = ['queued', 'cooking', 'ready'];
 
   var PRIMARY = {
-    queued: { action: 'accept', label: 'Accept', cls: 'kact-primary' },
-    cooking: { action: 'ready', label: 'Food Up - Call Runner', cls: 'kact-primary' },
-    ready: { action: 'deliver', label: 'Delivered', cls: 'kact-deliver' },
+    queued: { action: 'accept', labelKey: 'kitchen.act.accept', cls: 'kact-primary' },
+    cooking: { action: 'ready', labelKey: 'kitchen.act.ready', cls: 'kact-primary' },
+    ready: { action: 'deliver', labelKey: 'kitchen.act.deliver', cls: 'kact-deliver' },
   };
 
   var UNDO = { cooking: 'unaccept', ready: 'unready', queued: null };
@@ -154,10 +155,23 @@ const CATALOG = menu.catalog();
 
   // ------------------------------------------------------------------ chit view
 
+  var t = i18n.translator('kitchen');
+
+  /** Language switch for this rail. Shows the language it switches to. */
+  function wireLang(scope) {
+    var other = i18n.LANGS.filter(function (l) { return l.id !== t.lang; })[0];
+    var btn = document.getElementById('langSwitch');
+    if (!btn) return;
+    btn.textContent = other.short;
+    btn.setAttribute('aria-label', other.name);
+    btn.addEventListener('click', function () { i18n.setLang(scope, other.id); });
+    document.documentElement.setAttribute('lang', t.lang);
+  }
+
   function menuName(group, id) {
     var list = CATALOG[group] || [];
     var hit = list.filter(function (x) { return x.id === id; })[0];
-    return hit ? hit.name : id;
+    return hit ? ((t.isEs && hit.es) ? hit.es : hit.name) : id;
   }
 
   function pastaShape(id) {
@@ -182,10 +196,10 @@ const CATALOG = menu.catalog();
       adds.push(line.toppings.map(function (t) { return menuName(toppingGroup(line), t); }).join(', '));
     }
     if (!isPizza && line.sides && line.sides.length) {
-      adds.push('SIDE: ' + line.sides.map(function (s) { return menuName('sides', s); }).join(', '));
+      adds.push(t('kitchen.side') + ': ' + line.sides.map(function (s) { return menuName('sides', s); }).join(', '));
     }
 
-    var flags = isPizza ? ['12\" PIE'] : [menuName('portions', line.portion)];
+    var flags = isPizza ? [t('kitchen.pie')] : [menuName('portions', line.portion)];
     if (!isPizza && line.spice && line.spice !== 'mild') flags.push(line.spice.toUpperCase());
     if (line.allergens && line.allergens.length) flags.push(line.allergens.join('/'));
 
@@ -193,7 +207,7 @@ const CATALOG = menu.catalog();
       <span class="cline-art">${raw(art(lineGlyph(line)))}</span>
       <div class="grow">
         <div class="cline-who">${line.guestLabel}</div>
-        <div class="cline-dish">${line.dish}</div>
+        <div class="cline-dish">${menu.describe(line, t.lang)}</div>
         ${raw(adds.length ? '<div class="cline-add">' + escapeHtml(adds.join(' \u00b7 ')) + '</div>' : '')}
         <div class="cline-portion">${flags.join(' \u00b7 ')}</div>
         ${raw(line.notes ? '<div class="cline-note">! ' + escapeHtml(line.notes) + '</div>' : '')}
@@ -202,7 +216,7 @@ const CATALOG = menu.catalog();
   }
 
   function renderChit(order) {
-    var t = timerFor(order);
+    var timer = timerFor(order);
     // The server used to attach allowedActions to every chit. The state machine
     // now runs on the device, so ask it directly.
     var allowed = orderLib.allowedActions(order, config.sla);
@@ -217,16 +231,16 @@ const CATALOG = menu.catalog();
     if (order.status === 'held') badges.push('<span class="badge badge-held">On hold</span>');
 
     var alert = order.avoidAllergens && order.avoidAllergens.length
-      ? html`<div class="chit-alert">ALLERGY - must avoid ${order.avoidAllergens.map(function (a) {
+      ? html`<div class="chit-alert">${t('kitchen.alert.allergy', { list: order.avoidAllergens.map(function (a) {
           return menuName('allergens', a);
-        }).join(', ')}</div>`
+        }).join(', ') })}</div>`
       : '';
 
     var primary = PRIMARY[order.status];
     var buttons = [];
     if (primary && allowed.indexOf(primary.action) !== -1) {
       buttons.push(html`<button class="kact ${primary.cls}" data-act="${primary.action}" data-id="${order.id}">
-        ${primary.label}</button>`);
+        ${t(primary.labelKey)}</button>`);
     }
     var undo = UNDO[order.status];
     if (undo && allowed.indexOf(undo) !== -1) {
@@ -250,7 +264,7 @@ const CATALOG = menu.catalog();
       : 'Member ' + order.memberNumber;
 
     return html`<article class="chit ${order.status === 'held' ? 'is-held' : ''} ${state.selected === order.id ? 'is-selected' : ''} ${state.seen[order.id] ? '' : 'is-new'}"
-      data-id="${order.id}" data-priority="${order.priority}" data-late="${t.level}" tabindex="0">
+      data-id="${order.id}" data-priority="${order.priority}" data-late="${timer.level}" tabindex="0">
       <div class="chit-top">
         ${raw(order._key ? '<span class="chit-key">' + order._key + '</span>' : '')}
         <div>
@@ -260,7 +274,7 @@ const CATALOG = menu.catalog();
           <div class="chit-where">${order.tagLabel}</div>
           <div class="chit-meta">${memberLine}</div>
         </div>
-        <div class="chit-timer" data-late="${t.level}" data-timer="${order.id}">${mmss(t.seconds)}</div>
+        <div class="chit-timer" data-late="${timer.level}" data-timer="${order.id}">${mmss(timer.seconds)}</div>
       </div>
       <div class="chit-badges">${raw(badges.join(''))}</div>
       ${raw(alert)}
@@ -325,13 +339,13 @@ const CATALOG = menu.catalog();
     state.orders.forEach(function (order) {
       var node = document.querySelector('[data-timer="' + order.id + '"]');
       if (!node) return;
-      var t = timerFor(order);
-      node.textContent = mmss(t.seconds);
-      if (node.dataset.late !== t.level) {
-        node.dataset.late = t.level;
+      var timer = timerFor(order);
+      node.textContent = mmss(timer.seconds);
+      if (node.dataset.late !== timer.level) {
+        node.dataset.late = timer.level;
         var chit = node.closest('.chit');
-        if (chit) chit.dataset.late = t.level;
-        if (t.level === 'late' && state.sound) chime('late');
+        if (chit) chit.dataset.late = timer.level;
+        if (timer.level === 'late' && state.sound) chime('late');
       }
     });
   }
@@ -496,6 +510,13 @@ const CATALOG = menu.catalog();
 
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
+    wireLang('kitchen');
+    // The lane headings live in the HTML so the rail paints before JS runs.
+    [['queued', 'kitchen.lane.queued'], ['cooking', 'kitchen.lane.cooking'],
+      ['ready', 'kitchen.lane.ready']].forEach(function (pair) {
+      var node = document.getElementById('lane-title-' + pair[0]);
+      if (node) node.textContent = t(pair[1]);
+    });
     document.title = pageTitle('Kitchen');
 
     if (!db.isConfigured) {

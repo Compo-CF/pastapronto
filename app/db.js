@@ -153,7 +153,7 @@ export async function getUnavailable() {
  * child mistyping a digit should still be able to eat, and the kitchen sees the
  * flag on the chit.
  */
-export async function lookupMember(raw) {
+export async function lookupMember(raw, lang) {
   // One member is one document id, whatever the guest typed - 0002 and 2 both
   // read members/2.
   const memberNumber = order.normalizeMemberNumber(raw);
@@ -184,7 +184,11 @@ export async function lookupMember(raw) {
       defaultGuests: hit.defaultGuests || 2,
       // The directory holds family names, not people, so the greeting is
       // addressed to the party rather than to an individual.
-      message: hit.name ? `Buonasera, ${hit.name} Party!` : 'Buonasera!',
+      // Buonasera stays Italian in both - it is the venue's flourish, not a
+      // word being translated. What changes is the sentence around it.
+      message: hit.name
+        ? (lang === 'es' ? `¡Buonasera, familia ${hit.name}!` : `Buonasera, ${hit.name} Party!`)
+        : '¡Buonasera!',
     };
   }
 
