@@ -55,6 +55,72 @@
 .mtable .allerg { font-size: 12px; font-weight: 700; color: var(--tomato-dark); }
 .mtable-wrap { overflow-x: auto; }
 
+/* ------------------------------------------------------------- food cost */
+
+.costsum { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; }
+
+/* The coverage band. It sits above the figures rather than under them because
+   its whole job is to say how much of the number below it you can trust, and
+   a caveat printed after the number has already been read is not a caveat. */
+.costcover { margin-top: 12px; font-size: 14px; line-height: 1.5; }
+.costcover strong { font-weight: 800; }
+
+.costcharge { align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+
+/* A currency field is read as money before it is read as a number, so the sign
+   sits inside the box rather than in the label. */
+.moneyfield { display: flex; align-items: center; gap: 6px; }
+.moneyfield > span { font-size: 17px; font-weight: 800; color: var(--ink-faint); }
+.moneyfield .input { width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.costlane { margin-top: 10px; }
+.cost-station {
+  font-size: 17px; font-weight: 800; margin: 20px 0 0;
+  padding-top: 16px; border-top: 2px solid var(--line-strong);
+}
+.costlane:first-child { margin-top: 0; }
+.costlane:first-child .cost-station { margin-top: 0; padding-top: 0; border-top: 0; }
+
+.ctable-wrap { overflow-x: auto; }
+.ctable { width: 100%; border-collapse: collapse; font-size: 15px; }
+.ctable caption {
+  text-align: left; font-weight: 800; padding: 14px 0 8px; font-size: 16px;
+}
+.ctable caption span {
+  display: block; font-size: 12px; font-weight: 600; color: var(--ink-faint);
+  letter-spacing: 0; text-transform: none;
+}
+.ctable th, .ctable td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+.ctable th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.ctable th.num, .ctable td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ctable td.name { font-weight: 650; }
+
+/* Narrow, right-aligned and tabular: a column of prices is compared down the
+   column, which only works when the decimal points line up. */
+.costinput {
+  width: 88px; min-height: 38px; padding: 4px 8px;
+  text-align: right; font-variant-numeric: tabular-nums;
+  font: inherit; font-size: 15px;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--card); color: var(--ink);
+}
+.costinput:focus-visible { outline: 2px solid var(--tomato); outline-offset: 1px; }
+
+/* Derived, not entered. Styled unmistakably differently from the two inputs
+   beside it so nobody tries to type in it. */
+.costper { font-weight: 800; font-variant-numeric: tabular-nums; }
+.costper.is-unset { color: var(--ink-faint); font-weight: 600; }
+
+/* An ingredient that went out tonight with no price on it is the one row a
+   manager needs to find, so it is marked in the table rather than only in the
+   summary count. */
+.ctable tr.is-unpriced td.name::after {
+  content: ' \25CF';
+  color: var(--tomato);
+}
+.ctable td.uses { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ctable tr.is-idle td { color: var(--ink-faint); }
+
 /* ------------------------------------------------------------- table tents
    Hidden on screen, one per page when printed. Fold along the dashed line and
    stand it on the table. */

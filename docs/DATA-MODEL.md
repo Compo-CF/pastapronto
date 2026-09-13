@@ -190,7 +190,39 @@ orders/{orderId}          one document per order - the whole chit
 counters/{serviceDate}    { lastTicket, serviceDate } - allocates ticket numbers
 members/{memberNumber}    { name, dietaryNotes, defaultGuests }
 config/availability       { unavailable: [ingredientId] } - the 86 list
+config/costs              { items: { id: {price, yield} }, chargePerCover }
 ```
+
+### The cost sheet
+
+`config/costs` prices the pantry, and it is the only place in the app where
+money appears at all. A guest is never quoted a price - the night is
+all-you-can-eat and charges post against the member number through the club's
+own system - so this is the other side of that ledger: what the food cost the
+kitchen, not what anyone is billed.
+
+Each entry is a purchase, not a portion:
+
+```js
+marinara: { price: 18.40, yield: 40 }   // a #10 can, ladles 40 bowls
+```
+
+`app/costing.js` divides to get $0.46 a bowl and sums what is actually on each
+line, so cost per bowl comes from what guests built rather than from a guess at
+a typical order. Portion size scales the bowl (a kid bowl is 0.6 of it) but not
+a side plate, and the light/heavy chips scale the sauce or cheese under them
+rather than carrying a price of their own.
+
+**A missing price is never read as zero.** An entry that is absent, or whose
+yield is zero, reports as unpriced and the item carrying it is marked
+incomplete - averages run over fully-priced items only, and every figure on the
+manager screen is shown with its own coverage. An average that quietly treats
+missing data as free still reads as money, and is wrong by exactly however much
+nobody entered.
+
+Like the 86 list this is shared rather than per-device, and like the 86 list the
+rules cannot tell a manager from a guest: any signed-in client can read it. Keep
+supplier contract terms out of it.
 
 ### The 86 list
 

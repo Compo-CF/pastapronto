@@ -10,6 +10,7 @@ import { config } from '../app/config.js';
 import * as order from '../app/order.js';
 import * as cooktime from '../app/cooktime.js';
 import * as menu from '../app/menu.js';
+import * as costing from '../app/costing.js';
 import * as seed from '../app/seed.js';
 import { art, has as hasArt } from '../app/art.js';
 import * as pdf from '../app/pdf.js';
@@ -1078,6 +1079,206 @@ test('menu catalog exposes every group the screens render', () => {
   assert.strictEqual(c.pizzaSauces.length, 7, 'four sauces, no-sauce, light, heavy');
   assert.strictEqual(c.pizzaCheeses.length, 6, 'three cheeses, no-cheese, light, heavy');
   assert.ok(c.pizzaBase && c.pizzaBase.bakeSec > 0, 'one crust, one size');
+});
+
+// ------------------------------------------------------------- food costing
+
+const near = (got, want, msg) => assert.ok(
+  Math.abs(got - want) < 1e-9,
+  msg + ' (got ' + got + ', wanted ' + want + ')',
+);
+
+// A small priced pantry. Chosen so every per-portion figure is exact in
+// decimal, which keeps a failure readable instead of a float comparison.
+const PANTRY = {
+  penne: { price: 12.00, yield: 40 },         // 0.30
+  marinara: { price: 18.40, yield: 40 },      // 0.46
+  chicken: { price: 24.00, yield: 30 },       // 0.80
+  garlic_bread: { price: 6.00, yield: 12 },   // 0.50
+  classic: { price: 9.00, yield: 12 },        // 0.75 a dough ball
+  pz_marinara: { price: 18.40, yield: 40 },   // 0.46
+  pz_shred_mozz: { price: 20.00, yield: 25 }, // 0.80
+};
+
+const bowl = (over = {}) => ({
+  guestLabel: 'Ada', pasta: 'penne', sauces: ['marinara'], proteins: ['chicken'],
+  toppings: [], sides: [], portion: 'regular', spice: 'mild', ...over,
+});
+const pie = (over = {}) => ({
+  kind: 'pizza', guestLabel: 'Sam', sauces: ['pz_marinara'], cheeses: ['pz_shred_mozz'],
+  proteins: [], toppings: [], ...over,
+});
+const costOrder = (over = {}) => ({
+  id: 'o1', status: 'delivered', kind: 'pasta', ticketNo: 1, memberNumber: '1794',
+  guestCount: 2, submittedAt: '2026-09-13T18:00:00.000Z', lines: [bowl()], ...over,
+});
+
+test('a portion costs the pack price divided by what the pack yields', () => {
+  near(costing.perPortion({ price: 18.40, yield: 40 }), 0.46, 'a #10 can of marinara');
+  // Free and unpriced are different answers, and only one of them is a gap.
+  assert.strictEqual(costing.perPortion({ price: 0, yield: 10 }), 0, 'herbs off the property are free, not unpriced');
+  assert.strictEqual(costing.perPortion(undefined), null, 'nothing entered');
+  assert.strictEqual(costing.perPortion({ price: 12 }), null, 'a price with no yield cannot answer');
+  // Dividing anyway gives Infinity, which would poison every total after it.
+  assert.strictEqual(costing.perPortion({ price: 12, yield: 0 }), null, 'a pack that yields nothing');
+  assert.strictEqual(costing.perPortion({ price: -3, yield: 10 }), null, 'negative money is a typo');
+});
+
+test('a bowl costs the sum of what is in it', () => {
+  const c = costing.lineCost(bowl(), PANTRY);
+  near(c.total, 1.56, 'penne 0.30 + marinara 0.46 + chicken 0.80');
+  assert.ok(c.complete, 'every ingredient priced');
+  assert.strictEqual(c.parts.length, 3);
+});
+
+test('portion size scales the bowl but not the side plate', () => {
+  const kid = costing.lineCost(bowl({ portion: 'kid', sides: ['garlic_bread'] }), PANTRY);
+  // 1.56 * 0.6 = 0.936, plus a whole piece of garlic bread at 0.50. A kid-size
+  // bowl does not come with six tenths of a slice.
+  near(kid.total, 1.436, 'kid bowl scales, the side does not');
+
+  const large = costing.lineCost(bowl({ portion: 'large' }), PANTRY);
+  near(large.total, 1.56 * 1.4, 'a large bowl is 1.4 of everything in it');
+});
+
+test('a pizza costs its crust plus what goes on it', () => {
+  near(costing.lineCost(pie(), PANTRY).total, 2.01, 'dough 0.75 + sauce 0.46 + mozz 0.80');
+});
+
+test('"no sauce" costs nothing and the amount chips scale what is under them', () => {
+  const dry = costing.lineCost(pie({ sauces: ['pz_no_sauce'], cheeses: ['pz_no_cheese'] }), PANTRY);
+  near(dry.total, 0.75, 'a bare crust is just the dough');
+  assert.ok(dry.complete, 'nothing chosen is not the same as nothing priced');
+
+  const heavy = costing.lineCost(pie({ sauces: ['pz_marinara', 'pz_sauce_heavy'] }), PANTRY);
+  near(heavy.total, 0.75 + 0.46 * 1.5 + 0.80, 'heavy sauce is half again');
+
+  const light = costing.lineCost(pie({ cheeses: ['pz_shred_mozz', 'pz_cheese_light'] }), PANTRY);
+  near(light.total, 0.75 + 0.46 + 0.80 * 0.5, 'light cheese is half');
+
+  // The amount chip is not itself an ingredient, so it never gets its own row
+  // and can never be priced twice.
+  assert.ok(!heavy.parts.some((p) => p.id === 'pz_sauce_heavy'), 'the chip is a multiplier, not a line');
+});
+
+test('an unpriced ingredient is reported, never counted as free', () => {
+  const c = costing.lineCost(bowl({ toppings: ['mushrooms'] }), PANTRY);
+  near(c.total, 1.56, 'the total covers only what has a price');
+  assert.strictEqual(c.complete, false, 'and says so');
+  assert.deepStrictEqual(c.missing.map((m) => m.id), ['mushrooms']);
+  assert.strictEqual(c.missing[0].name, 'Mushrooms', 'named so a manager can find the row');
+});
+
+test('the night averages over fully-priced items only', () => {
+  // The second bowl has no chicken and an unpriced mushroom, so it prices at
+  // 0.76 of its real cost. Averaging both would report $1.16 a bowl - lower
+  // than either real bowl - and read as a cost rather than as a gap.
+  const rep = costing.costReport([
+    costOrder({ lines: [bowl(), bowl({ proteins: [], toppings: ['mushrooms'] })] }),
+  ], PANTRY);
+
+  near(rep.pasta.avg, 1.56, 'the average ignores the incomplete bowl');
+  assert.notStrictEqual(Math.round(rep.pasta.avg * 100), 116, 'not the average of both');
+  assert.strictEqual(rep.pasta.items, 2);
+  assert.strictEqual(rep.pasta.priced, 1);
+  assert.strictEqual(rep.coverage.complete, false);
+  assert.deepStrictEqual(rep.coverage.unpriced.map((g) => g.id), ['mushrooms']);
+  assert.strictEqual(rep.pizza.avg, null, 'no pizzas is not a pizza costing nothing');
+});
+
+test('cost per cover charges a party once, however many trips it makes', () => {
+  const rep = costing.costReport([
+    costOrder({ id: 'a', guestCount: 2, lines: [bowl()] }),
+    costOrder({ id: 'b', guestCount: 3, lines: [bowl(), bowl()] }),
+  ], PANTRY);
+
+  // All you can eat: the same member coming back for a second round is three
+  // covers, not five, so the cost per cover is over three heads.
+  assert.strictEqual(rep.totals.covers, 3, 'the largest head count that member reported');
+  assert.strictEqual(rep.totals.items, 3);
+  near(rep.totals.known, 1.56 * 3, 'three bowls of food went out');
+  near(rep.totals.perCover, (1.56 * 3) / 3, 'spread over three heads');
+});
+
+test('a voided ticket costs nothing', () => {
+  const rep = costing.costReport([
+    costOrder({ id: 'a', lines: [bowl()] }),
+    costOrder({ id: 'b', memberNumber: '42', status: 'voided', lines: [bowl(), bowl()] }),
+  ], PANTRY);
+  assert.strictEqual(rep.totals.items, 1, 'a voided chit never reached the pass');
+  near(rep.totals.known, 1.56);
+});
+
+test('food cost percentage needs a charge, and refuses to invent one', () => {
+  const orders = [costOrder({ guestCount: 2, lines: [bowl(), bowl()] })];
+  assert.strictEqual(costing.costReport(orders, PANTRY).foodCostPct, null, 'no charge entered');
+
+  // 3.12 of food over 2 covers is 1.56 a head against a $39 cover.
+  const rep = costing.costReport(orders, PANTRY, { chargePerCover: 39 });
+  near(rep.totals.perCover, 1.56);
+  near(rep.foodCostPct, (1.56 / 39) * 100);
+  assert.strictEqual(costing.costReport(orders, PANTRY, { chargePerCover: 0 }).foodCostPct, null,
+    'a free cover has no percentage, it has a division by zero');
+});
+
+test('nothing on the cost sheet can be priced twice', () => {
+  const rows = costing.costRows();
+  const ids = costing.costableIds();
+  assert.strictEqual(ids.length, new Set(ids).size, 'every row is its own ingredient');
+
+  const group = (key) => rows.flatMap((lane) => lane.groups).find((g) => g.key === key);
+
+  // "No Sauce" buys nothing and "Heavy Sauce" is a multiplier on a sauce that
+  // already has a row, so neither gets a price box.
+  assert.strictEqual(group('pizzaSauces').items.length, 4, 'four real sauces out of seven tiles');
+  assert.strictEqual(group('pizzaCheeses').items.length, 3, 'three real cheeses out of six tiles');
+  assert.ok(!ids.includes('pz_no_sauce') && !ids.includes('pz_cheese_heavy'));
+
+  // The crust is bought by the case like anything else, so it must be priceable
+  // or every pizza silently reads as incomplete.
+  assert.ok(ids.includes(menu.PIZZA_BASE.id), 'the dough has a row');
+});
+
+test('every ingredient a guest can order can be priced', () => {
+  // The gap that matters: an ingredient on the guest tiles with no row on the
+  // cost sheet can never be priced, so any item carrying it reads as
+  // part-priced forever with nothing a manager can do about it.
+  const priceable = new Set(costing.costableIds());
+  const c = menu.catalog();
+  ['pastas', 'sauces', 'proteins', 'toppings', 'sides',
+    'pizzaSauces', 'pizzaCheeses', 'pizzaProteins', 'pizzaToppings']
+    .forEach((key) => c[key]
+      .filter((i) => !i.exclusive && !i.amount)
+      .forEach((i) => assert.ok(priceable.has(i.id), i.name + ' (' + i.id + ') has a price box')));
+});
+
+test('the demo night costs out end to end', () => {
+  // The seeded rail is the one a pitch actually shows, so it has to survive
+  // the whole pipeline rather than just the hand-built lines above.
+  const built = seed.buildDemoOrders().map((o, i) => ({
+    ...o, id: 'seed-' + i, status: 'delivered',
+  }));
+  const rep = costing.costReport(built, PANTRY, { chargePerCover: 39 });
+
+  assert.ok(rep.totals.items > 0, 'the demo rail has food on it');
+  assert.ok(rep.totals.known > 0, 'and some of it is priced');
+  assert.ok(rep.coverage.unpriced.length > 0, 'a seven-item pantry cannot cover the whole menu');
+  assert.strictEqual(rep.coverage.complete, false, 'which the report says out loud');
+  // Whatever is priced has to add up to the sum of its parts.
+  near(
+    rep.contributors.reduce((a, x) => a + x.total, 0),
+    rep.totals.known,
+    'contributors reconcile to the total',
+  );
+});
+
+test('money renders a missing figure as a dash, never as zero', () => {
+  assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
+  assert.strictEqual(costing.money(1.5), '$1.50');
+  assert.strictEqual(costing.money(0), '$0.00');
+  // A third of a cent rounded to $0.00 makes a priced pinch look unpriced.
+  assert.strictEqual(costing.unitMoney(0.004), '$0.004');
+  assert.strictEqual(costing.unitMoney(2.5), '$2.50');
 });
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

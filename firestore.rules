@@ -20,8 +20,11 @@ rules_version = '2';
 //     create an order whose stated cook time disagrees with its contents
 //   - rules cannot tell a manager from a guest, so any signed-in client can
 //     read the whole day's rail and edit the 86 list
-//   - nothing here is priced; charges post against the member number through
-//     the club's own system, which this app never touches
+//   - no guest is ever quoted a price; charges post against the member number
+//     through the club's own system, which this app never touches. config/costs
+//     is the other side of that ledger - what the food cost the kitchen - and
+//     any signed-in client can read it, so treat it as venue-visible and never
+//     put supplier contract terms in it
 // Closing both of those properly means moving writes behind Cloud Functions
 // and adding Firebase App Check, which needs the Blaze plan. See README.md.
 
@@ -38,12 +41,26 @@ service cloud.firestore {
       allow write: if signedIn();
     }
 
-    // Shared service configuration - currently just the 86 list.
+    // Shared service configuration: the 86 list and the food-cost sheet.
+    //
+    // Validated per document rather than in one combined check. The two have
+    // nothing in common, and a single rule loose enough to admit both would be
+    // loose enough to admit anything - which is how the 86 list would end up
+    // writable as a map of prices.
     match /config/{docId} {
       allow read: if signedIn();
-      allow write: if signedIn()
-        && request.resource.data.unavailable is list
-        && request.resource.data.unavailable.size() <= 100;
+      allow write: if signedIn() && (
+        (docId == 'availability'
+          && request.resource.data.unavailable is list
+          && request.resource.data.unavailable.size() <= 100)
+        ||
+        // Costs are manager-entered numbers, not guest input. Rules cannot
+        // tell a manager from a guest here any more than they can on the 86
+        // list, so this bounds the shape and the size and nothing more.
+        (docId == 'costs'
+          && request.resource.data.items is map
+          && request.resource.data.items.size() <= 200)
+      );
     }
 
     // Ticket-number allocation, one document per service date.

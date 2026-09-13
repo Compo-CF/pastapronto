@@ -8,6 +8,7 @@
 import { config, serviceDate } from './config.js';
 import * as menu from './menu.js';
 import * as order from './order.js';
+import * as costing from './costing.js';
 import * as db from './db.js';
 import * as seed from './seed.js';
 import { art } from './art.js';
@@ -22,7 +23,10 @@ const CATALOG = menu.catalog();
 (function () {
   'use strict';
 
-  var state = { base: '', orders: [], unavailable: [] };
+  var state = {
+    base: '', orders: [], unavailable: [],
+    costs: { items: {}, chargePerCover: null },
+  };
 
   var el = {
     statgrid: document.getElementById('statgrid'),
@@ -32,6 +36,9 @@ const CATALOG = menu.catalog();
     baseUrl: document.getElementById('baseUrl'),
     baseHint: document.getElementById('baseHint'),
     qrMeta: document.getElementById('qrMeta'),
+    costSummary: document.getElementById('costSummary'),
+    costSheet: document.getElementById('costSheet'),
+    chargePerCover: document.getElementById('chargePerCover'),
     brandSwitch: document.getElementById('brandSwitch'),
     brandNote: document.getElementById('brandNote'),
     toast: document.getElementById('toast'),
@@ -242,6 +249,276 @@ const CATALOG = menu.catalog();
       '</p>';
   }
 
+  // ---------------------------------------------------------------- food cost
+
+  /**
+   * The cost sheet: one row per priceable ingredient, two boxes to fill in.
+   *
+   * Built once, at boot, and never rebuilt. Everything that changes - the
+   * derived per-portion figure, tonight's usage, the summary - is written into
+   * the cells it belongs to by applyCosts() below. Re-rendering this table on
+   * every snapshot would be simpler to write and would eat the caret out of
+   * whichever box the manager was typing in when the write came back.
+   */
+  function renderCostSheet() {
+    el.costSheet.innerHTML = costing.costRows().map(function (lane) {
+      return html`<div class="costlane">
+        <h3 class="cost-station">${lane.label}</h3>
+        ${lane.groups.map(function (g) {
+          return html`<div class="ctable-wrap"><table class="ctable">
+            <caption>${g.label}<span>a portion here means ${g.unitHint}</span></caption>
+            <thead><tr>
+              <th>Item</th>
+              <th class="num">Pack price</th>
+              <th class="num">Portions per pack</th>
+              <th class="num">Per portion</th>
+              <th class="num">Used</th>
+              <th class="num">Tonight</th>
+            </tr></thead>
+            <tbody>
+              ${g.items.map(function (i) {
+                return html`<tr data-row="${i.id}">
+                  <td class="name">${i.name}</td>
+                  <td class="num"><input class="costinput" type="number" min="0" step="0.01"
+                    inputmode="decimal" placeholder="0.00"
+                    data-cost="price" data-id="${i.id}"
+                    aria-label="Pack price for ${i.name}"></td>
+                  <td class="num"><input class="costinput" type="number" min="0" step="1"
+                    inputmode="numeric" placeholder="0"
+                    data-cost="yield" data-id="${i.id}"
+                    aria-label="Portions per pack for ${i.name}"></td>
+                  <td class="num costper" data-per="${i.id}">&mdash;</td>
+                  <td class="num uses" data-uses="${i.id}"></td>
+                  <td class="num" data-spend="${i.id}"></td>
+                </tr>`;
+              })}
+            </tbody>
+          </table></div>`;
+        })}
+      </div>`;
+    }).join('');
+  }
+
+  /** Tiles. Blank figures render as a dash, never as $0.00. */
+  function costSummaryHtml(rep) {
+    var pct = rep.foodCostPct;
+
+    /*
+     * Before anything is priced, the spend really is zero and the honest
+     * rendering of it is still a dash. "Food spend tonight $0.00" is read as
+     * "the food cost nothing", which is the one claim this whole module exists
+     * to avoid making.
+     */
+    var anyPriced = rep.coverage.ingredientsPriced > 0;
+    var known = anyPriced ? rep.totals.known : null;
+    var perCover = anyPriced ? rep.totals.perCover : null;
+
+    var cards = [
+      { label: 'Cost per bowl', value: costing.money(rep.pasta.avg),
+        note: rep.pasta.items
+          ? rep.pasta.priced + ' of ' + rep.pasta.items + ' bowls fully priced'
+          : 'no bowls tonight' },
+      { label: 'Cost per pizza', value: costing.money(rep.pizza.avg),
+        note: rep.pizza.items
+          ? rep.pizza.priced + ' of ' + rep.pizza.items + ' pizzas fully priced'
+          : 'no pizzas tonight' },
+      { label: 'Food cost per cover', value: costing.money(perCover),
+        note: rep.totals.covers + ' covers, all you can eat' },
+      { label: 'Food spend tonight', value: costing.money(known),
+        note: anyPriced ? rep.totals.items + ' items out' : 'nothing priced yet' },
+    ];
+
+    // Only worth a tile once someone has said what a cover is charged.
+    if (pct != null) {
+      cards.push({
+        label: 'Food cost %', value: Math.round(pct) + '%',
+        note: 'of ' + costing.money(rep.chargePerCover) + ' a cover, target under 35%',
+        good: pct <= 35, bad: pct > 45,
+      });
+    }
+
+    if (rep.dearest) {
+      cards.push({
+        label: 'Dearest item built', value: costing.money(rep.dearest.total),
+        note: 'ticket ' + rep.dearest.ticketNo + ' · ' + (rep.dearest.dish || rep.dearest.kind),
+      });
+    }
+
+    return cards.map(function (c) {
+      return html`<div class="stat ${c.good ? 'is-good' : ''} ${c.bad ? 'is-bad' : ''}">
+        <div class="stat-label">${c.label}</div>
+        <div class="stat-value">${c.value}</div>
+        <div class="stat-note">${c.note}</div>
+      </div>`;
+    }).join('');
+  }
+
+  /**
+   * How much of the figures above can be believed, said before they are read.
+   *
+   * This is the whole reason the costing module refuses to treat a missing
+   * price as zero. A cost per cover built on two thirds of the ingredients is
+   * not a low cost per cover, it is an incomplete one, and the difference has
+   * to be on the screen next to the number.
+   */
+  function coverageHtml(rep) {
+    if (!rep.totals.items) {
+      return html`<div class="notice costcover">
+        No orders on the rail yet, so there is nothing to cost. Prices entered
+        below are kept, and these figures fill in as the night runs.
+      </div>`;
+    }
+    if (rep.coverage.complete) {
+      return html`<div class="notice notice-ok costcover">
+        Every one of the ${rep.coverage.ingredientsPriced} ingredients that went
+        out tonight is priced, so the figures above are the whole food cost.
+      </div>`;
+    }
+    var gaps = rep.coverage.unpriced;
+    var shown = gaps.slice(0, 8).map(function (g) { return g.name + ' (×' + g.uses + ')'; });
+    if (gaps.length > shown.length) shown.push('and ' + (gaps.length - shown.length) + ' more');
+    return html`<div class="notice notice-warn costcover">
+      <strong>Part-priced:</strong> ${rep.coverage.itemsComplete} of
+      ${rep.coverage.itemsTotal} items have every ingredient priced. The figures
+      above count only what has a price, so treat them as a floor, not a cost.
+      Still to price: ${shown.join(', ')}.
+    </div>`;
+  }
+
+  /**
+   * Push the current cost sheet and tonight's orders into the cells.
+   *
+   * Skips whichever input has focus. A snapshot arriving mid-keystroke would
+   * otherwise overwrite what is being typed with what was last saved.
+   */
+  function applyCosts() {
+    if (!el.costSheet) return;
+    var items = state.costs.items || {};
+    var rep = costing.costReport(state.orders, items, {
+      chargePerCover: state.costs.chargePerCover,
+    });
+
+    var spendById = {};
+    rep.contributors.forEach(function (c) { spendById[c.id] = c; });
+    var gapById = {};
+    rep.coverage.unpriced.forEach(function (g) { gapById[g.id] = g; });
+
+    Array.prototype.forEach.call(el.costSheet.querySelectorAll('input[data-cost]'), function (input) {
+      if (input === document.activeElement) return;
+      var entry = items[input.dataset.id];
+      var v = entry ? entry[input.dataset.cost] : null;
+      input.value = v == null ? '' : String(v);
+    });
+
+    if (el.chargePerCover && el.chargePerCover !== document.activeElement) {
+      el.chargePerCover.value = state.costs.chargePerCover == null
+        ? '' : String(state.costs.chargePerCover);
+    }
+
+    Array.prototype.forEach.call(el.costSheet.querySelectorAll('tr[data-row]'), function (row) {
+      var id = row.getAttribute('data-row');
+      var unit = costing.perPortion(items[id]);
+      var spend = spendById[id];
+      var used = spend ? spend.uses : (gapById[id] ? gapById[id].uses : 0);
+
+      var per = row.querySelector('[data-per]');
+      per.textContent = unit == null ? 'not priced' : costing.unitMoney(unit);
+      per.classList.toggle('is-unset', unit == null);
+
+      row.querySelector('[data-uses]').textContent = used ? String(used) : '';
+      row.querySelector('[data-spend]').textContent = spend ? costing.money(spend.total) : '';
+
+      // Marked only when it actually went out unpriced. An ingredient nobody
+      // ordered is not a gap in tonight's number.
+      row.classList.toggle('is-unpriced', !!gapById[id]);
+      row.classList.toggle('is-idle', used === 0);
+    });
+
+    el.costSummary.innerHTML = costSummaryHtml(rep) + coverageHtml(rep);
+  }
+
+  /**
+   * Take one box's value into state.
+   *
+   * An empty box removes the field rather than storing zero - "I have not
+   * priced this" and "this costs nothing" are different claims, and only the
+   * first should count against coverage. A row with neither field left drops
+   * out of the document entirely.
+   */
+  function setCostField(id, field, rawValue) {
+    var items = state.costs.items;
+    var entry = items[id] || {};
+    var s = String(rawValue == null ? '' : rawValue).trim();
+
+    if (s === '') {
+      delete entry[field];
+    } else {
+      var n = Number(s);
+      // Refuse rather than store. applyCosts() puts the last good value back
+      // as soon as the box loses focus, so the rejection is visible.
+      if (!isFinite(n) || n < 0) return false;
+      entry[field] = n;
+    }
+
+    if (entry.price == null && entry.yield == null) delete items[id];
+    else items[id] = entry;
+    return true;
+  }
+
+  /*
+   * Writes are debounced. A manager tabbing along a row of packs would
+   * otherwise fire a document write per field, and they all land on the same
+   * document anyway - the last one is the only one that matters.
+   */
+  var saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      if (!db.isConfigured) return;
+      db.saveCosts(state.costs).catch(function (err) {
+        toast('Could not save the cost sheet: ' + err.message, true);
+      });
+    }, 600);
+  }
+
+  /*
+   * A number input reports a half-typed decimal as an empty string: type
+   * "18.40" and the box reads back "18", "", "18.4". Clearing the field on
+   * that empty reading blinks the row to "not priced" between two keystrokes,
+   * which on a screen where "not priced" is a real state reads as the entry
+   * having failed. So an empty box only counts as cleared on the way out, and
+   * `change` fires on blur.
+   */
+  el.costSheet.addEventListener('input', function (ev) {
+    var input = ev.target.closest('input[data-cost]');
+    if (!input || input.value.trim() === '') return;
+    if (setCostField(input.dataset.id, input.dataset.cost, input.value)) applyCosts();
+  });
+  el.costSheet.addEventListener('change', function (ev) {
+    var input = ev.target.closest('input[data-cost]');
+    if (!input) return;
+    setCostField(input.dataset.id, input.dataset.cost, input.value);
+    applyCosts();
+    scheduleSave();
+  });
+
+  function readCharge() {
+    var s = el.chargePerCover.value.trim();
+    var n = Number(s);
+    state.costs.chargePerCover = (s === '' || !isFinite(n) || n < 0) ? null : n;
+  }
+
+  el.chargePerCover.addEventListener('input', function () {
+    if (el.chargePerCover.value.trim() === '') return;
+    readCharge();
+    applyCosts();
+  });
+  el.chargePerCover.addEventListener('change', function () {
+    readCharge();
+    applyCosts();
+    scheduleSave();
+  });
+
   // -------------------------------------------------------------------- events
 
   /**
@@ -358,6 +635,8 @@ const CATALOG = menu.catalog();
     // half-configured install.
     renderQrs();
     renderMenu();
+    renderCostSheet();
+    applyCosts();
 
     if (!db.isConfigured) {
       el.statgrid.innerHTML =
@@ -379,9 +658,19 @@ const CATALOG = menu.catalog();
 
     // The manager screen watches the same live feed as the kitchen, so the
     // numbers move as service happens.
+    // The cost sheet is shared, not per-device: a chef pricing the walk-in on
+    // the office iPad shows up here without a refresh, same as the 86 list.
+    db.watchCosts(function (costs) {
+      state.costs = costs;
+      applyCosts();
+    }, {
+      onError: function (err) { toast('Could not read the cost sheet: ' + err.code, true); },
+    });
+
     db.watchToday(function (orders) {
       state.orders = orders;
       renderStats(order.metrics(orders, config.sla));
+      applyCosts();
     }, {
       onError: function (err) { toast('Lost the connection: ' + err.code, true); },
     });

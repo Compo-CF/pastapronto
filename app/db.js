@@ -14,6 +14,7 @@
  *   counters/{serviceDate}   { lastTicket } - allocates human ticket numbers
  *   members/{memberNumber}   { name, dietaryNotes, defaultGuests }
  *   config/availability      { unavailable: [ingredientId] } - the 86 list
+ *   config/costs             { items: { id: {price, yield} }, chargePerCover }
  *
  * Every screen listens to "today's orders" with a single-field query and does
  * its own filtering and sorting in memory. A service day is tens to a few
@@ -67,6 +68,7 @@ if (
 
 const ordersCol = collection(db, 'orders');
 const availabilityRef = doc(db, 'config', 'availability');
+const costsRef = doc(db, 'config', 'costs');
 
 /** Resolves once we have an anonymous identity, which the rules require. */
 let readyPromise = null;
@@ -130,6 +132,57 @@ export async function setUnavailable(ids) {
     updatedBy: uid(),
   }, { merge: true });
   return ids.length;
+}
+
+/**
+ * Live feed of the food-cost sheet: what a pack costs and how many portions it
+ * yields, per ingredient, plus what the club charges a cover.
+ *
+ * Shared rather than per-device on purpose. A cost sheet is the club's number,
+ * not this laptop's - a chef who prices the walk-in on the office iPad should
+ * find it on the manager screen at the pass, and a figure that only exists in
+ * one browser's storage is a figure nobody can check.
+ *
+ * @param {(costs: {items: object, chargePerCover: number|null}) => void} cb
+ * @returns {() => void} unsubscribe
+ */
+export function watchCosts(cb, { onError } = {}) {
+  const empty = { items: {}, chargePerCover: null };
+  return onSnapshot(
+    costsRef,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      cb(data ? {
+        items: data.items && typeof data.items === 'object' ? data.items : {},
+        chargePerCover: Number.isFinite(Number(data.chargePerCover))
+          ? Number(data.chargePerCover) : null,
+      } : empty);
+    },
+    (err) => {
+      console.error('[db] watchCosts failed:', err.code, err.message);
+      // An empty sheet reads as "nothing priced yet", which the costing screen
+      // already renders honestly. Better than a screen stuck on "loading".
+      cb(empty);
+      if (onError) onError(err);
+    },
+  );
+}
+
+/**
+ * Write the cost sheet. Manager screen only.
+ *
+ * Replaces `items` wholesale rather than merging it, so clearing a price
+ * actually clears it - a merge would leave the old number in the document and
+ * it would reappear on the next screen that read it.
+ */
+export async function saveCosts({ items, chargePerCover }) {
+  await ready();
+  await setDoc(costsRef, {
+    items: items || {},
+    chargePerCover: Number.isFinite(Number(chargePerCover)) ? Number(chargePerCover) : null,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid(),
+  });
 }
 
 /** One read of the 86 list, for the submit-time re-check. */

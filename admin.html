@@ -82,6 +82,31 @@
   <section class="tents" id="tents"></section>
 
   <section class="no-print">
+    <h2 class="sec-title">Food cost</h2>
+
+    <div class="costsum" id="costSummary"></div>
+
+    <div class="card stack" style="margin-top:14px">
+      <div class="row-between costcharge">
+        <div>
+          <label for="chargePerCover"><strong>Charge per cover</strong></label>
+          <p class="muted" style="margin:4px 0 0;font-size:14px">
+            What the club bills a head for the night. Optional &ndash; it only
+            turns cost per cover into a food cost percentage.
+          </p>
+        </div>
+        <div class="moneyfield">
+          <span aria-hidden="true">$</span>
+          <input class="input" id="chargePerCover" type="number" min="0" step="0.01"
+                 inputmode="decimal" placeholder="0.00" aria-label="Charge per cover in dollars">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="costSheet" style="margin-top:14px">Loading&hellip;</div>
+  </section>
+
+  <section class="no-print">
     <h2 class="sec-title">Menu, allergens &amp; 86 list</h2>
     <div class="notice" id="summary86" style="margin-bottom:14px">Loading&hellip;</div>
     <div class="card" id="menuRef"></div>
