@@ -565,7 +565,6 @@ function downloadPdf() {
   try {
     const brand = activeBrand();
     const bytes = buildReportPdf(current.report, current.date, {
-      lang: t.lang,
       orgName: brand.orgName,
       venueName: brand.venueName,
       accent: accentRgb(),
@@ -636,13 +635,6 @@ document.getElementById('printBtn').addEventListener('click', () => window.print
 async function boot() {
   document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
 
-  // The close-out has its own language, independent of the rail and the guest.
-  const other = i18n.LANGS.filter((l) => l.id !== t.lang)[0];
-  const langBtn = document.getElementById('langSwitch');
-  langBtn.textContent = other.short;
-  langBtn.setAttribute('aria-label', other.name);
-  langBtn.addEventListener('click', () => i18n.setLang('report', other.id));
-  document.documentElement.setAttribute('lang', t.lang);
     document.title = pageTitle('Close-out');
 
   if (!db.isConfigured) {

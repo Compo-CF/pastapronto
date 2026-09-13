@@ -38,16 +38,6 @@ const CATALOG = menu.catalog();
 
   var t = i18n.translator('kitchen');
 
-  /** Language switch for this rail. Shows the language it switches to. */
-  function wireLang(scope) {
-    var other = i18n.LANGS.filter(function (l) { return l.id !== t.lang; })[0];
-    var btn = document.getElementById('langSwitch');
-    if (!btn) return;
-    btn.textContent = other.short;
-    btn.setAttribute('aria-label', other.name);
-    btn.addEventListener('click', function () { i18n.setLang(scope, other.id); });
-    document.documentElement.setAttribute('lang', t.lang);
-  }
 
   function menuName(group, id) {
     var hit = (CATALOG[group] || []).filter(function (x) { return x.id === id; })[0];
@@ -203,7 +193,6 @@ const CATALOG = menu.catalog();
 
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
-    wireLang('kitchen');
     document.title = pageTitle('Expo & Runners');
 
     if (!db.isConfigured) {

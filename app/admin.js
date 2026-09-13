@@ -12,7 +12,6 @@ import * as db from './db.js';
 import * as seed from './seed.js';
 import { art } from './art.js';
 import { activeBrand, brandList, brandParam, mastheadHtml, pageTitle, switchBrand } from './brand.js';
-import * as i18n from './i18n.js';
 import * as QR from './qr.js';
 import {
   html, raw, mmss, escapeHtml, remember, recall, toast, requireStaff,
@@ -310,32 +309,6 @@ const CATALOG = menu.catalog();
    * nowhere else. The choice is per device, which is also what makes it safe
    * to flip mid-pitch on a laptop without touching anyone's phone.
    */
-  var t = i18n.translator('manager');
-
-  /**
-   * Language for every surface, from one place.
-   *
-   * The manager screen is where an install gets configured, so all four
-   * scopes are set here - a manager should not have to walk to the kitchen
-   * iPad to put the rail in Spanish. Each screen also has its own quick
-   * toggle; these are the same setting.
-   */
-  function renderLangSwitch() {
-    document.getElementById('langTitle').textContent = t('lang.label');
-    document.getElementById('langNote').textContent = t('lang.note');
-    var el2 = document.getElementById('langSwitch');
-    var labels = { guest: 'Guest', kitchen: 'Kitchen / Expo', manager: 'Manager', report: 'Close-out' };
-    el2.innerHTML = i18n.SCOPES.map(function (scope) {
-      var cur = i18n.langFor(scope);
-      var next = cur === 'es' ? 'en' : 'es';
-      return html`<button class="brandopt" type="button" data-act="setLang"
-        data-scope="${scope}" data-id="${next}" aria-pressed="${cur === 'es' ? 'true' : 'false'}">
-        <span class="brandopt-name">${labels[scope]}</span>
-        <span class="brandopt-sub">${cur === 'es' ? 'Español' : 'English'}</span>
-      </button>`;
-    }).join('');
-  }
-
   function renderBrandSwitch() {
     var brands = brandList();
 
@@ -351,12 +324,6 @@ const CATALOG = menu.catalog();
       + 'QR codes above so a guest’s phone opens the same brand. Every staff '
       + 'screen here follows it.';
   }
-
-  document.getElementById('langSwitch').addEventListener('click', function (ev) {
-    var btn = ev.target.closest('.brandopt');
-    if (!btn) return;
-    i18n.setLang(btn.getAttribute('data-scope'), btn.getAttribute('data-id'));
-  });
 
   el.brandSwitch.addEventListener('click', function (ev) {
     var btn = ev.target.closest('.brandopt');
@@ -376,7 +343,6 @@ const CATALOG = menu.catalog();
       throw new Error('Staff passcode required.');
     }
 
-    renderLangSwitch();
     renderBrandSwitch();
 
     // Whatever address this page was opened from is an address a phone can

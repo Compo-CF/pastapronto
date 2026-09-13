@@ -363,3 +363,16 @@
   .lanes { grid-template-columns: 1fr; overflow-y: auto; }
   .lane[data-lane="ready"] { grid-column: span 1; }
   .kfoot { display: none; }
+
+/* A note the guest wrote in Spanish. The English gloss leads, the original
+   sits under it in the guest's own words - a cook acting on a half-understood
+   note is worse than a cook who can see exactly what was written. */
+.note-es {
+  display: inline-block; margin-right: 6px; padding: 0 6px;
+  border-radius: 4px; background: #3d3417; color: var(--kwarn);
+  font-size: 11px; font-weight: 800; letter-spacing: .06em;
+}
+.note-orig {
+  display: block; margin-top: 4px;
+  font-size: 12px; font-weight: 600; color: var(--kmuted);
+}

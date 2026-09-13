@@ -355,6 +355,12 @@ import {
 
     return html`
       ${raw(screenWelcome())}
+      <div class="langpick" role="group" aria-label="Language / Idioma">
+        ${i18n.LANGS.map(function (l) {
+          return html`<button class="langpick-opt" type="button" data-act="setLang" data-id="${l.id}"
+            lang="${l.id}" aria-pressed="${l.id === t.lang ? 'true' : 'false'}">${l.name}</button>`;
+        })}
+      </div>
       <div class="step-head">
         <p class="step-kicker">${t('guest.step', { n: 1 })}</p>
         <h1 class="step-title">${t('guest.member.title', { label: memberLabel() })}</h1>
@@ -1059,6 +1065,10 @@ import {
       render({ keepScroll: true });
     },
 
+    setLang: function (el) {
+      i18n.setLang('guest', el.dataset.id);
+    },
+
     toggleSauce: function (el) {
       var bowl = currentBowl();
       var cap = state.boot.limits.maxSaucesPerBowl;
@@ -1157,6 +1167,7 @@ import {
           memberNumber: state.memberDigits,
           memberName: state.member ? state.member.name : '',
           memberStatus: state.member ? state.member.status : 'unverified',
+          lang: t.lang,
           guestCount: state.guestCount,
           source: 'qr',
           avoidAllergens: state.avoid,

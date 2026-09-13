@@ -194,6 +194,9 @@ export function buildOrder(draft, ctx) {
     memberNumber: normalizeMemberNumber(draft.memberNumber) || '',
     memberName: String(draft.memberName || '').slice(0, 48),
     memberStatus: draft.memberStatus || 'unverified',
+    // The language the guest ordered in, so the kitchen knows whether a free
+    // text note needs reading as Spanish.
+    lang: draft.lang === 'es' ? 'es' : 'en',
 
     kind,
     guestCount: Number(draft.guestCount),

@@ -18,6 +18,7 @@ import * as db from './db.js';
 import { art } from './art.js';
 import { mastheadHtml, pageTitle } from './brand.js';
 import * as i18n from './i18n.js';
+import { glossNote } from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
   remember, recall, chime, unlockAudio, toast, requireStaff,
@@ -157,16 +158,6 @@ const CATALOG = menu.catalog();
 
   var t = i18n.translator('kitchen');
 
-  /** Language switch for this rail. Shows the language it switches to. */
-  function wireLang(scope) {
-    var other = i18n.LANGS.filter(function (l) { return l.id !== t.lang; })[0];
-    var btn = document.getElementById('langSwitch');
-    if (!btn) return;
-    btn.textContent = other.short;
-    btn.setAttribute('aria-label', other.name);
-    btn.addEventListener('click', function () { i18n.setLang(scope, other.id); });
-    document.documentElement.setAttribute('lang', t.lang);
-  }
 
   function menuName(group, id) {
     var list = CATALOG[group] || [];
@@ -189,7 +180,26 @@ const CATALOG = menu.catalog();
     return menu.kindOf(line) === 'pizza' ? 'pizzaToppings' : 'toppings';
   }
 
-  function renderLine(line) {
+  /**
+   * A guest note, pushed toward English when the order was placed in Spanish.
+   *
+   * The original always stays on the chit underneath. The glossary catches the
+   * common requests and nothing more, so a cook who sees only half of it in
+   * English still has the guest's own words to read, or to carry to someone
+   * who can read them.
+   */
+  function noteHtml(text, cls, orderLang) {
+    if (!text) return '';
+    if (orderLang !== 'es') return '<div class="' + cls + '">' + escapeHtml(text) + '</div>';
+    var g = glossNote(text);
+    if (!g.changed) {
+      return '<div class="' + cls + '"><span class="note-es">ES</span> ' + escapeHtml(text) + '</div>';
+    }
+    return '<div class="' + cls + '">' + escapeHtml(g.text)
+      + '<span class="note-orig"><span class="note-es">ES</span> ' + escapeHtml(text) + '</span></div>';
+  }
+
+  function renderLine(line, orderLang) {
     var isPizza = menu.kindOf(line) === 'pizza';
     var adds = [];
     if (line.toppings && line.toppings.length) {
@@ -210,7 +220,7 @@ const CATALOG = menu.catalog();
         <div class="cline-dish">${menu.describe(line, t.lang)}</div>
         ${raw(adds.length ? '<div class="cline-add">' + escapeHtml(adds.join(' \u00b7 ')) + '</div>' : '')}
         <div class="cline-portion">${flags.join(' \u00b7 ')}</div>
-        ${raw(line.notes ? '<div class="cline-note">! ' + escapeHtml(line.notes) + '</div>' : '')}
+        ${raw(noteHtml(line.notes, 'cline-note', orderLang))}
       </div>
     </li>`;
   }
@@ -278,8 +288,8 @@ const CATALOG = menu.catalog();
       </div>
       <div class="chit-badges">${raw(badges.join(''))}</div>
       ${raw(alert)}
-      <ul class="chit-lines">${order.lines.map(renderLine)}</ul>
-      ${raw(order.notes ? '<div class="chit-note">' + escapeHtml(order.notes) + '</div>' : '')}
+      <ul class="chit-lines">${order.lines.map(function (l) { return renderLine(l, order.lang); })}</ul>
+      ${raw(noteHtml(order.notes, 'chit-note', order.lang))}
       <div class="chit-actions">${buttons}</div>
     </article>`;
   }
@@ -510,7 +520,6 @@ const CATALOG = menu.catalog();
 
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
-    wireLang('kitchen');
     // The lane headings live in the HTML so the rail paints before JS runs.
     [['queued', 'kitchen.lane.queued'], ['cooking', 'kitchen.lane.cooking'],
       ['ready', 'kitchen.lane.ready']].forEach(function (pair) {
