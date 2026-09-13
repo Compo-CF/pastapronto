@@ -172,8 +172,24 @@ can warn a table before it complains.
 
 **Today at a glance** - eight stat tiles: orders, covers, open now, average wait
 to accept, average cook time, average runner time, p90 ticket time and on-time
-percentage (green at 90 or above, red below 75). No revenue tile: the app never
-handles money. Refreshes on every order event.
+percentage (green at 90 or above, red below 75). No revenue tile: nothing here
+is billed, and charges post through the club's own system. Refreshes on every
+order event.
+
+**Sub-navigation** - the three working sections (QR codes, Food cost, Menu) are
+pills showing one panel at a time, rather than a single stack. Each is long
+enough on its own that stacking them put the last one below two screenfuls of
+the other two. The pills stick under the appbar, so the cost sheet - seven
+screenfuls at laptop width - can be left from its bottom without scrolling back
+up first. The choice is remembered per device, because filling in a cost sheet
+takes more than one sitting.
+
+The **86 count rides on the Menu pill** as a badge. It is the only live service
+state on this screen - everything else here is set once - so it is the one
+thing that must not go quiet while a manager is looking at another tab.
+
+The table tents sit outside the panels: they print from the QR panel's button,
+and a hidden panel would take them off the printed page with it.
 
 **QR codes** - a base-address field pre-filled with the detected LAN address,
 because a QR pointing at localhost is useless on a phone. Codes are generated

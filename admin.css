@@ -5,6 +5,62 @@
 .adminnav { display: flex; gap: 8px; }
 .adminnav .btn { min-height: 44px; font-size: 15px; padding: 0 18px; }
 
+/* ------------------------------------------------------------------ subnav
+   A second level of navigation under the one in the appbar, so it has to read
+   as subordinate to it: the same pill shape, a hairline instead of the
+   appbar's 2px, and a lighter weight. Same shape at a lower rank, rather than
+   a different shape competing for the same job. */
+
+.subnav {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  /* The panel is its own section with the page's 34px gap above it. Half that
+     back, so the active panel reads as hanging off its pill. */
+  margin-bottom: -17px;
+
+  /* Sticky under the appbar, which is itself sticky and 71px tall. The cost
+     sheet runs to seven screenfuls - without this, switching away from the
+     bottom of it means scrolling all the way back up first, which is the
+     problem these pills exist to solve. */
+  position: sticky;
+  top: 70px;
+  z-index: 10;                      /* under the appbar's 20, over the panels */
+  padding: 10px 0;
+  background: var(--paper);
+}
+
+.subpill {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card); color: var(--ink-soft);
+  font: inherit; font-size: 15px; font-weight: 700;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+.subpill:hover { border-color: var(--tomato); color: var(--tomato-dark); }
+.subpill:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
+
+.subpill[aria-selected="true"] {
+  background: var(--tomato); border-color: var(--tomato); color: #fff;
+}
+
+/* A panel is only ever reached through its pill, so it takes no focus ring of
+   its own - the ring belongs to the thing you pressed. */
+.panel:focus { outline: none; }
+
+/* The 86 count, carried on the pill so taking an ingredient off the menu stays
+   visible from the other two tabs. Burying live service state behind a tab is
+   the one thing this layout could have cost us. */
+.subpill-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--tomato); color: #fff;
+  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.subpill[aria-selected="true"] .subpill-badge { background: #fff; color: var(--tomato); }
+
 /* -------------------------------------------------------------------- stats */
 
 .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; }

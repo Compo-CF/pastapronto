@@ -62,8 +62,18 @@
     </div>
   </section>
 
-  <section class="no-print">
-    <h2 class="sec-title">QR codes</h2>
+  <!-- One section at a time. The QR grid, the cost sheet and the menu tables
+       are each long enough that stacking all three buried the last one. -->
+  <nav class="subnav no-print" role="tablist" aria-label="Manager sections">
+    <button class="subpill" type="button" role="tab" data-tab="qr"
+            id="tab-qr" aria-controls="panel-qr" aria-selected="true">QR codes</button>
+    <button class="subpill" type="button" role="tab" data-tab="cost"
+            id="tab-cost" aria-controls="panel-cost" aria-selected="false" tabindex="-1">Food cost</button>
+    <button class="subpill" type="button" role="tab" data-tab="menu"
+            id="tab-menu" aria-controls="panel-menu" aria-selected="false" tabindex="-1">Menu, allergens &amp; 86<span class="subpill-badge" id="badge86" hidden></span></button>
+  </nav>
+
+  <section class="no-print panel" id="panel-qr" role="tabpanel" aria-labelledby="tab-qr" tabindex="0">
     <div class="card stack">
       <div class="field">
         <label for="baseUrl">Base address printed into every QR code</label>
@@ -79,11 +89,11 @@
     <div class="qrgrid" id="qrgrid"></div>
   </section>
 
+  <!-- Outside the panels on purpose: the tents print from the QR panel's
+       button, and a hidden panel would take them off the page with it. -->
   <section class="tents" id="tents"></section>
 
-  <section class="no-print">
-    <h2 class="sec-title">Food cost</h2>
-
+  <section class="no-print panel" id="panel-cost" role="tabpanel" aria-labelledby="tab-cost" tabindex="0" hidden>
     <div class="costsum" id="costSummary"></div>
 
     <div class="card stack" style="margin-top:14px">
@@ -106,8 +116,7 @@
     <div class="card" id="costSheet" style="margin-top:14px">Loading&hellip;</div>
   </section>
 
-  <section class="no-print">
-    <h2 class="sec-title">Menu, allergens &amp; 86 list</h2>
+  <section class="no-print panel" id="panel-menu" role="tabpanel" aria-labelledby="tab-menu" tabindex="0" hidden>
     <div class="notice" id="summary86" style="margin-bottom:14px">Loading&hellip;</div>
     <div class="card" id="menuRef"></div>
   </section>

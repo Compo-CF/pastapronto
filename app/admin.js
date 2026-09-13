@@ -193,6 +193,23 @@ const CATALOG = menu.catalog();
   function render86Summary() {
     var el86 = document.getElementById('summary86');
     if (!el86) return;
+
+    /*
+     * The count rides on the pill as well as in the panel. The 86 list is the
+     * only live service state on this screen - everything else here is set
+     * once - so it is the one thing that must not go quiet just because a
+     * manager is looking at the cost sheet.
+     */
+    var badge = document.getElementById('badge86');
+    if (badge) {
+      badge.textContent = state.unavailable.length;
+      badge.hidden = state.unavailable.length === 0;
+      var n = state.unavailable.length;
+      document.getElementById('tab-menu').setAttribute('aria-label', n
+        ? 'Menu, allergens and 86 list - ' + n + ' ingredient' + (n === 1 ? '' : 's') + ' off the menu'
+        : 'Menu, allergens and 86 list');
+    }
+
     if (!state.unavailable.length) {
       el86.className = 'notice';
       el86.style.background = '#f4ece0';
@@ -519,6 +536,64 @@ const CATALOG = menu.catalog();
     scheduleSave();
   });
 
+  // ------------------------------------------------------------------- panels
+
+  /*
+   * Three sections, one at a time. Each of them - the QR grid, the cost sheet,
+   * the menu tables - is long enough on its own that stacking all three put
+   * the last one below two screenfuls of the other two.
+   *
+   * Every panel stays rendered whether or not it is showing. Nothing in this
+   * screen measures layout, so a hidden panel updates exactly as well as a
+   * visible one and switching is instant rather than a re-render. The table
+   * tents live outside the panels for the opposite reason: they print from the
+   * QR panel's button, and hiding that panel would take them off the page.
+   */
+  var TABS = ['qr', 'cost', 'menu'];
+  var activeTab = TABS[0];
+
+  function showTab(name, moveFocus) {
+    var tab = TABS.indexOf(name) === -1 ? TABS[0] : name;
+    activeTab = tab;
+
+    TABS.forEach(function (id) {
+      var pill = document.getElementById('tab-' + id);
+      var panel = document.getElementById('panel-' + id);
+      var on = id === tab;
+      pill.setAttribute('aria-selected', on ? 'true' : 'false');
+      // Roving tabindex: the group is one tab stop, arrows move inside it.
+      pill.tabIndex = on ? 0 : -1;
+      panel.hidden = !on;
+      if (on && moveFocus) pill.focus();
+    });
+
+    remember('admin.tab', tab);
+  }
+
+  var subnav = document.querySelector('.subnav');
+
+  subnav.addEventListener('click', function (ev) {
+    var pill = ev.target.closest('[data-tab]');
+    if (pill) showTab(pill.dataset.tab, false);
+  });
+
+  // Arrow keys are how a tablist is expected to work, and without them the
+  // roving tabindex above would leave two of the three pills unreachable.
+  subnav.addEventListener('keydown', function (ev) {
+    var step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[ev.key];
+    var jump = ev.key === 'Home' ? 0 : (ev.key === 'End' ? TABS.length - 1 : null);
+    if (step === undefined && jump === null) return;
+
+    ev.preventDefault();
+
+    // Usually the key came from a pill. If focus is on the container itself,
+    // step from whichever tab is open rather than doing nothing.
+    var pill = ev.target.closest('[data-tab]');
+    var at = TABS.indexOf(pill ? pill.dataset.tab : activeTab);
+    var next = jump !== null ? jump : (at + step + TABS.length) % TABS.length;
+    showTab(TABS[next], true);
+  });
+
   // -------------------------------------------------------------------- events
 
   /**
@@ -621,6 +696,11 @@ const CATALOG = menu.catalog();
     }
 
     renderBrandSwitch();
+
+    // Whichever section this manager was last working in. A cost sheet takes
+    // more than one sitting to fill in, and landing back on QR codes every
+    // time would make that worse than it needs to be.
+    showTab(recall('admin.tab', 'qr'), false);
 
     // Whatever address this page was opened from is an address a phone can
     // reach, so it is the right default to print into the codes.
