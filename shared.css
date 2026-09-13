@@ -245,10 +245,14 @@ button { cursor: pointer; }
   letter-spacing: 0.12em;
 }
 .memberview span {
+  box-sizing: content-box;
   width: 52px;
+  min-height: 1.1em;
+  line-height: 1.1;
   padding-bottom: 6px;
   border-bottom: 4px solid var(--line-strong);
   text-align: center;
+  letter-spacing: normal;
 }
 .memberview span.is-filled { border-bottom-color: var(--tomato); }
 
