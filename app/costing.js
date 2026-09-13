@@ -128,6 +128,19 @@ export function perPortion(entry) {
   return price / yieldN;
 }
 
+/**
+ * A charge per cover, or null when there isn't one.
+ *
+ * Guarding with Number.isFinite alone is not enough, which is how this got out
+ * the door wrong: Number(null) is 0 and 0 is finite, so "nobody entered one"
+ * stored as a charge of zero and read back into the box as "0". Zero is not a
+ * charge in any case - it is a division by zero wearing a number's clothes.
+ */
+export function normalizeCharge(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function portionFactor(line) {
   const p = menu.PORTIONS.find((x) => x.id === line.portion);
   return p ? p.factor : 1;
@@ -268,8 +281,7 @@ export function costReport(orders, costs, opts = {}) {
   const covers = billableCovers(orders || []);
   const perCover = covers ? known / covers : null;
 
-  const charge = Number(opts.chargePerCover);
-  const chargePerCover = Number.isFinite(charge) && charge > 0 ? charge : null;
+  const chargePerCover = normalizeCharge(opts.chargePerCover);
 
   const usedIds = new Set([...contrib.keys(), ...unpriced.keys()]);
 

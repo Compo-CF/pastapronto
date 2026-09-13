@@ -520,9 +520,7 @@ const CATALOG = menu.catalog();
   });
 
   function readCharge() {
-    var s = el.chargePerCover.value.trim();
-    var n = Number(s);
-    state.costs.chargePerCover = (s === '' || !isFinite(n) || n < 0) ? null : n;
+    state.costs.chargePerCover = costing.normalizeCharge(el.chargePerCover.value.trim());
   }
 
   el.chargePerCover.addEventListener('input', function () {

@@ -36,6 +36,7 @@ import { firebaseConfig, isConfigured } from './firebase-config.js';
 import { config, serviceDate, tagById } from './config.js';
 import * as order from './order.js';
 import * as menu from './menu.js';
+import * as costing from './costing.js';
 import { noteClockSkew } from './ui.js';
 
 export { isConfigured };
@@ -154,8 +155,9 @@ export function watchCosts(cb, { onError } = {}) {
       const data = snap.exists() ? snap.data() : null;
       cb(data ? {
         items: data.items && typeof data.items === 'object' ? data.items : {},
-        chargePerCover: Number.isFinite(Number(data.chargePerCover))
-          ? Number(data.chargePerCover) : null,
+        // Also heals documents written before this was fixed, which stored a
+        // missing charge as 0 and put "0" back in the box on every load.
+        chargePerCover: costing.normalizeCharge(data.chargePerCover),
       } : empty);
     },
     (err) => {
@@ -179,7 +181,7 @@ export async function saveCosts({ items, chargePerCover }) {
   await ready();
   await setDoc(costsRef, {
     items: items || {},
-    chargePerCover: Number.isFinite(Number(chargePerCover)) ? Number(chargePerCover) : null,
+    chargePerCover: costing.normalizeCharge(chargePerCover),
     updatedAt: serverTimestamp(),
     updatedBy: uid(),
   });

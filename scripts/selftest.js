@@ -1272,6 +1272,22 @@ test('the demo night costs out end to end', () => {
   );
 });
 
+test('"no charge entered" never round-trips as a charge of zero', () => {
+  // This shipped wrong. Number(null) is 0 and 0 is finite, so a guard of
+  // Number.isFinite(Number(v)) let "unset" through as 0 - it saved to the
+  // document as 0 and came back into the box as the string "0".
+  assert.strictEqual(costing.normalizeCharge(null), null, 'null is not a charge');
+  assert.strictEqual(costing.normalizeCharge(undefined), null, 'absent is not a charge');
+  assert.strictEqual(costing.normalizeCharge(''), null, 'an empty box is not a charge');
+  assert.strictEqual(costing.normalizeCharge('   '), null, 'nor is whitespace');
+  assert.strictEqual(costing.normalizeCharge(0), null, 'zero is a division, not a price');
+  assert.strictEqual(costing.normalizeCharge(-5), null, 'nor is a negative');
+  assert.strictEqual(costing.normalizeCharge('abc'), null);
+
+  assert.strictEqual(costing.normalizeCharge(39), 39);
+  assert.strictEqual(costing.normalizeCharge('39.50'), 39.5, 'the box hands over a string');
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');
