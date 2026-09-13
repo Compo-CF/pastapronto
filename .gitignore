@@ -1,6 +1,11 @@
 # Runtime service state: the live order rail is a snapshot, not source.
 data/
 
+# Firebase CLI deploy cache. Rewritten by every `firebase deploy`, so tracking
+# it meant a dirty tree after each one. Already excluded from what is uploaded
+# by the "**/.*" rule in both firebase.json hosting targets.
+.firebase/
+
 # Generated close-out exports, never source.
 close-out-*.pdf
 closeout-*.pdf
