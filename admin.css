@@ -107,7 +107,8 @@
 .mtable caption { text-align: left; font-weight: 800; padding: 14px 0 8px; font-size: 16px; }
 .mtable th, .mtable td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
 .mtable th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
-.mtable td.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Both halves, or the 86 column's cells move right and its header stays put. */
+.mtable th.num, .mtable td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .mtable .allerg { font-size: 12px; font-weight: 700; color: var(--tomato-dark); }
 .mtable-wrap { overflow-x: auto; }
 
