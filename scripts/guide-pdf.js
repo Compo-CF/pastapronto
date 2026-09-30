@@ -251,7 +251,9 @@ y = para(
   112, { width: COL - 40 },
 );
 
-const bandY = 160;
+// Clear of the intro above it. At 160 the last line of that paragraph ran
+// underneath this row and lost a word behind the first panel.
+const bandY = 204;
 // Tall enough for the two cooking areas plus the note under them. They ended
 // flush on the border at 236, with the note sitting on the last station box.
 const bandH = 264;
@@ -315,12 +317,19 @@ groupBy(config.tags, 'area', (t) => t.label).forEach((g) => {
   // Tables come from the tent list, covers from the config. Printing them
   // together is the whole point: a manager reading this wants to know what a
   // full room looks like before the first ticket lands.
-  const line = covers
-    ? g.items.length + ' tables, ' + covers + ' covers'
-    : g.items.length + (g.items.length === 1 ? ' point' : ' points');
-  doc.text(line, { x: zoneX + 12, y: zy + 14, size: 10.5, font: 'bold', color: INK });
-  zy = para(g.items[0] + ' - ' + g.items[g.items.length - 1], zy + 27,
-    { x: zoneX + 12, width: colW - 24, size: 8.5, lead: 11 }) + 14;
+  // An area with covers leads with its capacity and names its range beneath.
+  // One with a single point just names it - "Takeout Counter - Takeout
+  // Counter" is what a first-to-last range says when there is only one.
+  const headline = covers ? g.items.length + ' tables, ' + covers + ' covers' : g.items[0];
+  doc.text(headline, { x: zoneX + 12, y: zy + 14, size: 10.5, font: 'bold', color: INK });
+  zy += 14;
+  if (covers) {
+    const range = g.items.length > 1
+      ? g.items[0] + ' - ' + g.items[g.items.length - 1]
+      : g.items[0];
+    zy = para(range, zy + 13, { x: zoneX + 12, width: colW - 24, size: 8.5, lead: 11 });
+  }
+  zy += 18;
 });
 
 const totalCovers = Object.values(config.areaCovers).reduce((a, b) => a + b, 0);
@@ -331,25 +340,10 @@ doc.text(totalCovers + ' covers', { x: zoneX + 12, y: zy + 28, size: 13, font: '
 arrow(M + colW + 5, bandY + 120, passX - 5, bandY + 120, FAINT, 1.2);
 arrow(passX + colW + 5, bandY + 120, zoneX - 5, bandY + 120, FAINT, 1.2);
 
-y = bandY + bandH + 34;
-rule(y);
-eyebrow('And back again', y + 22);
-
-const loop = [
-  ['1', 'Member scans the tent', 'The code carries the table. Nobody types a table number, ever.'],
-  ['2', 'Ticket routes by kind', 'Pasta to the main kitchen, pizza to the patio decks, alternating.'],
-  ['3', 'Kitchen calls it up', 'It leaves the rail and appears on the pass, wherever it was cooked.'],
-  ['4', 'Runner reads the destination', 'Written large on the card: the tent name, not a code to decode.'],
-  ['5', 'Delivered closes the loop', 'The member\'s own phone updates as the runner walks away.'],
-];
-let ly = y + 46;
-loop.forEach((s) => {
-  doc.rect(M, ly - 9, 18, 18, BRAND);
-  monoMid(s[0], M + 9, ly + 4, 9, PAPER);
-  doc.text(s[1], { x: M + 28, y: ly + 4, size: 9.5, font: 'bold', color: INK });
-  doc.text(s[2], { x: M + 210, y: ly + 4, size: 9, color: SOFT });
-  ly += 26;
-});
+// The five-step loop that used to sit here restated the cover strip almost
+// step for step. The page reads better with the air.
+y = bandY + bandH + 36;
+const ly = y;
 
 y = ly + 18;
 rule(y);
@@ -386,7 +380,7 @@ para('They scan the code on the table tent and they are in. The whole order take
 
 const memberSteps = [
   ['Scan the tent', 'Every table has its own code. It carries the table with it, so the kitchen always knows where the food goes.'],
-  ['Language, then member number', 'English and Espanol are the first thing on the first screen, each written in its own language. Member numbers are 1 to 4 digits; leading zeros do not matter.'],
+  ['Language, then member number', 'English and Español are the first thing on the first screen, each written in its own language. Member numbers are 1 to 4 digits; leading zeros do not matter.'],
   ['Pasta or pizza', 'One tap. The next screen greets them by name.'],
   ['How many at the table', 'Up to ' + config.order.maxGuests + '. This is the number that becomes covers at close-out.'],
   ['Build each plate', 'One tile grid per person. Anything 86\'d is greyed out and marked sold out - visible rather than hidden. Allergens show on each ingredient as they build.'],
@@ -406,14 +400,18 @@ memberSteps.forEach((s, i) => {
 
 const cardY = 148;
 const cardX = RIGHT - 152;
+let rightColumnBottom = cardY + 198;
 
 // The build grid, actual size on a phone, in the column beside the steps.
 if (SHOTS.build) {
-  const ph = doc.fit(SHOTS.build, 152, 262);
-  doc.image(SHOTS.build, { x: cardX + (152 - ph.w) / 2, y: cardY + 212, w: ph.w, h: ph.h });
-  frame(cardX + (152 - ph.w) / 2, cardY + 212, ph.w, ph.h, RULE, 0.6);
-  para('Building bowl 1 of 2. Bow Ties is 86\'d - greyed out and marked sold out, never hidden.',
-    cardY + 212 + ph.h + 13, { x: cardX, width: 152, size: 8, lead: 10, color: FAINT });
+  const shotTop = cardY + 216;
+  const ph = doc.fit(SHOTS.build, 152, 250);
+  doc.image(SHOTS.build, { x: cardX + (152 - ph.w) / 2, y: shotTop, w: ph.w, h: ph.h });
+  frame(cardX + (152 - ph.w) / 2, shotTop, ph.w, ph.h, RULE, 0.6);
+  rightColumnBottom = para(
+    'Building bowl 1 of 2. Bow Ties is 86\'d - greyed out and marked sold out, never hidden.',
+    shotTop + ph.h + 14, { x: cardX, width: 152, size: 8, lead: 10, color: FAINT },
+  );
 }
 
 panel(cardX, cardY, 152, 198, { fill: WASH });
@@ -436,7 +434,9 @@ limits.forEach(([k, v]) => {
   liy += 19;
 });
 
-y += 6;
+// Full width, so it has to clear BOTH columns. Taking only the steps column
+// into account put it straight through the phone screenshot beside them.
+y = Math.max(y, rightColumnBottom) + 18;
 panel(M, y, COL, 58, { fill: WASH, accent: QUEUED, border: null });
 doc.text('An unrecognised member number still goes through.', { x: M + 14, y: y + 22, size: 10, font: 'bold', color: INK });
 para('The kitchen is not the place to settle a membership question and a hungry guest should not be '
@@ -667,5 +667,83 @@ const bytes = doc.build({
   title: 'Neapolitan Night - Floor Guide',
   author: 'The Club at Carlton Woods',
 });
+
+/**
+ * Read the finished file back and check the layout actually holds.
+ *
+ * Laying a page out in absolute coordinates means a paragraph that grows by
+ * one line silently slides under whatever is beneath it. Both faults this
+ * document has shipped were exactly that: copy running off the bottom of the
+ * sheet, and a screenshot sitting on top of a callout because the callout only
+ * cleared the column to its left.
+ *
+ * Neither is visible in a page count or a byte size, and the second is not
+ * visible in a margin check either - the two elements were both comfortably
+ * inside the margins, just on top of each other. So the build refuses rather
+ * than handing over a document that has to be proofread by eye every time.
+ */
+function verify(pdfBytes) {
+  const src = Buffer.from(pdfBytes).toString('latin1');
+  const problems = [];
+  const streams = [...src.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
+    .map((m) => m[1])
+    .filter((s) => /Tj/.test(s));
+
+  const hits = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const H = doc.height;
+  const FOOT = 748;
+
+  streams.forEach((s, i) => {
+    const page = 'page ' + (i + 1);
+    const boxes = [];
+
+    for (const m of s.matchAll(/([\d.-]+) ([\d.-]+) Td \((.*?)\) Tj/g)) {
+      const x = +m[1];
+      const y = H - +m[2];
+      if (x < M - 1 || x > doc.width - M + 1 || y < 20 || y > H - 20) {
+        problems.push(`${page}: text "${m[3].slice(0, 30)}" outside the margins at y=${y.toFixed(0)}`);
+      }
+    }
+
+    for (const m of s.matchAll(/q ([\d.-]+) 0 0 ([\d.-]+) ([\d.-]+) ([\d.-]+) cm \/(Im\d+) Do Q/g)) {
+      const w = +m[1];
+      const h = +m[2];
+      const box = { what: m[5], x: +m[3], y: H - (+m[4] + h), w, h };
+      boxes.push(box);
+      if (box.y + h > FOOT) problems.push(`${page}: ${box.what} runs into the footer`);
+    }
+
+    for (const m of s.matchAll(/([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) re f/g)) {
+      const w = +m[3];
+      const h = +m[4];
+      // Full-bleed bands and hairline rules are not content boxes.
+      if (w > doc.width - 20 || h < 12) continue;
+      const box = { what: 'panel', x: +m[1], y: H - (+m[2] + h), w, h };
+      boxes.push(box);
+      if (box.y + h > FOOT) problems.push(`${page}: a panel runs into the footer`);
+    }
+
+    boxes.forEach((a, ai) => boxes.slice(ai + 1).forEach((b) => {
+      // Panels nest inside panels by design - a chit inside a lane.
+      if (a.what === 'panel' && b.what === 'panel') return;
+      if (hits(a, b)) {
+        problems.push(`${page}: ${a.what} overlaps ${b.what}`
+          + ` (y ${a.y.toFixed(0)}-${(a.y + a.h).toFixed(0)} vs ${b.y.toFixed(0)}-${(b.y + b.h).toFixed(0)})`);
+      }
+    }));
+  });
+
+  return problems;
+}
+
+const problems = verify(bytes);
 writeFileSync(OUT, Buffer.from(bytes));
-console.log('wrote ' + OUT + '  (' + doc.pageCount + ' pages, ' + bytes.length + ' bytes)');
+
+if (problems.length) {
+  console.error('wrote ' + OUT + ', but the layout is broken:');
+  problems.forEach((p) => console.error('  ' + p));
+  process.exitCode = 1;
+} else {
+  console.log('wrote ' + OUT + '  (' + doc.pageCount + ' pages, '
+    + (bytes.length / 1024).toFixed(0) + 'KB, layout checked)');
+}
