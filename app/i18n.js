@@ -62,9 +62,8 @@ export function langFor(scope) {
 /**
  * Switch one surface and reload into it.
  *
- * Strips ?lang= on the way out for the same reason the brand switch strips
- * ?brand=: the parameter beats storage, so leaving it in the address bar would
- * quietly undo the switch on the very next load.
+ * Strips ?lang= on the way out: the parameter beats storage, so leaving it in
+ * the address bar would quietly undo the switch on the very next load.
  */
 export function setLang(scope, lang) {
   if (!isLang(lang) || ENGLISH_ONLY.indexOf(scope) !== -1) return false;

@@ -181,32 +181,34 @@ the numbers on this page are checked without a database.
 
 ## Venue branding
 
-The app ships unbranded. A venue brand is **data plus a stylesheet of
-custom-property overrides** - no screen logic knows a brand exists.
+A venue brand is **data plus a stylesheet of custom-property overrides** - no
+screen logic knows a brand exists.
 
-| Brand | Guest link |
-| --- | --- |
-| Default (PastaPresto) | `/?t=table-12` |
-| The Club at Carlton Woods | `/?t=table-12&brand=carltonwoods` |
+The app runs as **The Club at Carlton Woods** on every screen and every link.
+There is nothing to select and no parameter to remember: `/?t=table-12` is
+branded, and so is a link someone forwards with the query string stripped off.
 
-`?brand=<id>` is remembered per device, so staff screens stay branded once set.
-`?brand=default` clears it.
+### Why it is pinned
 
-### Switching brands
+Branding used to resolve per device from `?brand=` plus a `pp.brand` value in
+localStorage, with a toggle on the Manager screen. That made the answer depend
+on how you arrived. A link sent without the parameter, or opened on a phone
+that had never seen one, came up as unbranded PastaPresto - and a member's own
+phone at the table is the last screen where that is acceptable.
 
-There is a **Branding** toggle in the quiet corner at the bottom of the
-[Manager screen](admin.html) - the settings end of the app, below everything a
-live service needs. Pick a brand and the page reloads into it.
+So `app/brand.js` pins `ACTIVE_BRAND_ID`, and each page's `<head>` carries the
+matching `data-brand` attribute and brand stylesheet as **plain markup**. No
+script runs before first paint any more, which is a useful side effect: there
+is now no window at all in which an unbranded palette could appear.
 
-Staff-only on purpose, and only on that one screen. A guest should never meet a
-control that changes whose restaurant they think they are in.
+The QR codes got shorter too. They used to carry `&brand=<id>` so a guest's
+phone - which has never been to the site and has nothing stored - would open
+branded. A pinned brand does that for free, and a code that has been printed
+and laminated cannot go stale.
 
-The choice is per device, which is what makes it safe to flip on a laptop
-mid-pitch without touching anyone's phone. It also gets **printed into the QR
-codes** on the same screen (`&brand=<id>`), because a guest's phone has never
-been to the site and so has nothing in storage to brand itself from - without
-that, codes printed for a branded venue would open the default palette at every
-table. The printable table tents follow the active brand's wordmark too.
+**Going back to a selectable brand** means turning that constant into a lookup
+again and restoring the five `<head>` blocks. `BRANDS.default` is still in
+`app/brand.js`: the PastaPresto identity is kept, just not reachable.
 
 ### Printed table tents
 

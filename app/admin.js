@@ -12,7 +12,7 @@ import * as costing from './costing.js';
 import * as db from './db.js';
 import * as seed from './seed.js';
 import { art } from './art.js';
-import { activeBrand, brandList, brandParam, mastheadHtml, pageTitle, switchBrand } from './brand.js';
+import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
 import * as QR from './qr.js';
 import {
   html, raw, mmss, escapeHtml, remember, recall, toast, requireStaff,
@@ -39,8 +39,6 @@ const CATALOG = menu.catalog();
     costSummary: document.getElementById('costSummary'),
     costSheet: document.getElementById('costSheet'),
     chargePerCover: document.getElementById('chargePerCover'),
-    brandSwitch: document.getElementById('brandSwitch'),
-    brandNote: document.getElementById('brandNote'),
     toast: document.getElementById('toast'),
   };
 
@@ -79,12 +77,13 @@ const CATALOG = menu.catalog();
    * QR target. A static host has no routing, so the table travels as a query
    * parameter rather than a path segment: https://host/pastapronto/?t=table-12
    *
-   * The brand rides along too. A guest's phone has never been to this site, so
-   * it has nothing in storage to brand itself from - without this, codes
-   * printed for a branded venue would open the default palette on every table.
+   * The table and nothing else. This used to carry &brand= as well, because a
+   * guest's phone has never been to this site and had nothing to brand itself
+   * from - the brand is pinned now, so the codes are shorter and a code that
+   * was printed and laminated cannot go stale when the brand changes.
    */
   function tagUrl(tag) {
-    return state.base.replace(/\/+$/, '') + '/?t=' + tag.id + brandParam();
+    return state.base.replace(/\/+$/, '') + '/?t=' + tag.id;
   }
 
   function renderQrs() {
@@ -648,41 +647,6 @@ const CATALOG = menu.catalog();
     }
   });
 
-  // ------------------------------------------------------------------ branding
-
-  /**
-   * Brand chooser for the quiet corner.
-   *
-   * Staff-only on purpose. A guest should never see a control that changes
-   * whose restaurant they think they are in, and a manager sets this once when
-   * the venue is installed - so it lives at the bottom of this screen and
-   * nowhere else. The choice is per device, which is also what makes it safe
-   * to flip mid-pitch on a laptop without touching anyone's phone.
-   */
-  function renderBrandSwitch() {
-    var brands = brandList();
-
-    el.brandSwitch.innerHTML = brands.map(function (b) {
-      return html`<button class="brandopt" type="button"
-        data-brand="${b.id}" aria-pressed="${b.active ? 'true' : 'false'}">
-        <span class="brandopt-name">${b.label}</span>
-        <span class="brandopt-sub">${b.sub}</span>
-      </button>`;
-    }).join('');
-
-    el.brandNote.textContent = 'Remembered on this device, and printed into the '
-      + 'QR codes above so a guest’s phone opens the same brand. Every staff '
-      + 'screen here follows it.';
-  }
-
-  el.brandSwitch.addEventListener('click', function (ev) {
-    var btn = ev.target.closest('.brandopt');
-    if (!btn) return;
-    var id = btn.getAttribute('data-brand');
-    if (id === activeBrand().id) return;
-    switchBrand(id);
-  });
-
   // ---------------------------------------------------------------------- boot
 
   async function boot() {
@@ -692,8 +656,6 @@ const CATALOG = menu.catalog();
     if (!(await requireStaff())) {
       throw new Error('Staff passcode required.');
     }
-
-    renderBrandSwitch();
 
     // Whichever section this manager was last working in. A cost sheet takes
     // more than one sitting to fill in, and landing back on QR codes every

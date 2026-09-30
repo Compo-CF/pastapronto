@@ -1,16 +1,19 @@
 /**
  * Brand layer.
  *
- * The app ships unbranded by default. A venue brand overrides colours, type,
- * the wordmark and the venue name without touching any screen logic - a brand
- * is data plus a stylesheet of custom-property overrides, nothing more.
+ * A brand overrides colours, type, the wordmark and the venue name without
+ * touching any screen logic - it is data plus a stylesheet of custom-property
+ * overrides, nothing more.
  *
- * Selected with ?brand=<id>, remembered per device so the staff screens stay
- * branded once set. ?brand=default clears it.
+ * ONE BRAND, PINNED. This used to resolve per device from ?brand= and
+ * localStorage, which meant the answer depended on how you arrived: a link
+ * sent without the parameter, or opened on a phone that had never seen one,
+ * came up as unbranded PastaPresto. Nobody opening a link should have to know
+ * about a query parameter, and a guest landing on the wrong identity is the
+ * wrong answer on the one screen that is not ours.
  *
- * The stylesheet itself is attached by a tiny inline script in each page's
- * <head> rather than here, so the branded colours are present on first paint
- * instead of flashing the default palette first.
+ * The stylesheet is attached by a plain <link> in each page's <head>, so the
+ * branded palette is there on first paint with no script involved at all.
  */
 
 export const BRANDS = {
@@ -40,25 +43,23 @@ export const BRANDS = {
 };
 
 /**
- * Where the choice is remembered. The inline <head> script on every page has
- * to repeat this literal - it runs before any module is loaded, which is the
- * whole point of it - so if this ever changes, those change with it.
+ * The brand every screen runs under, on every link, for everyone.
+ *
+ * Each page's <head> carries the matching `data-brand` attribute and brand
+ * stylesheet as plain markup, so if this ever names a different venue, those
+ * five files change with it. That duplication is the price of having the
+ * palette right on the first paint rather than after a script runs.
+ *
+ * BRANDS.default stays below. It is the product's own identity and what a
+ * second venue would start from, and reaching it again means turning this
+ * constant back into a lookup - not rebuilding the brand.
  */
-export const BRAND_KEY = 'pp.brand';
+export const ACTIVE_BRAND_ID = 'carltonwoods';
 
-/** The brand this page is running under. Falls back to default. */
+/** The brand this page is running under. */
 export function activeBrand() {
-  let id = 'default';
-  try {
-    const q = new URLSearchParams(location.search).get('brand');
-    id = q || localStorage.getItem(BRAND_KEY) || 'default';
-  } catch {
-    id = 'default';
-  }
-  return BRANDS[id] || BRANDS.default;
+  return BRANDS[ACTIVE_BRAND_ID] || BRANDS.default;
 }
-
-export const isBranded = () => activeBrand().id !== 'default';
 
 /** The brand's tagline in one language, falling back to English. */
 export function taglineFor(lang) {
@@ -66,55 +67,15 @@ export function taglineFor(lang) {
   return (lang === 'es' && b.taglineEs) ? b.taglineEs : b.tagline;
 }
 
-/**
- * Switch the brand for this device and reload into it.
+/*
+ * switchBrand(), brandList(), brandParam() and isBranded() used to live here.
  *
- * A reload rather than a live swap, because the brand stylesheet is attached
- * by the inline <head> script before first paint - that is what stops a
- * branded screen flashing the default palette, and it is not worth giving up
- * to save a page load on a screen only staff see.
- *
- * The brand query parameter is stripped on the way out. It wins over storage
- * by design, so leaving ?brand=carltonwoods in the address bar would quietly
- * undo a switch back to default on the very next load.
+ * They all existed to answer "which brand is this?", and now there is only one
+ * answer. In particular brandParam() hung &brand=... off every QR code so a
+ * guest's phone - which has never been to this site and has nothing stored -
+ * would open branded; that is exactly what the pinned brand does for free, so
+ * the codes are shorter now as well as always right.
  */
-export function switchBrand(id) {
-  if (!BRANDS[id]) return false;
-  try {
-    localStorage.setItem(BRAND_KEY, id);
-  } catch {
-    // Private mode: the switch cannot be remembered, so carry it in the URL
-    // instead and let this load be the whole of its life.
-    const url = new URL(location.href);
-    url.searchParams.set('brand', id);
-    location.replace(url.toString());
-    return true;
-  }
-  const url = new URL(location.href);
-  url.searchParams.delete('brand');
-  location.replace(url.toString());
-  return true;
-}
-
-/**
- * The brand query string to hang off a URL that leaves this device - a QR
- * code, a printed tent. Empty for the default brand, so an unbranded venue's
- * codes stay clean.
- */
-export function brandParam() {
-  const id = activeBrand().id;
-  return id === 'default' ? '' : '&brand=' + encodeURIComponent(id);
-}
-
-/** Every brand, for a chooser. Default first, then the venues. */
-export function brandList() {
-  return Object.values(BRANDS).map((b) => ({
-    id: b.id,
-    label: b.orgName || b.venueName,
-    sub: b.orgName ? b.venueName : 'Unbranded',
-    active: b.id === activeBrand().id,
-  }));
-}
 
 /**
  * The masthead for a screen: a venue's logo when it has one, otherwise the
