@@ -29,3 +29,6 @@ desktop.ini
 .idea/
 .claude/
 *.swp
+
+# Generated deliverables, never source.
+neapolitan-night-floor-guide.pdf
