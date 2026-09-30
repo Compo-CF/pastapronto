@@ -10,9 +10,33 @@
  * the guide that trains staff on it changes with it, which is the only way a
  * printed document and a running system stay in agreement.
  */
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import * as pdf from '../app/pdf.js';
 import { config } from '../app/config.js';
+
+/**
+ * Screens captured from the running app into shots/. They are committed rather
+ * than regenerated on every build: a guide that only assembles when someone
+ * has a dev server up is a guide that stops being buildable.
+ *
+ * A missing file is not fatal. The page falls back to a labelled placeholder
+ * so the layout still holds and the gap is obvious, rather than the build
+ * dying and nobody getting a document at all.
+ */
+const shot = (name) => {
+  const path = new URL('../shots/' + name, import.meta.url);
+  return existsSync(path) ? new Uint8Array(readFileSync(path)) : null;
+};
+
+const SHOTS = {
+  logo: shot('00-logo.jpeg'),
+  landing: shot('01-guest-landing.jpeg'),
+  lane: shot('02-guest-lane.jpeg'),
+  build: shot('03-guest-build.jpeg'),
+  kitchen: shot('04-kitchen.jpeg'),
+  expo: shot('05-expo.jpeg'),
+  cost: shot('06-food-cost.jpeg'),
+};
 
 const OUT = (() => {
   const i = process.argv.indexOf('--out');
@@ -105,6 +129,33 @@ function rule(y, color = RULE) {
   doc.line(M, y, RIGHT, y, { color, width: 0.8 });
 }
 
+/**
+ * A screenshot in a box `maxW` wide, centred, with a caption under it.
+ * Returns the y below the caption so the page can carry on.
+ *
+ * A screen is worth more than a drawing of a screen: these are captures of the
+ * running app, not mockups, so what a cook is told to look for is what they
+ * will actually see.
+ */
+function screenshot(bytes, maxW, caption, y, maxH = 340) {
+  const x0 = M + (COL - maxW) / 2;
+  if (!bytes) {
+    panel(x0, y, maxW, 60, { fill: WASH });
+    doc.text('[ screenshot missing: run the capture again ]', { x: x0 + 14, y: y + 34, size: 9, color: LATE });
+    return y + 74;
+  }
+  const box = doc.fit(bytes, maxW, maxH);
+  const x = M + (COL - box.w) / 2;
+  doc.image(bytes, { x, y, w: box.w, h: box.h });
+  // A hairline keeps a pale screenshot from bleeding into the page.
+  frame(x, y, box.w, box.h, RULE, 0.6);
+  let out = y + box.h;
+  if (caption) {
+    out = para(caption, out + 13, { x, width: box.w, size: 8.5, lead: 11, color: FAINT });
+  }
+  return out + 6;
+}
+
 function footer(pageNo, label) {
   doc.line(M, 748, RIGHT, 748, { color: RULE, width: 0.6 });
   doc.text('Neapolitan Night - The Club at Carlton Woods', { x: M, y: 761, size: 7.5, color: FAINT });
@@ -114,18 +165,31 @@ function footer(pageNo, label) {
 
 // ================================================================== page 1
 
-doc.rect(0, 0, W, 132, WASH);
-doc.rect(0, 130, W, 2, BRAND);
+/*
+ * The venue's own masthead, on the venue's own maroon. The logo file is white
+ * on transparent and JPEG has no transparency, so it is captured already
+ * sitting on #530000 - the same value this band is filled with, which is what
+ * keeps the join invisible.
+ *
+ * It is placed at 150pt wide on purpose. The asset is 211px across, so that
+ * works out near 240dpi in print; anything larger starts showing the upscale.
+ */
+doc.rect(0, 0, W, 172, BRAND);
 
-doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 52, size: 8.5, font: 'bold', color: BRAND });
-doc.text('Neapolitan Night', { x: M, y: 86, size: 30, font: 'bold', color: INK });
-doc.text('Floor Guide', { x: M, y: 114, size: 19, color: BRAND });
+if (SHOTS.logo) {
+  doc.image(SHOTS.logo, { x: M, y: 30, w: 150, h: 45 });
+} else {
+  doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 58, size: 9, font: 'bold', color: PAPER });
+}
+
+doc.text('Neapolitan Night', { x: M, y: 122, size: 30, font: 'bold', color: PAPER });
+doc.text('Floor Guide', { x: M, y: 150, size: 17, color: [0.93, 0.82, 0.80] });
 
 let y = para(
   'How an order travels from a member\'s phone to their table, and what each station does with it. '
-  + 'Four roles, one ticket. Every timing and limit in this guide is read from the running system, so '
-  + 'this document and the screens cannot drift apart.',
-  170, { size: 10.5, lead: 15, width: COL - 60 },
+  + 'Four roles, one ticket. Every timing and limit in this guide is read from the running system, and '
+  + 'every screen shown is a capture of it - so this document and the app cannot drift apart.',
+  206, { size: 10.5, lead: 15, width: COL - 60 },
 );
 
 eyebrow('One ticket, four hands', y + 26);
@@ -325,6 +389,16 @@ memberSteps.forEach((s, i) => {
 
 const cardY = 148;
 const cardX = RIGHT - 152;
+
+// The build grid, actual size on a phone, in the column beside the steps.
+if (SHOTS.build) {
+  const ph = doc.fit(SHOTS.build, 152, 262);
+  doc.image(SHOTS.build, { x: cardX + (152 - ph.w) / 2, y: cardY + 212, w: ph.w, h: ph.h });
+  frame(cardX + (152 - ph.w) / 2, cardY + 212, ph.w, ph.h, RULE, 0.6);
+  para('Building bowl 1 of 2. Bow Ties is 86\'d - greyed out and marked sold out, never hidden.',
+    cardY + 212 + ph.h + 13, { x: cardX, width: 152, size: 8, lead: 10, color: FAINT });
+}
+
 panel(cardX, cardY, 152, 198, { fill: WASH });
 doc.text('WHAT THEY CAN BUILD', { x: cardX + 12, y: cardY + 20, size: 7, font: 'monoBold', color: FAINT });
 const limits = [
@@ -362,27 +436,16 @@ heading('The chit rail', 88);
 y = para('Three lanes. Chits move left to right and never need dragging. Built for a cook with flour on '
   + 'their hands, so every action is one large button or one key.', 112, { width: COL - 40 });
 
-const lanes = [
-  ['New orders', QUEUED, 'Accept'],
-  ['Cooking', COOKING, 'Food Up - Call Runner'],
-  ['Ready / runner', READY, 'picked up by expo'],
-];
-const lw = (COL - 2 * 16) / 3;
-const lyTop = y + 24;
-lanes.forEach((l, i) => {
-  const x = M + i * (lw + 16);
-  panel(x, lyTop, lw, 106, { accent: l[1] });
-  doc.text(l[0].toUpperCase(), { x: x + 12, y: lyTop + 22, size: 8, font: 'monoBold', color: l[1] });
-  panel(x + 12, lyTop + 34, lw - 24, 26, { fill: WASH });
-  doc.text('#41  Table 3', { x: x + 20, y: lyTop + 51, size: 8.5, font: 'mono', color: INK });
-  panel(x + 12, lyTop + 68, lw - 24, 26, { fill: WASH });
-  doc.text('#42  Patio A', { x: x + 20, y: lyTop + 85, size: 8.5, font: 'mono', color: INK });
-  doc.text(l[2], { x: x + 12, y: lyTop + 122, size: 8, font: 'bold', color: SOFT });
-  if (i < 2) arrow(x + lw + 3, lyTop + 54, x + lw + 13, lyTop + 54, FAINT, 1.1);
-});
+// The real rail, rather than a drawing of one. It shows the three lanes, the
+// badges and the live timers in one frame, which a diagram was only ever
+// approximating.
+y = screenshot(SHOTS.kitchen, 390,
+  'New orders, Cooking, Ready. Chits carry the ticket number, the table, the guest count and every '
+  + 'plate written out. The timer on each one is counting against that chit\'s own estimate.',
+  y + 20, 236);
 
-y = lyTop + 150;
-rule(y);
+rule(y + 6);
+y += 6;
 
 const halfW = (COL - 30) / 2;
 eyebrow('Reading a chit', y + 22);
@@ -401,6 +464,8 @@ doc.text('BUMP BAR', { x: rx, y: y + 22, size: 8, font: 'bold', color: BRAND });
 let ky = y + 44;
 [
   ['1 - 9', 'send that chit forward'],
+  ['', 'numbered across the whole rail,'],
+  ['', 're-flowing as chits move'],
   ['Shift + 1-9', 'undo that step'],
   ['H', 'hold or release'],
   ['R', 'mark rush'],
@@ -427,13 +492,6 @@ ky += 16;
   ky += 18;
 });
 
-y = Math.max(cy, ky) + 18;
-panel(M, y, COL, 48, { fill: WASH, accent: BRAND, border: null });
-doc.text('Numbers run across the whole rail', { x: M + 14, y: y + 21, size: 9.5, font: 'bold', color: INK });
-para('Left lane first, re-flowing as chits move - so 3 is always the third chit you can see, not a '
-  + 'fixed ticket. Tap a chit to select it, tap again to let go.',
-  y + 34, { x: M + 14, width: COL - 28, size: 9, lead: 11 });
-
 footer(4, 'Back of house');
 
 // ================================================================== page 5
@@ -444,7 +502,11 @@ heading('Expo and runners', 88);
 y = para('Deliberately thinner than the kitchen screen. A runner carrying four bowls needs four things: '
   + 'the ticket number, where it goes, what is on the tray, and one button.', 112, { width: COL - 40 });
 
-y += 16;
+y = screenshot(SHOTS.expo, 340,
+  'Run These Now on the left, oldest at the top; Coming Up on the right. One button per card, and it '
+  + 'names the table.', y + 16, 196);
+
+y += 6;
 [
   ['Work the Run These Now cards', 'Oldest first. Each card is one ticket with its destination written large.'],
   ['Watch the runner clock', 'Starts when the kitchen calls food up. Amber at ' + fmt(config.sla.runnerWarnSec) + ', red and nudging at ' + fmt(config.sla.runnerLateSec) + '. That clock is food sitting under a lamp.'],
@@ -479,16 +541,20 @@ heading('Setting up, and closing out', 88);
 y = para('Two screens: one to set the night up and watch it run, one to close it out. Both sit behind '
   + 'the staff passcode.', 112, { width: COL - 40 });
 
-let my = y + 26;
+y = screenshot(SHOTS.cost, 340,
+  'The food cost tab with the pantry priced. Cost per bowl, per pizza and per cover come from what '
+  + 'members actually built - and every ingredient that went out is priced, which the tiles say out loud.',
+  y + 16, 196);
+
+let my = y + 8;
 [
-  ['Before service', 'Print the tents from the QR codes tab. Codes are drawn on the device, so this works with the internet unplugged and no outside service sees the club\'s links.'],
-  ['Before service', 'Check the 86 list. Switch an ingredient off and it greys out on every member\'s phone within a second. The count rides on the tab itself.'],
-  ['During service', 'Today at a glance: orders, covers, what is open now, average accept, cook and runner times, ticket time at p90, on-time percentage.'],
-  ['Any time', 'Food cost prices the pantry the way a kitchen buys it - pack price and portions per pack - and works out cost per bowl, per pizza and per cover from what members actually built.'],
-  ['After service', 'Close-out leads with who to charge: every member number that dined and how many covers, sorted by member number so it reconciles line by line. Save PDF keeps the lot.'],
+  ['Before service', 'Print the tents from the QR codes tab. Codes are drawn on the device, so this works with the internet unplugged.'],
+  ['Before service', 'Check the 86 list. An ingredient switched off greys out on every phone within a second, and the count rides on the tab.'],
+  ['During service', 'Today at a glance: covers, what is open now, accept, cook and runner times, and on-time percentage.'],
+  ['After service', 'Close-out leads with who to charge, sorted by member number so it reconciles line by line against the club\'s billing.'],
 ].forEach((s) => {
   doc.text(s[0].toUpperCase(), { x: M, y: my, size: 7, font: 'monoBold', color: BRAND });
-  my = para(s[1], my + 13, { x: M, width: COL - 190, size: 9.5, lead: 12.5 }) + 18;
+  my = para(s[1], my + 12, { x: M, width: COL - 190, size: 9, lead: 11.5 }) + 14;
 });
 
 // the close-out running order, beside the steps
@@ -507,13 +573,11 @@ doc.text('CLOSE-OUT, IN ORDER', { x: coX + 12, y: y + 46, size: 7, font: 'monoBo
   doc.text(r[2], { x: coX + 36, y: ry2 + 14, size: 8, color: SOFT });
 });
 
-my = Math.max(my, y + 194);
-panel(M, my, COL, 62, { fill: WASH, accent: LATE, border: null });
-doc.text('The staff passcode is a convenience lock, not security.', { x: M + 14, y: my + 22, size: 10, font: 'bold', color: INK });
-para('It stops a member who wanders onto a staff link from landing on the kitchen rail. Treat the '
-  + 'staff screens as trusted-network tools and keep the links inside the team. Clear today deletes '
-  + 'the whole service day and cannot be undone.',
-  my + 37, { x: M + 14, width: COL - 28, size: 9, lead: 11.5 });
+my = Math.max(my, y + 156) + 4;
+panel(M, my, COL, 50, { fill: WASH, accent: LATE, border: null });
+doc.text('The staff passcode is a convenience lock, not security.', { x: M + 14, y: my + 21, size: 9.5, font: 'bold', color: INK });
+para('Keep staff links inside the team. Clear today deletes the whole service day and cannot be undone.',
+  my + 35, { x: M + 14, width: COL - 28, size: 9, lead: 11 });
 
 footer(6, 'Manager');
 

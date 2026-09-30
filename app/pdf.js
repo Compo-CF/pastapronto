@@ -44,6 +44,36 @@ export function monoWidth(text, size) {
 }
 
 /**
+ * Pixel size of a JPEG, read from its start-of-frame marker.
+ *
+ * JPEG is the one image format this file can carry, and it is carried whole:
+ * PDF's DCTDecode filter IS JPEG, so the bytes go in exactly as they came off
+ * disk. That is the entire reason images are possible here at all - any other
+ * format would need a deflate implementation, which is precisely the sort of
+ * thing this module exists to avoid.
+ *
+ * @returns {{width, height, components}|null} null if it is not a JPEG.
+ */
+export function jpegSize(bytes) {
+  if (!bytes || bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null;
+  let i = 2;
+  while (i < bytes.length - 9) {
+    if (bytes[i] !== 0xFF) { i += 1; continue; }
+    const marker = bytes[i + 1];
+    // Every SOFn is a frame header except DHT (C4), DNL (C8) and DAC (CC).
+    if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+      return {
+        height: (bytes[i + 5] << 8) | bytes[i + 6],
+        width: (bytes[i + 7] << 8) | bytes[i + 8],
+        components: bytes[i + 9],
+      };
+    }
+    i += 2 + ((bytes[i + 2] << 8) | bytes[i + 3]);
+  }
+  return null;
+}
+
+/**
  * Rough width of a proportional run, for wrapping only.
  *
  * Helvetica averages near 0.5em over mixed text; 0.52 buys headroom so a line
@@ -119,6 +149,7 @@ export function create(opts = {}) {
   const margin = opts.margin == null ? 40 : opts.margin;
 
   const pages = [''];
+  const images = [];
   let page = 0;
 
   const num = (n) => {
@@ -176,6 +207,59 @@ export function create(opts = {}) {
       return api;
     },
 
+    /**
+     * Place a JPEG, `y` being its TOP edge like everything else here.
+     *
+     * The same bytes handed in twice are embedded once and drawn twice - a
+     * logo on every page would otherwise be the logo in the file once per
+     * page, which for a seven-page guide is six copies nobody asked for.
+     *
+     * Width and height are page points, not pixels: pass the box you want it
+     * to fill and let the image scale into it. `fit()` below works out that
+     * box from the image's own proportions.
+     */
+    image(bytes, o = {}) {
+      const size = jpegSize(bytes);
+      if (!size) throw new Error('image(): not a JPEG (no start-of-frame marker found)');
+      if (size.components === 4) throw new Error('image(): CMYK JPEGs are not supported');
+
+      let entry = images.find((im) => im.bytes === bytes);
+      if (!entry) {
+        // One character per byte, the same promise the rest of the file keeps,
+        // so the xref offsets stay valid with binary in the middle of it.
+        let data = '';
+        for (let i = 0; i < bytes.length; i += 1) data += String.fromCharCode(bytes[i] & 0xFF);
+        entry = {
+          bytes,
+          data,
+          name: 'Im' + (images.length + 1),
+          width: size.width,
+          height: size.height,
+          components: size.components,
+        };
+        images.push(entry);
+      }
+
+      const w = o.w == null ? size.width : o.w;
+      const h = o.h == null ? size.height : o.h;
+      const x = o.x == null ? margin : o.x;
+      const y = o.y == null ? margin : o.y;
+      pages[page] += 'q ' + num(w) + ' 0 0 ' + num(h) + ' '
+        + num(x) + ' ' + num(flipY(y + h)) + ' cm /' + entry.name + ' Do Q\n';
+      return api;
+    },
+
+    /**
+     * The box this image fills inside `maxW` x `maxH`, keeping its shape.
+     * Returns { w, h } to hand straight back to image().
+     */
+    fit(bytes, maxW, maxH) {
+      const size = jpegSize(bytes);
+      if (!size) throw new Error('fit(): not a JPEG');
+      const scale = Math.min(maxW / size.width, maxH / size.height);
+      return { w: size.width * scale, h: size.height * scale };
+    },
+
     /** A rule. */
     line(x1, y1, x2, y2, o = {}) {
       const c = o.color || [0, 0, 0];
@@ -206,6 +290,21 @@ export function create(opts = {}) {
         .map((k) => '/' + FONTS[k].name + ' ' + fontIds[k] + ' 0 R')
         .join(' ');
 
+      // Images are their own objects, and every page lists all of them - the
+      // same way every page lists all the fonts. A resource named but never
+      // drawn costs one dictionary entry and no bytes.
+      const imageIds = {};
+      images.forEach((im) => {
+        imageIds[im.name] = add('<< /Type /XObject /Subtype /Image'
+          + ' /Width ' + im.width + ' /Height ' + im.height
+          + ' /ColorSpace ' + (im.components === 1 ? '/DeviceGray' : '/DeviceRGB')
+          + ' /BitsPerComponent 8 /Filter /DCTDecode'
+          + ' /Length ' + im.data.length + ' >>\nstream\n' + im.data + '\nendstream');
+      });
+      const xobjRes = images.length
+        ? ' /XObject << ' + images.map((im) => '/' + im.name + ' ' + imageIds[im.name] + ' 0 R').join(' ') + ' >>'
+        : '';
+
       const pageIds = [];
       pages.forEach((content) => {
         const streamId = add('<< /Length ' + content.length + ' >>\nstream\n'
@@ -214,7 +313,7 @@ export function create(opts = {}) {
         pageIds.push(pageId);
         objects[pageId - 1] = '<< /Type /Page /Parent ' + pagesId + ' 0 R'
           + ' /MediaBox [0 0 ' + num(width) + ' ' + num(height) + ']'
-          + ' /Resources << /Font << ' + fontRes + ' >> >>'
+          + ' /Resources << /Font << ' + fontRes + ' >>' + xobjRes + ' >>'
           + ' /Contents ' + streamId + ' 0 R >>';
       });
 

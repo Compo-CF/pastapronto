@@ -1288,6 +1288,60 @@ test('"no charge entered" never round-trips as a charge of zero', () => {
   assert.strictEqual(costing.normalizeCharge('39.50'), 39.5, 'the box hands over a string');
 });
 
+test('a JPEG goes into the PDF whole, and only once', () => {
+  // A minimal baseline JPEG header: SOI, then SOF0 declaring 40x25 in 3
+  // components, then EOI. Enough for jpegSize and for the writer to embed.
+  const jpg = new Uint8Array([
+    0xFF, 0xD8,
+    0xFF, 0xC0, 0x00, 0x11, 0x08, 0x00, 0x19, 0x00, 0x28, 0x03,
+    0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+    0xFF, 0xD9,
+  ]);
+
+  const size = pdf.jpegSize(jpg);
+  assert.deepStrictEqual(size, { width: 40, height: 25, components: 3 });
+  assert.strictEqual(pdf.jpegSize(new Uint8Array([1, 2, 3, 4])), null, 'not a JPEG');
+  assert.strictEqual(pdf.jpegSize(null), null);
+
+  // fit() keeps the shape rather than stretching to the box.
+  const box = pdf.create().fit(jpg, 80, 80);
+  assert.strictEqual(Math.round(box.w), 80);
+  assert.strictEqual(Math.round(box.h), 50, '40x25 into an 80 square is 80x50');
+
+  const doc = pdf.create();
+  doc.image(jpg, { x: 20, y: 30, w: 80, h: 50 });
+  doc.addPage();
+  doc.image(jpg, { x: 20, y: 30, w: 40, h: 25 });
+  const out = Buffer.from(doc.build()).toString('latin1');
+
+  // Embedded once, drawn twice. Six copies of a logo in a seven-page guide is
+  // exactly the bug this de-duplication exists to prevent.
+  assert.strictEqual((out.match(/\/Subtype \/Image/g) || []).length, 1, 'one image object');
+  assert.strictEqual((out.match(/\/Im1 Do/g) || []).length, 2, 'drawn on both pages');
+  assert.ok(out.includes('/Filter /DCTDecode'), 'embedded as JPEG, not re-encoded');
+  assert.ok(out.includes('/Width 40 /Height 25'), 'pixel size comes from the file');
+  assert.ok(out.includes('/XObject << /Im1'), 'listed in the page resources');
+
+  // The bytes have to survive intact or the reader sees a corrupt image.
+  const raw = Array.from(jpg).map((b) => String.fromCharCode(b)).join('');
+  assert.ok(out.includes(raw), 'the JPEG is in the file byte for byte');
+  assert.ok(out.includes('/Length ' + jpg.length + ' >>\nstream'), 'declared length matches');
+
+  // And the whole file still parses: one byte per character, so the xref
+  // offsets a reader follows are still right with binary in the middle.
+  const startxref = Number(out.slice(out.lastIndexOf('startxref') + 9).trim().split('\n')[0]);
+  assert.strictEqual(out.slice(startxref, startxref + 4), 'xref', 'xref offset survives binary');
+});
+
+test('a PDF with no images is unchanged by image support existing', () => {
+  // The close-out report draws no images. Its bytes must not move.
+  const doc = pdf.create();
+  doc.text('Members to charge', { x: 44, y: 60 });
+  const out = Buffer.from(doc.build()).toString('latin1');
+  assert.ok(!out.includes('/XObject'), 'no empty XObject dict on a page without images');
+  assert.ok(!out.includes('/Subtype /Image'));
+});
+
 test('every seating area has tents, and every tent has an area', () => {
   // The floor page of the printed guide groups tents by area. It used to infer
   // the grouping from the id string, which is how it invented a poolside that
