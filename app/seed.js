@@ -75,7 +75,7 @@ const DRAFTS = [
   {
     _age: 17, _state: 'cooking', _late: true,
     memberNumber: '3150', memberName: 'Okonkwo', memberStatus: 'verified',
-    guestCount: 5, tag: 'patio-a', avoidAllergens: ['gluten'],
+    guestCount: 5, tag: 'patio-01', avoidAllergens: ['gluten'],
     notes: 'Sam is celiac - separate water, please',
     lines: [
       { guestLabel: 'Sam (GF)', pasta: 'fusilli_gf', sauces: ['marinara'], proteins: ['chicken'], toppings: ['tomatoes'], sides: [], portion: 'regular', spice: 'mild', notes: 'CELIAC - dedicated pot' },
@@ -98,7 +98,7 @@ const DRAFTS = [
   {
     _age: 4, _state: 'queued', _rush: true,
     memberNumber: '6123', memberName: 'Petrov', memberStatus: 'verified',
-    guestCount: 2, tag: 'cabana-3', avoidAllergens: ['dairy'],
+    guestCount: 2, tag: 'patio-02', avoidAllergens: ['dairy'],
     notes: 'Ana is dairy free',
     lines: [
       { guestLabel: 'Ana (DF)', pasta: 'spaghetti', sauces: ['marinara'], proteins: ['chicken'], toppings: ['basil'], sides: [], portion: 'regular', spice: 'mild', notes: 'NO DAIRY - no parm' },
@@ -108,7 +108,7 @@ const DRAFTS = [
   {
     _age: 3, _state: 'queued',
     memberNumber: '5007', memberName: 'Whitfield', memberStatus: 'verified',
-    guestCount: 1, tag: 'pool-bar',
+    guestCount: 1, tag: 'patio-03',
     lines: [
       { guestLabel: 'Guest 1', pasta: 'tortellini', sauces: ['pesto'], proteins: [], toppings: ['tomatoes', 'basil'], sides: [], portion: 'regular', spice: 'mild' },
     ],
@@ -135,7 +135,7 @@ const DRAFTS = [
   {
     _age: 6, _state: 'queued',
     memberNumber: '4421', memberName: 'Delgado', memberStatus: 'verified',
-    guestCount: 2, tag: 'patio-a', avoidAllergens: ['pork'],
+    guestCount: 2, tag: 'patio-01', avoidAllergens: ['pork'],
     notes: 'No pork on either pizza',
     lines: [
       { guestLabel: 'Rosa', kind: 'pizza', sauces: ['pz_marinara'], cheeses: ['pz_no_cheese'], proteins: [], toppings: ['pz_pepper', 'pz_olives', 'pz_tomatoes', 'pz_basil', 'fin_oregano'], notes: 'NO PORK - NO CHEESE' },
@@ -145,7 +145,7 @@ const DRAFTS = [
   {
     _age: 2, _state: 'queued',
     memberNumber: '6123', memberName: 'Petrov', memberStatus: 'verified',
-    guestCount: 1, tag: 'pool-bar',
+    guestCount: 1, tag: 'patio-03',
     lines: [
       { guestLabel: 'Guest 1', kind: 'pizza', sauces: ['pz_pesto', 'pz_sauce_light'], cheeses: ['pz_grated_parm'], proteins: ['pz_sausage'], toppings: ['jalapeno', 'pz_artichoke', 'fin_salt'] },
     ],

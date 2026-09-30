@@ -311,7 +311,7 @@ console.log('\nQR encoder verification (scanner-style round trip)\n');
 const realUrls = [
   'https://compo-cf.github.io/pastapronto/?t=table-12',
   'https://compo-cf.github.io/pastapronto/?t=takeout',
-  'https://pastapronto.web.app/?t=pool-bar',
+  'https://pastapronto.web.app/?t=patio-01',
   'http://192.168.1.50:5173/?t=table-01',
 ];
 

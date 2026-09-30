@@ -187,41 +187,50 @@ eyebrow('Stations and service points', 62);
 heading('The floor, and how a ticket crosses it', 88);
 y = para(
   'The system routes on two things: what kind of item it is, and which tent the member scanned. Pasta '
-  + 'tickets alternate across the pasta stations, pizza tickets across the decks, and the destination is '
-  + 'whatever the code on the table said.',
+  + 'goes to the main kitchen, pizza to the decks out on the patio, and the destination is whatever the '
+  + 'code on the table said. Which means a pizza for a patio table barely travels, while the same pizza '
+  + 'for the dining room crosses the building - worth knowing when the runner clock starts.',
   112, { width: COL - 40 },
 );
 
 const bandY = 160;
-const bandH = 236;
+// Tall enough for the two cooking areas plus the note under them. They ended
+// flush on the border at 236, with the note sitting on the last station box.
+const bandH = 264;
 const colW = (COL - 2 * 26) / 3;
 
 panel(M, bandY, colW, bandH, { accent: COOKING });
-doc.text('BACK OF HOUSE', { x: M + 12, y: bandY + 22, size: 7.5, font: 'monoBold', color: COOKING });
-doc.text('The kitchen', { x: M + 12, y: bandY + 42, size: 13, font: 'bold', color: INK });
+doc.text('WHERE IT IS COOKED', { x: M + 12, y: bandY + 22, size: 7.5, font: 'monoBold', color: COOKING });
+doc.text('Two areas', { x: M + 12, y: bandY + 42, size: 13, font: 'bold', color: INK });
 
-const pastaSt = config.kitchen.stations.filter((s) => s.kind === 'pasta');
-const pizzaSt = config.kitchen.stations.filter((s) => s.kind === 'pizza');
+/**
+ * Grouped by the station's own `area`, never by guessing from its name. An
+ * earlier draft of this page inferred the groupings and invented a poolside
+ * that does not exist.
+ */
+const groupBy = (rows, key, value) => rows.reduce((acc, r) => {
+  let g = acc.find((x) => x.name === r[key]);
+  if (!g) { g = { name: r[key], items: [] }; acc.push(g); }
+  g.items.push(value(r));
+  return acc;
+}, []);
+
+const cookAreas = groupBy(config.kitchen.stations, 'area', (s) => s);
 
 let sty = bandY + 64;
-doc.text('PASTA', { x: M + 12, y: sty, size: 7, font: 'monoBold', color: FAINT });
-pastaSt.forEach((s, i) => {
-  const by = sty + 8 + i * 30;
-  panel(M + 12, by, colW - 24, 24, { fill: WASH });
-  doc.text(s.label, { x: M + 20, y: by + 16, size: 9.5, font: 'bold', color: INK });
-  doc.text(s.pans + ' pans', { x: M + colW - 68, y: by + 16, size: 8, font: 'mono', color: SOFT });
+cookAreas.forEach((g) => {
+  doc.text(g.name.toUpperCase(), { x: M + 12, y: sty, size: 7, font: 'monoBold', color: FAINT });
+  g.items.forEach((s, i) => {
+    const by = sty + 8 + i * 30;
+    panel(M + 12, by, colW - 24, 24, { fill: WASH });
+    doc.text(s.label, { x: M + 20, y: by + 16, size: 9.5, font: 'bold', color: INK });
+    const sub = s.pans ? s.pans + ' pans' : s.decks + ' decks';
+    doc.text(sub, { x: M + colW - 24 - pdf.monoWidth(sub, 8) - 8, y: by + 16, size: 8, font: 'mono', color: SOFT });
+  });
+  sty += 8 + g.items.length * 30 + 18;
 });
 
-sty = bandY + 140;
-doc.text('PIZZA', { x: M + 12, y: sty, size: 7, font: 'monoBold', color: FAINT });
-pizzaSt.forEach((s, i) => {
-  const by = sty + 8 + i * 30;
-  panel(M + 12, by, colW - 24, 24, { fill: WASH });
-  doc.text(s.label, { x: M + 20, y: by + 16, size: 9.5, font: 'bold', color: INK });
-  doc.text(s.decks + ' decks', { x: M + colW - 74, y: by + 16, size: 8, font: 'mono', color: SOFT });
-});
-
-doc.text('Tickets auto-assign, alternating', { x: M + 12, y: bandY + 222, size: 7.5, color: FAINT });
+doc.text('Tickets auto-assign, alternating', { x: M + 12, y: bandY + bandH - 14, size: 7.5, color: FAINT });
 
 const passX = M + colW + 26;
 panel(passX, bandY, colW, bandH, { accent: READY });
@@ -241,18 +250,10 @@ panel(zoneX, bandY, colW, bandH, { accent: BRAND });
 doc.text('FRONT OF HOUSE', { x: zoneX + 12, y: bandY + 22, size: 7.5, font: 'monoBold', color: BRAND });
 doc.text('Service points', { x: zoneX + 12, y: bandY + 42, size: 13, font: 'bold', color: INK });
 
-const AREAS = [
-  ['Dining room', config.tags.filter((t) => /^table-/.test(t.id)).map((t) => t.label)],
-  ['Patio', config.tags.filter((t) => /^patio/.test(t.id)).map((t) => t.label)],
-  ['Poolside', config.tags.filter((t) => /^(cabana|pool)/.test(t.id)).map((t) => t.label)],
-  ['Counter', config.tags.filter((t) => t.kind === 'pickup').map((t) => t.label)],
-];
-
 let zy = bandY + 62;
-AREAS.forEach(([area, labels]) => {
-  if (!labels.length) return;
-  doc.text(area.toUpperCase(), { x: zoneX + 12, y: zy, size: 7, font: 'monoBold', color: FAINT });
-  zy = para(labels.join(', '), zy + 12, { x: zoneX + 12, width: colW - 24, size: 9, lead: 11.5, color: INK }) + 12;
+groupBy(config.tags, 'area', (t) => t.label).forEach((g) => {
+  doc.text(g.name.toUpperCase(), { x: zoneX + 12, y: zy, size: 7, font: 'monoBold', color: FAINT });
+  zy = para(g.items.join(', '), zy + 12, { x: zoneX + 12, width: colW - 24, size: 9, lead: 11.5, color: INK }) + 12;
 });
 
 arrow(M + colW + 5, bandY + 120, passX - 5, bandY + 120, FAINT, 1.2);
@@ -264,7 +265,7 @@ eyebrow('And back again', y + 22);
 
 const loop = [
   ['1', 'Member scans the tent', 'The code carries the table. Nobody types a table number, ever.'],
-  ['2', 'Ticket routes by kind', 'Pasta to a pasta station, pizza to a deck, alternating so load spreads.'],
+  ['2', 'Ticket routes by kind', 'Pasta to the main kitchen, pizza to the patio decks, alternating.'],
   ['3', 'Kitchen calls it up', 'It leaves the rail and appears on the pass, wherever it was cooked.'],
   ['4', 'Runner reads the destination', 'Written large on the card: the tent name, not a code to decode.'],
   ['5', 'Delivered closes the loop', 'The member\'s own phone updates as the runner walks away.'],

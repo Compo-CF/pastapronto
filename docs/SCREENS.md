@@ -109,7 +109,7 @@ clock and a **Back to queue** button.
 
 ```
 +--------------------------------------------------+
-| [1]  #11    Cabana 3              12:45          |   bump key, ticket,
+| [1]  #11    Patio 2                12:45          |   bump key, ticket,
 |             Petrov - 61234                       |   where, member, timer
 | RUSH  PASTA-1  2 GUESTS                          |   badges
 | ALLERGY - must avoid Dairy                       |   red banner

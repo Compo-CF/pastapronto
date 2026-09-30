@@ -21,11 +21,15 @@ export const config = {
   kitchen: {
     // Every station cooks exactly one kind. Orders are routed by their kind,
     // so a pizza can never land on a pasta rail.
+    // `area` is where the station physically stands. The two kinds are not in
+    // the same room - pasta is in the main kitchen, pizza is out on the patio -
+    // so anything drawing a floor plan has to read this rather than assume one
+    // kitchen.
     stations: [
-      { id: 'PASTA-1', label: 'Pasta 1', kind: 'pasta', pans: 3 },
-      { id: 'PASTA-2', label: 'Pasta 2', kind: 'pasta', pans: 3 },
-      { id: 'PIZZA-1', label: 'Pizza 1', kind: 'pizza', decks: 2 },
-      { id: 'PIZZA-2', label: 'Pizza 2', kind: 'pizza', decks: 2 },
+      { id: 'PASTA-1', label: 'Pasta 1', kind: 'pasta', pans: 3, area: 'Main kitchen' },
+      { id: 'PASTA-2', label: 'Pasta 2', kind: 'pasta', pans: 3, area: 'Main kitchen' },
+      { id: 'PIZZA-1', label: 'Pizza 1', kind: 'pizza', decks: 2, area: 'Patio' },
+      { id: 'PIZZA-2', label: 'Pizza 2', kind: 'pizza', decks: 2, area: 'Patio' },
     ],
     autoAssignStations: true,
     // Client-side gate on the kitchen/expo/admin screens. A convenience lock so
@@ -70,16 +74,20 @@ export const config = {
 
   // Each printed table tent gets its own tag, so the kitchen knows where the
   // food goes without the guest typing anything.
+  // `area` is the room the tent sits in. Two areas take orders - the dining
+  // room and the patio - and the patio is also where the pizza stations are,
+  // so a pizza for a patio table barely travels while the same pizza for the
+  // dining room crosses the building.
   tags: [
-    { id: 'table-01', label: 'Table 1', kind: 'table' },
-    { id: 'table-02', label: 'Table 2', kind: 'table' },
-    { id: 'table-03', label: 'Table 3', kind: 'table' },
-    { id: 'table-04', label: 'Table 4', kind: 'table' },
-    { id: 'table-12', label: 'Table 12', kind: 'table' },
-    { id: 'patio-a', label: 'Patio A', kind: 'table' },
-    { id: 'cabana-3', label: 'Cabana 3', kind: 'table' },
-    { id: 'pool-bar', label: 'Pool Bar', kind: 'bar' },
-    { id: 'takeout', label: 'Takeout Counter', kind: 'pickup' },
+    { id: 'table-01', label: 'Table 1', kind: 'table', area: 'Dining room' },
+    { id: 'table-02', label: 'Table 2', kind: 'table', area: 'Dining room' },
+    { id: 'table-03', label: 'Table 3', kind: 'table', area: 'Dining room' },
+    { id: 'table-04', label: 'Table 4', kind: 'table', area: 'Dining room' },
+    { id: 'table-12', label: 'Table 12', kind: 'table', area: 'Dining room' },
+    { id: 'patio-01', label: 'Patio 1', kind: 'table', area: 'Patio' },
+    { id: 'patio-02', label: 'Patio 2', kind: 'table', area: 'Patio' },
+    { id: 'patio-03', label: 'Patio 3', kind: 'table', area: 'Patio' },
+    { id: 'takeout', label: 'Takeout Counter', kind: 'pickup', area: 'Counter' },
   ],
 };
 
