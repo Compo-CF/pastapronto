@@ -187,29 +187,42 @@ function footer(pageNo, label) {
  * So the band is only as tall as the mark needs, the brand colour reads as a
  * letterhead rule rather than a background, and the type carries the page.
  */
-const BAND_H = 98;
+/*
+ * The full stacked lockup, on white, where it belongs.
+ *
+ * The earlier wide logo was white-on-transparent, which forced a maroon field
+ * behind it; the field had to be big enough to look deliberate and the logo
+ * was too small to fill it, so the page read as a red slab with a speck in it.
+ * This version is the crest and the wordmark together on white, so the brand
+ * colour can go back to being a rule at the top rather than a background.
+ *
+ * The capture is 500px wide because Chrome will not open a window narrower
+ * than that. The logo sits flush left in it and the rest is white on a white
+ * page, which is why the image is placed wider than the logo draws.
+ */
+const LOGO_IMG_W = 232;          // logo itself lands ~103pt across, near 155dpi
 
-doc.rect(0, 0, W, BAND_H, BRAND);
-// #a8792a, the gold the club's own stylesheet uses - not a gold I picked.
-doc.rect(0, BAND_H, W, 2.5, GOLD);
+doc.rect(0, 0, W, 14, BRAND);
+doc.rect(0, 14, W, 2, GOLD);     // #a8792a, from brands/carltonwoods.css
 
 if (SHOTS.logo) {
-  doc.image(SHOTS.logo, { x: M, y: 26, w: 150, h: 45 });
+  const lg = doc.fit(SHOTS.logo, LOGO_IMG_W, 200);
+  doc.image(SHOTS.logo, { x: M, y: 60, w: lg.w, h: lg.h });
 } else {
-  doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 56, size: 9, font: 'bold', color: PAPER });
+  doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 96, size: 10, font: 'bold', color: BRAND });
 }
 
-doc.text('Neapolitan Night', { x: M, y: 186, size: 34, font: 'bold', color: INK });
-doc.text('Floor Guide', { x: M, y: 218, size: 15, color: BRAND });
+doc.text('Neapolitan Night', { x: M, y: 232, size: 34, font: 'bold', color: INK });
+doc.text('Floor Guide', { x: M, y: 264, size: 15, color: BRAND });
 
-doc.line(M, 246, M + 56, 246, { color: GOLD, width: 1.4 });
-doc.text('Service manual for every station', { x: M, y: 270, size: 9.5, color: FAINT });
+doc.line(M, 292, M + 56, 292, { color: GOLD, width: 1.4 });
+doc.text('Service manual for every station', { x: M, y: 316, size: 9.5, color: FAINT });
 
 let y = para(
   'How an order travels from a member\'s phone to their table, and what each station does with it. '
   + 'Four roles, one ticket. Every timing and limit in this guide is read from the running system, and '
   + 'every screen shown is a capture of it - so this document and the app cannot drift apart.',
-  316, { size: 10.5, lead: 16, width: COL - 60 },
+  362, { size: 10.5, lead: 16, width: COL - 60 },
 );
 
 eyebrow('One ticket, four hands', y + 34);
