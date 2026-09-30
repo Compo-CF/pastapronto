@@ -52,6 +52,8 @@ const BRAND = [0.325, 0, 0];
 const RULE = [0.88, 0.84, 0.83];
 const WASH = [0.965, 0.925, 0.92];
 const PAPER = [1, 1, 1];
+// #a8792a - lifted from brands/carltonwoods.css, the club's own accent.
+const GOLD = [0.659, 0.475, 0.165];
 
 const QUEUED = [0.54, 0.42, 0];
 const COOKING = [0.66, 0.31, 0.05];
@@ -174,35 +176,40 @@ function footer(pageNo, label) {
  * It is placed at 150pt wide on purpose. The asset is 211px across, so that
  * works out near 240dpi in print; anything larger starts showing the upscale.
  */
-const TINT = [0.86, 0.72, 0.70];
-const COVER_H = 300;
-
-doc.rect(0, 0, W, COVER_H, BRAND);
-
 /*
- * The logo sits as a mark, not as the hero. Placed at 150pt the capture is a
- * 240dpi image, but the logo inside it only draws about 63pt across - the
- * asset is 211px and there is no more detail to be had. Blowing it up to
- * headline scale would just show the upscale, so the type carries the cover
- * and the mark identifies it. A higher-resolution logo would change this.
+ * A masthead, not a colour field.
+ *
+ * This was a 300pt maroon slab with a small crest adrift in it, which is what
+ * a big flat rectangle always looks like when the thing inside it cannot fill
+ * it. The club's logo is 211px wide - that is the only version they publish -
+ * so it draws about 55pt across and no arrangement will make it a hero.
+ *
+ * So the band is only as tall as the mark needs, the brand colour reads as a
+ * letterhead rule rather than a background, and the type carries the page.
  */
+const BAND_H = 98;
+
+doc.rect(0, 0, W, BAND_H, BRAND);
+// #a8792a, the gold the club's own stylesheet uses - not a gold I picked.
+doc.rect(0, BAND_H, W, 2.5, GOLD);
+
 if (SHOTS.logo) {
-  doc.image(SHOTS.logo, { x: M, y: 62, w: 150, h: 45 });
+  doc.image(SHOTS.logo, { x: M, y: 26, w: 150, h: 45 });
 } else {
-  doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 90, size: 9, font: 'bold', color: PAPER });
+  doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 56, size: 9, font: 'bold', color: PAPER });
 }
 
-doc.text('Neapolitan Night', { x: M, y: 196, size: 34, font: 'bold', color: PAPER });
-doc.text('Floor Guide', { x: M, y: 230, size: 15, color: TINT });
+doc.text('Neapolitan Night', { x: M, y: 186, size: 34, font: 'bold', color: INK });
+doc.text('Floor Guide', { x: M, y: 218, size: 15, color: BRAND });
 
-doc.line(M, 258, M + 54, 258, { color: TINT, width: 1.2 });
-doc.text('Service manual for every station', { x: M, y: 280, size: 9.5, color: TINT });
+doc.line(M, 246, M + 56, 246, { color: GOLD, width: 1.4 });
+doc.text('Service manual for every station', { x: M, y: 270, size: 9.5, color: FAINT });
 
 let y = para(
   'How an order travels from a member\'s phone to their table, and what each station does with it. '
   + 'Four roles, one ticket. Every timing and limit in this guide is read from the running system, and '
   + 'every screen shown is a capture of it - so this document and the app cannot drift apart.',
-  COVER_H + 56, { size: 10.5, lead: 16, width: COL - 60 },
+  316, { size: 10.5, lead: 16, width: COL - 60 },
 );
 
 eyebrow('One ticket, four hands', y + 34);
