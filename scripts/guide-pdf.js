@@ -174,25 +174,38 @@ function footer(pageNo, label) {
  * It is placed at 150pt wide on purpose. The asset is 211px across, so that
  * works out near 240dpi in print; anything larger starts showing the upscale.
  */
-doc.rect(0, 0, W, 172, BRAND);
+const TINT = [0.86, 0.72, 0.70];
+const COVER_H = 300;
 
+doc.rect(0, 0, W, COVER_H, BRAND);
+
+/*
+ * The logo sits as a mark, not as the hero. Placed at 150pt the capture is a
+ * 240dpi image, but the logo inside it only draws about 63pt across - the
+ * asset is 211px and there is no more detail to be had. Blowing it up to
+ * headline scale would just show the upscale, so the type carries the cover
+ * and the mark identifies it. A higher-resolution logo would change this.
+ */
 if (SHOTS.logo) {
-  doc.image(SHOTS.logo, { x: M, y: 30, w: 150, h: 45 });
+  doc.image(SHOTS.logo, { x: M, y: 62, w: 150, h: 45 });
 } else {
-  doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 58, size: 9, font: 'bold', color: PAPER });
+  doc.text('THE CLUB AT CARLTON WOODS', { x: M, y: 90, size: 9, font: 'bold', color: PAPER });
 }
 
-doc.text('Neapolitan Night', { x: M, y: 122, size: 30, font: 'bold', color: PAPER });
-doc.text('Floor Guide', { x: M, y: 150, size: 17, color: [0.93, 0.82, 0.80] });
+doc.text('Neapolitan Night', { x: M, y: 196, size: 34, font: 'bold', color: PAPER });
+doc.text('Floor Guide', { x: M, y: 230, size: 15, color: TINT });
+
+doc.line(M, 258, M + 54, 258, { color: TINT, width: 1.2 });
+doc.text('Service manual for every station', { x: M, y: 280, size: 9.5, color: TINT });
 
 let y = para(
   'How an order travels from a member\'s phone to their table, and what each station does with it. '
   + 'Four roles, one ticket. Every timing and limit in this guide is read from the running system, and '
   + 'every screen shown is a capture of it - so this document and the app cannot drift apart.',
-  206, { size: 10.5, lead: 15, width: COL - 60 },
+  COVER_H + 56, { size: 10.5, lead: 16, width: COL - 60 },
 );
 
-eyebrow('One ticket, four hands', y + 26);
+eyebrow('One ticket, four hands', y + 34);
 
 const stages = [
   ['QUEUED', 'Member sends', 'Lands on the kitchen rail', 'under New orders', QUEUED],
@@ -202,45 +215,26 @@ const stages = [
 ];
 
 const sw = (COL - 3 * 14) / 4;
-const sy = y + 40;
+const sy = y + 52;
 stages.forEach((s, i) => {
   const x = M + i * (sw + 14);
-  panel(x, sy, sw, 92, { accent: s[4] });
-  doc.text(s[0], { x: x + 10, y: sy + 22, size: 7.5, font: 'monoBold', color: s[4] });
-  doc.text(s[1], { x: x + 10, y: sy + 40, size: 10.5, font: 'bold', color: INK });
-  doc.text(s[2], { x: x + 10, y: sy + 57, size: 7.5, color: SOFT });
-  doc.text(s[3], { x: x + 10, y: sy + 69, size: 7.5, color: SOFT });
-  if (i < 3) arrow(x + sw + 2, sy + 46, x + sw + 12, sy + 46, FAINT, 1.1);
+  panel(x, sy, sw, 104, { accent: s[4] });
+  doc.text(s[0], { x: x + 12, y: sy + 24, size: 7.5, font: 'monoBold', color: s[4] });
+  doc.text(s[1], { x: x + 12, y: sy + 46, size: 10.5, font: 'bold', color: INK });
+  doc.text(s[2], { x: x + 12, y: sy + 66, size: 7.5, color: SOFT });
+  doc.text(s[3], { x: x + 12, y: sy + 79, size: 7.5, color: SOFT });
+  if (i < 3) arrow(x + sw + 2, sy + 52, x + sw + 12, sy + 52, FAINT, 1.1);
 });
 
-y = sy + 118;
-panel(M, y, COL, 60, { fill: WASH, accent: BRAND, border: null });
-doc.text('Nothing here charges anyone.', { x: M + 14, y: y + 22, size: 10, font: 'bold', color: INK });
+y = sy + 136;
+panel(M, y, COL, 68, { fill: WASH, accent: BRAND, border: null });
+doc.text('Nothing here charges anyone.', { x: M + 16, y: y + 26, size: 10, font: 'bold', color: INK });
 para(
   'The night is all you can eat. The app records which member numbers dined and how many people were '
   + 'at each table; the charge posts through the club\'s own system at close-out. A member who comes '
   + 'back for a second round is still one cover.',
-  y + 37, { x: M + 14, width: COL - 28, size: 9, lead: 11.5 },
+  y + 43, { x: M + 16, width: COL - 32, size: 9, lead: 12 },
 );
-
-y += 88;
-rule(y);
-eyebrow('Who does what', y + 22);
-
-const roles = [
-  ['THE MEMBER', 'their own phone', 'Scans the tent, picks a language, enters their member number, builds and sends.'],
-  ['BACK OF HOUSE', 'kitchen rail, iPad', 'Accepts the chit, cooks to its estimate, calls the runner.'],
-  ['FRONT OF HOUSE', 'expo board, iPad', 'Runs the food, confirms allergies at the table, presses Delivered.'],
-  ['MANAGER', 'manager + close-out', 'Prints tents, keeps the 86 list, watches the clocks, closes the night out.'],
-];
-let ry = y + 42;
-roles.forEach((r) => {
-  doc.rect(M, ry - 9, 3, 30, BRAND);
-  doc.text(r[0], { x: M + 12, y: ry, size: 9, font: 'bold', color: INK });
-  doc.text(r[1], { x: M + 150, y: ry, size: 8, font: 'mono', color: BRAND });
-  doc.text(r[2], { x: M + 12, y: ry + 13, size: 9, color: SOFT });
-  ry += 40;
-});
 
 footer(1, 'The ticket');
 
@@ -355,6 +349,29 @@ loop.forEach((s) => {
   doc.text(s[1], { x: M + 28, y: ly + 4, size: 9.5, font: 'bold', color: INK });
   doc.text(s[2], { x: M + 210, y: ly + 4, size: 9, color: SOFT });
   ly += 26;
+});
+
+y = ly + 18;
+rule(y);
+eyebrow('Who does what', y + 26);
+
+// Four across rather than four stacked. The list ran 160pt down the page for
+// four lines of information, which is what made the cover feel padded out
+// instead of composed.
+const roles = [
+  ['THE MEMBER', 'their own phone', 'Scans, picks a language, builds, sends.'],
+  ['BACK OF HOUSE', 'kitchen iPad', 'Accepts, cooks to the estimate, calls up.'],
+  ['FRONT OF HOUSE', 'expo iPad', 'Runs it, confirms allergies, delivers.'],
+  ['MANAGER', 'manager, close-out', 'Sets up, watches the clocks, closes out.'],
+];
+const rw = (COL - 3 * 14) / 4;
+const ry = y + 44;
+roles.forEach((r, i) => {
+  const x = M + i * (rw + 14);
+  doc.rect(x, ry, 22, 2.5, BRAND);
+  doc.text(r[0], { x, y: ry + 22, size: 8.5, font: 'bold', color: INK });
+  doc.text(r[1], { x, y: ry + 35, size: 7.5, font: 'mono', color: BRAND });
+  para(r[2], ry + 50, { x, width: rw, size: 8.5, lead: 11 });
 });
 
 footer(2, 'The floor');
