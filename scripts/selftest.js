@@ -1288,6 +1288,34 @@ test('"no charge entered" never round-trips as a charge of zero', () => {
   assert.strictEqual(costing.normalizeCharge('39.50'), 39.5, 'the box hands over a string');
 });
 
+test('every seating area has tents, and every tent has an area', () => {
+  // The floor page of the printed guide groups tents by area. It used to infer
+  // the grouping from the id string, which is how it invented a poolside that
+  // does not exist - so the area is data now, and this is what keeps it honest.
+  config.tags.forEach((t) => {
+    assert.ok(t.area, t.id + ' names the area it stands in');
+  });
+
+  const tentsIn = (area) => config.tags.filter((t) => t.area === area);
+
+  Object.keys(config.areaCovers).forEach((area) => {
+    assert.ok(tentsIn(area).length > 0, area + ' has tents to seat its covers in');
+    assert.ok(config.areaCovers[area] > 0, area + ' seats somebody');
+    // More covers than tables, always - a table for nobody is not a table.
+    assert.ok(
+      config.areaCovers[area] >= tentsIn(area).length,
+      area + ' cannot seat fewer people than it has tables',
+    );
+  });
+
+  assert.strictEqual(tentsIn('Dining room').length, 19, 'dining room tables');
+  assert.strictEqual(tentsIn('Patio').length, 7, 'patio tables');
+  assert.strictEqual(config.areaCovers['Dining room'] + config.areaCovers.Patio, 115, 'covers at once');
+
+  const ids = config.tags.map((t) => t.id);
+  assert.strictEqual(ids.length, new Set(ids).size, 'every tent id is unique');
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');

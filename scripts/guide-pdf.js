@@ -253,8 +253,22 @@ doc.text('Service points', { x: zoneX + 12, y: bandY + 42, size: 13, font: 'bold
 let zy = bandY + 62;
 groupBy(config.tags, 'area', (t) => t.label).forEach((g) => {
   doc.text(g.name.toUpperCase(), { x: zoneX + 12, y: zy, size: 7, font: 'monoBold', color: FAINT });
-  zy = para(g.items.join(', '), zy + 12, { x: zoneX + 12, width: colW - 24, size: 9, lead: 11.5, color: INK }) + 12;
+  const covers = config.areaCovers[g.name];
+  // Tables come from the tent list, covers from the config. Printing them
+  // together is the whole point: a manager reading this wants to know what a
+  // full room looks like before the first ticket lands.
+  const line = covers
+    ? g.items.length + ' tables, ' + covers + ' covers'
+    : g.items.length + (g.items.length === 1 ? ' point' : ' points');
+  doc.text(line, { x: zoneX + 12, y: zy + 14, size: 10.5, font: 'bold', color: INK });
+  zy = para(g.items[0] + ' - ' + g.items[g.items.length - 1], zy + 27,
+    { x: zoneX + 12, width: colW - 24, size: 8.5, lead: 11 }) + 14;
 });
+
+const totalCovers = Object.values(config.areaCovers).reduce((a, b) => a + b, 0);
+doc.line(zoneX + 12, zy - 2, zoneX + colW - 12, zy - 2, { color: RULE, width: 0.6 });
+doc.text('FULL HOUSE', { x: zoneX + 12, y: zy + 12, size: 7, font: 'monoBold', color: FAINT });
+doc.text(totalCovers + ' covers', { x: zoneX + 12, y: zy + 28, size: 13, font: 'bold', color: BRAND });
 
 arrow(M + colW + 5, bandY + 120, passX - 5, bandY + 120, FAINT, 1.2);
 arrow(passX + colW + 5, bandY + 120, zoneX - 5, bandY + 120, FAINT, 1.2);

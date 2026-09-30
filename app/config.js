@@ -78,15 +78,45 @@ export const config = {
   // room and the patio - and the patio is also where the pizza stations are,
   // so a pizza for a patio table barely travels while the same pizza for the
   // dining room crosses the building.
+  // Seats per area, which no tent can tell us. Table counts are deliberately
+  // NOT stored here - an area has however many tents it has in `tags` below,
+  // so the two cannot drift apart. selftest.js asserts every area named here
+  // actually has tents.
+  areaCovers: {
+    'Dining room': 80,
+    Patio: 35,
+  },
+
+  // One tent per row, and one printed page per tent. Listed out rather than
+  // generated because these are physical cards on physical tables: a venue
+  // renumbering a booth should be able to edit the one line that names it.
   tags: [
     { id: 'table-01', label: 'Table 1', kind: 'table', area: 'Dining room' },
     { id: 'table-02', label: 'Table 2', kind: 'table', area: 'Dining room' },
     { id: 'table-03', label: 'Table 3', kind: 'table', area: 'Dining room' },
     { id: 'table-04', label: 'Table 4', kind: 'table', area: 'Dining room' },
+    { id: 'table-05', label: 'Table 5', kind: 'table', area: 'Dining room' },
+    { id: 'table-06', label: 'Table 6', kind: 'table', area: 'Dining room' },
+    { id: 'table-07', label: 'Table 7', kind: 'table', area: 'Dining room' },
+    { id: 'table-08', label: 'Table 8', kind: 'table', area: 'Dining room' },
+    { id: 'table-09', label: 'Table 9', kind: 'table', area: 'Dining room' },
+    { id: 'table-10', label: 'Table 10', kind: 'table', area: 'Dining room' },
+    { id: 'table-11', label: 'Table 11', kind: 'table', area: 'Dining room' },
     { id: 'table-12', label: 'Table 12', kind: 'table', area: 'Dining room' },
+    { id: 'table-13', label: 'Table 13', kind: 'table', area: 'Dining room' },
+    { id: 'table-14', label: 'Table 14', kind: 'table', area: 'Dining room' },
+    { id: 'table-15', label: 'Table 15', kind: 'table', area: 'Dining room' },
+    { id: 'table-16', label: 'Table 16', kind: 'table', area: 'Dining room' },
+    { id: 'table-17', label: 'Table 17', kind: 'table', area: 'Dining room' },
+    { id: 'table-18', label: 'Table 18', kind: 'table', area: 'Dining room' },
+    { id: 'table-19', label: 'Table 19', kind: 'table', area: 'Dining room' },
     { id: 'patio-01', label: 'Patio 1', kind: 'table', area: 'Patio' },
     { id: 'patio-02', label: 'Patio 2', kind: 'table', area: 'Patio' },
     { id: 'patio-03', label: 'Patio 3', kind: 'table', area: 'Patio' },
+    { id: 'patio-04', label: 'Patio 4', kind: 'table', area: 'Patio' },
+    { id: 'patio-05', label: 'Patio 5', kind: 'table', area: 'Patio' },
+    { id: 'patio-06', label: 'Patio 6', kind: 'table', area: 'Patio' },
+    { id: 'patio-07', label: 'Patio 7', kind: 'table', area: 'Patio' },
     { id: 'takeout', label: 'Takeout Counter', kind: 'pickup', area: 'Counter' },
   ],
 };
