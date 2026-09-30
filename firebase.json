@@ -23,7 +23,9 @@
         "public/**",
         "server.js",
         "data/**",
-        "*.log"
+        "*.log",
+        "shots/**",
+        "*.pdf"
       ],
       "headers": [
         {
@@ -57,7 +59,9 @@
         "public/**",
         "server.js",
         "data/**",
-        "*.log"
+        "*.log",
+        "shots/**",
+        "*.pdf"
       ],
       "headers": [
         {
