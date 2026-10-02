@@ -15,6 +15,7 @@
  *   members/{memberNumber}   { name, dietaryNotes, defaultGuests }
  *   config/availability      { unavailable: [ingredientId] } - the 86 list
  *   config/costs             { items: { id: {price, yield} }, chargePerCover }
+ *   config/service           { night } - which night the venue is running
  *
  * Every screen listens to "today's orders" with a single-field query and does
  * its own filtering and sorting in memory. A service day is tens to a few
@@ -70,6 +71,7 @@ if (
 const ordersCol = collection(db, 'orders');
 const availabilityRef = doc(db, 'config', 'availability');
 const costsRef = doc(db, 'config', 'costs');
+const serviceRef = doc(db, 'config', 'service');
 
 /** Resolves once we have an anonymous identity, which the rules require. */
 let readyPromise = null;
@@ -136,6 +138,50 @@ export async function setUnavailable(ids) {
 }
 
 /**
+ * Live feed of which night the venue is running.
+ *
+ * One document, watched by every screen, so a manager flipping to Burger Night
+ * changes the lane a guest is offered, the stations tickets route to and the
+ * name on the masthead within a moment - including on phones already sitting
+ * open at a table, with nobody reloading anything.
+ *
+ * Tickets already on the rail are untouched. A pasta chit does not become a
+ * burger because someone changed the night halfway through; the kitchen
+ * finishes what it started.
+ *
+ * @param {(nightId: string) => void} cb
+ * @returns {() => void} unsubscribe
+ */
+export function watchServiceNight(cb, { onError } = {}) {
+  return onSnapshot(
+    serviceRef,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      const id = data && typeof data.night === 'string' ? data.night : config.defaultNight;
+      cb(config.nights[id] ? id : config.defaultNight);
+    },
+    (err) => {
+      console.error('[db] watchServiceNight failed:', err.code, err.message);
+      // Fall back to the default rather than leaving a screen with no menu.
+      cb(config.defaultNight);
+      if (onError) onError(err);
+    },
+  );
+}
+
+/** Switch the night. Manager screen only. */
+export async function setServiceNight(nightId) {
+  if (!config.nights[nightId]) throw new Error('Unknown night: ' + nightId);
+  await ready();
+  await setDoc(serviceRef, {
+    night: nightId,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid(),
+  }, { merge: true });
+  return nightId;
+}
+
+/**
  * Live feed of the food-cost sheet: what a pack costs and how many portions it
  * yields, per ingredient, plus what the club charges a cover.
  *
@@ -188,10 +234,29 @@ export async function saveCosts({ items, chargePerCover }) {
 }
 
 /** One read of the 86 list, for the submit-time re-check. */
-export async function getUnavailable() {
+export async function getUnavailable({ timeoutMs = 2500 } = {}) {
   await ready();
   try {
-    const snap = await getDoc(availabilityRef);
+    // Bounded, because a hang is not a rejection.
+    //
+    // This read sits directly in front of placing an order. It was wrapped in
+    // a try/catch, which looks careful and is not: getDoc() stalling returns
+    // no error and never settles, so the catch never ran and submitOrder()
+    // waited forever behind it. A guest pressing Send got "Sending..." and
+    // nothing else, with no error anywhere to explain it.
+    //
+    // Falling back to an empty list is the same answer the catch already gave,
+    // and it is the right one: validateDraft() re-checks the 86 list before
+    // the write, so the worst case is a check deferred by a moment rather than
+    // an order that cannot be placed at all.
+    const snap = await Promise.race([
+      getDoc(availabilityRef),
+      new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    if (!snap) {
+      console.warn('[db] getUnavailable timed out after ' + timeoutMs + 'ms; letting the order through');
+      return [];
+    }
     const data = snap.exists() ? snap.data() : null;
     return data && Array.isArray(data.unavailable) ? data.unavailable : [];
   } catch {

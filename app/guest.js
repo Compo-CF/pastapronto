@@ -9,8 +9,8 @@
  *   pro    - reveals allergen filters, spice, per-bowl notes, cook times and
  *            a compact review, for adults and staff taking an order
  */
-import { config, tagById, isOpen } from './config.js';
-import { catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine } from './menu.js';
+import { config, tagById, isOpen, kindsForNight, nightById } from './config.js';
+import { catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine, GROUPS_FOR } from './menu.js';
 import * as i18n from './i18n.js';
 import * as cooktime from './cooktime.js';
 import * as order from './order.js';
@@ -42,6 +42,14 @@ import {
       { id: 'cheeses', labelKey: 'guest.tab.cheese', group: 'pizzaCheeses', titleKey: 'guest.step.cheese', subKey: 'guest.step.amountsub', multi: true },
       { id: 'proteins', labelKey: 'guest.tab.protein', group: 'pizzaProteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
       { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'pizzaToppings', titleKey: 'guest.step.toppings', subKey: '' },
+    ],
+    burger: [
+      { id: 'proteins', labelKey: 'guest.tab.patty', group: 'burgerPatties', titleKey: 'guest.step.patty', subKey: 'guest.step.patty.sub', multi: true },
+      { id: 'base', labelKey: 'guest.tab.bun', group: 'burgerBuns', titleKey: 'guest.step.bun', subKey: '' },
+      { id: 'cheeses', labelKey: 'guest.tab.cheese', group: 'burgerCheeses', titleKey: 'guest.step.cheese', subKey: '', multi: true },
+      { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'burgerToppings', titleKey: 'guest.step.toppings', subKey: '' },
+      { id: 'sauces', labelKey: 'guest.tab.sauce', group: 'burgerSauces', titleKey: 'guest.step.burgersauce', subKey: '', multi: true },
+      { id: 'sides', labelKey: 'guest.tab.side', group: 'burgerSides', titleKey: 'guest.step.side', subKey: 'guest.step.side.sub' },
     ],
   };
 
@@ -75,10 +83,58 @@ import {
       blurbKey: 'guest.lane.pizza.blurb',
       art: 'pie',
     },
+    burger: {
+      one: 'burger', many: 'burgers',
+      titleKey: 'guest.lane.burger.title',
+      blurbKey: 'guest.lane.burger.blurb',
+      art: 'meatball',
+    },
   };
 
   function lane() {
     return LANES[state.kind] || LANES.pasta;
+  }
+
+  /** The kinds tonight serves. One night, one menu. */
+  /** Tonight's tagline, falling back to the brand's if a night has none. */
+  /**
+   * Masthead and tab title for tonight.
+   *
+   * Called at boot and again whenever the night changes, because the night
+   * arrives from Firestore a moment after the page paints - rendering the
+   * chrome once at boot left a burger night wearing the pasta night's name.
+   */
+  function applyNightChrome() {
+    var label = nightById(state.night).label;
+    var el = document.getElementById('masthead');
+    if (el) el.innerHTML = mastheadHtml(art('mark'), label);
+    document.title = pageTitle(state.order ? 'Order' : '', label);
+  }
+
+  function nightTagline() {
+    var n = nightById(state.night);
+    var es = t.lang === 'es';
+    return (es ? n.taglineEs : n.tagline) || taglineFor(t.lang);
+  }
+
+  function kindsTonight() {
+    return kindsForNight(state.night);
+  }
+
+  /**
+   * Where a guest goes after their member number.
+   *
+   * On a night with a single lane there is nothing to choose, so asking would
+   * be a screen that exists only to be tapped through. Burger Night goes
+   * straight to the head count with the kind already set.
+   */
+  function afterMember() {
+    var kinds = kindsTonight();
+    if (kinds.length === 1) {
+      state.kind = kinds[0];
+      return 'guests';
+    }
+    return 'lane';
   }
 
   function steps() {
@@ -94,6 +150,7 @@ import {
 
   var state = {
     screen: 'welcome',
+    night: config.defaultNight,
     kind: null,
     mode: recall('mode', 'simple'),
     boot: null,
@@ -140,6 +197,13 @@ import {
       notes: '',
     };
     if (state.kind === 'pizza') return Object.assign(base, { cheeses: [] });
+    // Every field a lane's steps will read has to exist from the start. A
+    // burger reaching the cheese step with no `cheeses` array threw inside the
+    // tile grid and froze the build on the step before it - which presents as
+    // "the button does nothing" rather than as an error.
+    if (state.kind === 'burger') {
+      return Object.assign(base, { base: null, cheeses: [], sides: [] });
+    }
     return Object.assign(base, {
       pasta: null, sides: [], portion: null, spice: 'mild',
     });
@@ -149,9 +213,17 @@ import {
     return state.bowls[state.activeBowl];
   }
 
+  /**
+   * Enough to send. Deliberately the minimum each lane needs rather than every
+   * step having been visited - a guest who wants a plain burger should not
+   * have to tap through toppings to prove it.
+   */
   function bowlComplete(bowl) {
     if (!bowl) return false;
     if (bowl.kind === 'pizza') return bowl.sauces.length > 0 && bowl.cheeses.length > 0;
+    if (bowl.kind === 'burger') {
+      return Boolean(bowl.base) && bowl.proteins.length === 1 && bowl.cheeses.length > 0;
+    }
     return Boolean(bowl.pasta && bowl.sauces.length > 0 && bowl.portion);
   }
 
@@ -330,11 +402,11 @@ import {
             ? '<p class="hero-org">' + escapeHtml(state.boot.venue.orgName) + '</p>'
             : ''))}
         <h1>${t('guest.lane.title')}</h1>
-        <p>${taglineFor(t.lang)}</p>
+        <p>${nightTagline()}</p>
       </div>
 
       <div class="lanepick">
-        ${['pasta', 'pizza'].map(function (k) {
+        ${kindsTonight().map(function (k) {
           var l = LANES[k];
           return html`<button class="lanetile" type="button" data-act="pickKind" data-id="${k}">
             <span class="lanetile-art">${raw(art(l.art))}</span>
@@ -493,6 +565,11 @@ import {
         act: 'toggleCheese', value: bowl.cheeses, multi: true,
         blocked: groupRules(step.group, bowl.cheeses).blocked,
       });
+    } else if (SINGLE_INTO_ARRAY[step.group]) {
+      var field = SINGLE_INTO_ARRAY[step.group];
+      body = tileGrid(step.group, {
+        act: 'pickOne', value: (bowl[field] || [])[0], multi: false,
+      });
     } else if (step.id === 'proteins') {
       body = tileGrid(step.group, { act: 'toggleProtein', value: bowl.proteins, multi: true });
     } else {
@@ -534,9 +611,10 @@ import {
 
   /** Toppings cap differs by kind: a pizza takes more than a bowl. */
   function toppingCap() {
-    return state.kind === 'pizza'
-      ? state.boot.limits.maxToppingsPerPizza
-      : state.boot.limits.maxToppingsPerBowl;
+    var lim = state.boot.limits;
+    if (state.kind === 'pizza') return lim.maxToppingsPerPizza;
+    if (state.kind === 'burger') return lim.maxToppingsPerBurger;
+    return lim.maxToppingsPerBowl;
   }
 
   /** True for a pizza topping that goes on after the oven, so costs no slot. */
@@ -550,10 +628,15 @@ import {
   }
 
   function buildToppings(bowl) {
-    var group = state.kind === 'pizza' ? 'pizzaToppings' : 'toppings';
+    // The group comes from the lane's own step list. Guessing it from a
+    // pizza-or-not check was fine while there were two lanes and put pasta
+    // toppings on a burger the moment there were three.
+    var group = (GROUPS_FOR[state.kind] || {}).toppings || 'toppings';
     var grid = tileGrid(group, { act: 'toggleTopping', value: bowl.toppings, multi: true, small: true });
 
     // Sides are a pasta-station thing; a pizza order does not offer them.
+    // Burgers get their own side step, so the inline prompt is for the pasta
+    // lane only - a pizza has no sides at all.
     var sides = state.kind === 'pasta' && (state.mode === 'pro' || bowl.sides.length > 0)
       ? html`<div class="stack" style="margin-top:22px">
           <strong>Add a side?</strong>
@@ -617,8 +700,14 @@ import {
   function screenReview() {
     var bowls = state.bowls.map(function (bowl, i) {
       var isPizza = bowl.kind === 'pizza';
-      var glyph = isPizza ? 'pie' : (item('pastas', bowl.pasta) || {}).shape || 'none';
-      var toppingGroup = isPizza ? 'pizzaToppings' : 'toppings';
+      var isBurger = bowl.kind === 'burger';
+      // Groups come from the lane, the same as the build tiles. Guessing them
+      // from an is-pizza check printed raw ids on a burger: "with bt_lettuce".
+      var bowlGroups = GROUPS_FOR[bowl.kind] || GROUPS_FOR.pasta;
+      var glyph = isPizza ? 'pie'
+        : isBurger ? 'meatball'
+          : (item('pastas', bowl.pasta) || {}).shape || 'none';
+      var toppingGroup = bowlGroups.toppings;
 
       var extras = [];
       if (bowl.toppings.length) {
@@ -628,6 +717,16 @@ import {
       }
       if (isPizza) {
         extras.push('12" - one size');
+      } else if (isBurger) {
+        var bun = item('burgerBuns', bowl.base);
+        // The bun goes first - it is the one choice that can make the whole
+        // thing gluten free, so it belongs ahead of the toppings, not after.
+        if (bun) extras.unshift('on a ' + bun.name);
+        if (bowl.sides.length) {
+          extras.push('side of ' + bowl.sides.map(function (x) {
+            return (item('burgerSides', x) || {}).name || x;
+          }).join(', '));
+        }
       } else {
         if (bowl.sides.length) {
           extras.push('side of ' + bowl.sides.map(function (x) {
@@ -936,7 +1035,18 @@ import {
     if (!opts.keepScroll) window.scrollTo(0, 0);
   }
 
-  var GROUP_FIELD = { pastas: 'pasta', proteins: 'protein', portions: 'portion' };
+  var GROUP_FIELD = { pastas: 'pasta', proteins: 'protein', portions: 'portion', burgerBuns: 'base' };
+
+  /**
+   * Steps that write ONE id into an array field.
+   *
+   * A burger takes one patty and one basket, but both are stored as arrays so
+   * the rest of the app - validateLine, the cost sheet, the close-out - can
+   * read them the same way it reads a bowl's. Tapping replaces rather than
+   * appends, so the tiles behave like the single choice they are instead of
+   * letting a guest build something the review screen will reject.
+   */
+  var SINGLE_INTO_ARRAY = { burgerPatties: 'proteins', burgerSides: 'sides' };
 
   /** Move forward through steps, then bowls, then to review. */
   function advance() {
@@ -1006,7 +1116,7 @@ import {
         if (res.status === 'verified' && res.defaultGuests) state.guestCount = res.defaultGuests;
         state.busy = false;
         if (res.status === 'invalid') return render({ keepScroll: true });
-        state.screen = 'lane';
+        state.screen = afterMember();
         return render();
       } catch (err) {
         state.busy = false;
@@ -1046,6 +1156,14 @@ import {
       currentBowl()[field] = el.dataset.id;
       state.showAll = false;
       // Tapping a choice moves you on - fewer buttons for a child to hunt for.
+      advance();
+    },
+
+    pickOne: function (el) {
+      var field = SINGLE_INTO_ARRAY[el.dataset.group];
+      if (!field) return;
+      currentBowl()[field] = [el.dataset.id];
+      state.showAll = false;
       advance();
     },
 
@@ -1286,7 +1404,7 @@ import {
   // ------------------------------------------------------------------------ boot
 
   async function boot() {
-    document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
+    applyNightChrome();
 
     var other = i18n.LANGS.filter(function (l) { return l.id !== t.lang; })[0];
     var langBtn = document.getElementById('langSwitch');
@@ -1295,7 +1413,7 @@ import {
     langBtn.setAttribute('lang', other.id);
     langBtn.addEventListener('click', function () { i18n.setLang('guest', other.id); });
     document.documentElement.setAttribute('lang', t.lang);
-    document.title = pageTitle('');
+    document.title = pageTitle('', nightById(state.night).label);
 
     // On a static host there is no server to route /t/<tag>, so the QR codes
     // carry the table as a query parameter: ...?t=table-12
@@ -1324,6 +1442,8 @@ import {
         maxSidesPerBowl: config.order.maxSidesPerBowl,
         maxToppingsPerPizza: config.order.maxToppingsPerPizza,
         maxCheesesPerPizza: config.order.maxCheesesPerPizza,
+        maxToppingsPerBurger: config.order.maxToppingsPerBurger,
+        maxSidesPerBurger: config.order.maxSidesPerBurger,
       },
       sla: config.sla,
       open: isOpen(),
@@ -1339,7 +1459,7 @@ import {
       return;
     }
 
-    document.title = pageTitle('Order');
+    document.title = pageTitle('Order', nightById(state.night).label);
     state.screen = 'member';
     render();
 
@@ -1352,6 +1472,22 @@ import {
 
     // Live 86 list. If the kitchen runs out of shrimp while a guest is mid-build
     // the tile greys out under them, and submitOrder re-checks anyway.
+    // Live service night. A manager flipping to Burger Night changes the lane
+    // under a guest who is still on the welcome screen, which is the point -
+    // nobody should have to reload a phone that is already at the table.
+    db.watchServiceNight(function (night) {
+      if (night === state.night) return;
+      state.night = night;
+      applyNightChrome();
+      // Anything half-built belongs to the night that is over.
+      if (['lane', 'guests', 'build', 'review'].indexOf(state.screen) !== -1) {
+        state.kind = null;
+        state.bowls = [];
+        state.screen = state.member ? afterMember() : 'member';
+      }
+      render();
+    });
+
     db.watchAvailability(function (list) {
       var was = state.unavailable.join(',');
       state.unavailable = list;

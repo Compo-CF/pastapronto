@@ -69,6 +69,18 @@ const LANES = [
       ['pizzaToppings', 'Toppings', 'one portion'],
     ],
   },
+  {
+    lane: 'burger',
+    label: 'Grill',
+    groups: [
+      ['burgerBuns', 'Buns', 'one bun'],
+      ['burgerPatties', 'Patties', 'one patty'],
+      ['burgerCheeses', 'Cheeses', 'one slice'],
+      ['burgerToppings', 'Toppings', 'one portion'],
+      ['burgerSauces', 'Sauces', 'one squeeze'],
+      ['burgerSides', 'Sides', 'one basket'],
+    ],
+  },
 ];
 
 /**
@@ -187,7 +199,18 @@ export function lineCost(line, costs) {
     rules.bases.forEach((id) => add(id, scale * mult));
   };
 
-  if (kind === 'pizza') {
+  if (kind === 'burger') {
+    // One size, so nothing scales. The bun is chosen rather than assumed,
+    // which is why it is costed off the line instead of off a constant the way
+    // a pizza crust is - and why a lettuce wrap costs what a lettuce wrap
+    // costs rather than quietly billing a brioche.
+    if (line.base) add(line.base, 1);
+    pick(groups.proteins, menu.proteinsOf(line), 1);
+    pick(groups.cheeses, menu.cheesesOf(line), 1);
+    pick(groups.toppings, line.toppings || [], 1);
+    pick(groups.sauces, menu.saucesOf(line), 1);
+    (line.sides || []).forEach((id) => add(id, 1));
+  } else if (kind === 'pizza') {
     add(BASE.id, 1);
     pick(groups.sauces, menu.saucesOf(line), 1);
     pick(groups.cheeses, menu.cheesesOf(line), 1);

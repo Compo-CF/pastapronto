@@ -5,7 +5,7 @@
  * The QR codes are generated in the browser by /app/qr.js - no external
  * service ever sees the venue's URLs, and it works with the wifi unplugged.
  */
-import { config, serviceDate } from './config.js';
+import { config, serviceDate, nightList, nightById } from './config.js';
 import * as menu from './menu.js';
 import * as order from './order.js';
 import * as costing from './costing.js';
@@ -26,6 +26,7 @@ const CATALOG = menu.catalog();
   var state = {
     base: '', orders: [], unavailable: [],
     costs: { items: {}, chargePerCover: null },
+    night: config.defaultNight,
   };
 
   var el = {
@@ -36,6 +37,8 @@ const CATALOG = menu.catalog();
     baseUrl: document.getElementById('baseUrl'),
     baseHint: document.getElementById('baseHint'),
     qrMeta: document.getElementById('qrMeta'),
+    nightSwitch: document.getElementById('nightSwitch'),
+    nightNote: document.getElementById('nightNote'),
     costSummary: document.getElementById('costSummary'),
     costSheet: document.getElementById('costSheet'),
     chargePerCover: document.getElementById('chargePerCover'),
@@ -533,6 +536,52 @@ const CATALOG = menu.catalog();
     scheduleSave();
   });
 
+  // -------------------------------------------------------------------- night
+
+  /**
+   * Which night the venue is running.
+   *
+   * Shared, not per device: flipping it here changes what a guest is offered
+   * on a phone already open at a table, and which stations the kitchen routes
+   * to. That is the whole point - the alternative is a deploy, and a themed
+   * night that needs a deploy to move is a night nobody can move.
+   *
+   * Tickets already on the rail keep the night they were taken under. The
+   * kitchen finishes what it started.
+   */
+  function renderNightSwitch() {
+    el.nightSwitch.innerHTML = nightList().map(function (n) {
+      var on = n.id === state.night;
+      return html`<button class="nightopt" type="button"
+        data-act="setNight" data-id="${n.id}" aria-pressed="${on ? 'true' : 'false'}">
+        <span class="nightopt-name">${n.label}</span>
+        <span class="nightopt-sub">${n.kinds.join(' + ')}</span>
+      </button>`;
+    }).join('');
+
+    var live = state.orders.filter(function (o) {
+      return order.LIVE_STATUSES.indexOf(o.status) !== -1;
+    }).length;
+
+    el.nightNote.textContent = 'Changes every guest phone and the kitchen rail within a second. '
+      + (live
+        ? live + ' ticket' + (live === 1 ? '' : 's') + ' still open - those keep the night they were taken under.'
+        : 'Nothing open right now, so this is a clean switch.');
+  }
+
+  document.addEventListener('click', async function (ev) {
+    var btn = ev.target.closest('[data-act="setNight"]');
+    if (!btn) return;
+    var id = btn.getAttribute('data-id');
+    if (id === state.night) return;
+    try {
+      await db.setServiceNight(id);
+      toast(nightById(id).label + ' is on. Guest screens have switched.');
+    } catch (err) {
+      toast('Could not switch the night: ' + err.message, true);
+    }
+  });
+
   // ------------------------------------------------------------------- panels
 
   /*
@@ -675,6 +724,7 @@ const CATALOG = menu.catalog();
     // half-configured install.
     renderQrs();
     renderMenu();
+    renderNightSwitch();
     renderCostSheet();
     applyCosts();
 
@@ -700,6 +750,14 @@ const CATALOG = menu.catalog();
     // numbers move as service happens.
     // The cost sheet is shared, not per-device: a chef pricing the walk-in on
     // the office iPad shows up here without a refresh, same as the 86 list.
+    db.watchServiceNight(function (night) {
+      state.night = night;
+      renderNightSwitch();
+      renderMenu();
+    }, {
+      onError: function (err) { toast('Could not read the service night: ' + err.code, true); },
+    });
+
     db.watchCosts(function (costs) {
       state.costs = costs;
       applyCosts();
@@ -710,6 +768,7 @@ const CATALOG = menu.catalog();
     db.watchToday(function (orders) {
       state.orders = orders;
       renderStats(order.metrics(orders, config.sla));
+      renderNightSwitch();
       applyCosts();
     }, {
       onError: function (err) { toast('Lost the connection: ' + err.code, true); },

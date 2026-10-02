@@ -261,6 +261,9 @@
 /* Which lane a chit came from. Colour plus the word, never colour alone. */
 .badge-kind.is-pasta { background: #3d3417; color: var(--kwarn); }
 .badge-kind.is-pizza { background: #3a1f2e; color: #ff9ecb; }
+/* Burgers get their own colour for the same reason the other two do: a cook
+   glancing down a rail reads the badge before the words. */
+.badge-kind.is-burger { background: #2f2a1c; color: #e8b980; }
 
 /* The nav on the dark screens. Same shape, inverted surface. */
 .kds .kbar { flex-wrap: wrap; }

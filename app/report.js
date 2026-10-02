@@ -163,6 +163,11 @@ function menuMix(r) {
       ['Proteins', r.mix.pizza.proteins],
       ['Toppings', r.mix.pizza.toppings],
     ]],
+    ['Grill', 'burger', [
+      ['Buns', r.mix.burger.buns], ['Patties', r.mix.burger.patties],
+      ['Cheeses', r.mix.burger.cheeses], ['Toppings', r.mix.burger.toppings],
+      ['Sauces', r.mix.burger.sauces], ['Sides', r.mix.burger.sides],
+    ]],
   ];
 
   const rendered = lanes

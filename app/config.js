@@ -25,11 +25,17 @@ export const config = {
     // the same room - pasta is in the main kitchen, pizza is out on the patio -
     // so anything drawing a floor plan has to read this rather than assume one
     // kitchen.
+    // Every station in the building, across every night. A station only ever
+    // cooks one kind, and order.stationForTicket() picks from the kinds that
+    // match - so the grill simply sits idle on a pasta night and the pans sit
+    // idle on a burger night, with no routing change needed either way.
     stations: [
       { id: 'PASTA-1', label: 'Pasta 1', kind: 'pasta', pans: 3, area: 'Main kitchen' },
       { id: 'PASTA-2', label: 'Pasta 2', kind: 'pasta', pans: 3, area: 'Main kitchen' },
       { id: 'PIZZA-1', label: 'Pizza 1', kind: 'pizza', decks: 2, area: 'Patio' },
       { id: 'PIZZA-2', label: 'Pizza 2', kind: 'pizza', decks: 2, area: 'Patio' },
+      { id: 'GRILL-1', label: 'Grill 1', kind: 'burger', patties: 6, area: 'Main kitchen' },
+      { id: 'GRILL-2', label: 'Grill 2', kind: 'burger', patties: 6, area: 'Main kitchen' },
     ],
     autoAssignStations: true,
     // Client-side gate on the kitchen/expo/admin screens. A convenience lock so
@@ -62,6 +68,10 @@ export const config = {
     // bacon. Past three the pan or the pie stops working.
     maxProteinsPerItem: 3,
     maxSidesPerBowl: 2,
+    // A burger takes one patty, one cheese, one basket. The caps that suit a
+    // bowl are wrong for a bun.
+    maxToppingsPerBurger: 6,
+    maxSidesPerBurger: 1,
     allowUnverifiedMembers: true,
     // Member numbers run from 1 to 4 digits. Guests type them however they
     // remember them - 2, 02, 002 and 0002 are all member 2 - so there are two
@@ -78,6 +88,38 @@ export const config = {
   // room and the patio - and the patio is also where the pizza stations are,
   // so a pizza for a patio table barely travels while the same pizza for the
   // dining room crosses the building.
+  /**
+   * The nights this venue runs. One is active at a time, and which one is a
+   * live setting in Firestore (config/service) that a manager flips - not a
+   * deploy, and not a date calculation. A themed night gets moved, and a night
+   * only the calendar knows about is a night nobody can move.
+   *
+   * A night declares the kinds of item it serves. Everything else follows:
+   * which lanes a guest is offered, which stations tickets route to, which
+   * groups the cost sheet prices. A third night is an entry here plus its
+   * menu groups.
+   */
+  nights: {
+    neapolitan: {
+      id: 'neapolitan',
+      label: 'Neapolitan Night',
+      kinds: ['pasta', 'pizza'],
+      tagline: 'All you can eat pizza and pasta, every Thursday',
+      taglineEs: 'Pizza y pasta a discreción, todos los jueves',
+    },
+    burger: {
+      id: 'burger',
+      label: 'Burger Night',
+      kinds: ['burger'],
+      tagline: 'All you can eat burgers, straight off the grill',
+      taglineEs: 'Hamburguesas a discreción, recién hechas a la parrilla',
+    },
+  },
+
+  // What the app runs as until someone says otherwise, and what it falls back
+  // to when the setting cannot be read.
+  defaultNight: 'neapolitan',
+
   // Seats per area, which no tent can tell us. Table counts are deliberately
   // NOT stored here - an area has however many tents it has in `tags` below,
   // so the two cannot drift apart. selftest.js asserts every area named here
@@ -123,6 +165,29 @@ export const config = {
 
 export function tagById(id) {
   return config.tags.find((t) => t.id === id) || null;
+}
+
+/**
+ * A night by id, falling back to the default rather than returning nothing.
+ *
+ * Every screen calls this, including before the live setting has arrived from
+ * Firestore. Returning null would mean every caller writing the same fallback,
+ * and one of them eventually forgetting to.
+ */
+export function nightById(id) {
+  return config.nights[id] || config.nights[config.defaultNight];
+}
+
+/** The kinds a night serves - ['pasta','pizza'] or ['burger']. */
+export function kindsForNight(id) {
+  return nightById(id).kinds.slice();
+}
+
+/** Every night, for a chooser. */
+export function nightList() {
+  return Object.values(config.nights).map((n) => ({
+    id: n.id, label: n.label, kinds: n.kinds.slice(),
+  }));
 }
 
 /** Service date string (YYYY-MM-DD) honouring the 4am roll. */

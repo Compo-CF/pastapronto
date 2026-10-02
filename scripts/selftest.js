@@ -6,7 +6,7 @@
  * Firebase-free, so this runs with no emulator, no network and no credentials.
  */
 import assert from 'node:assert';
-import { config } from '../app/config.js';
+import { config, kindsForNight, nightById } from '../app/config.js';
 import * as order from '../app/order.js';
 import * as cooktime from '../app/cooktime.js';
 import * as menu from '../app/menu.js';
@@ -40,6 +40,22 @@ const draft = () => ({
     { guestLabel: 'Ada', pasta: 'shells', sauces: ['butter'], proteins: [], toppings: ['parmesan'], sides: [], portion: 'kid', spice: 'mild' },
     { guestLabel: 'Sam', pasta: 'penne', sauces: ['arrabbiata', 'marinara'], proteins: ['chicken', 'meatballs'], toppings: ['mushrooms', 'chili'], sides: ['garlic_bread'], portion: 'regular', spice: 'hot' },
   ],
+});
+
+const burgerLine = (over = {}) => ({
+  kind: 'burger',
+  guestLabel: 'Ada',
+  base: 'bun_brioche',
+  proteins: ['smash'],
+  cheeses: ['ch_american'],
+  toppings: ['bt_lettuce', 'bt_pickles'],
+  sauces: ['bs_burger'],
+  sides: ['side_fries'],
+  ...over,
+});
+const burgerDraft = (over = {}) => ({
+  memberNumber: '1794', memberName: 'Compofelice', memberStatus: 'verified',
+  guestCount: 1, lines: [burgerLine()], ...over,
 });
 
 let seq = 0;
@@ -468,10 +484,15 @@ test('every pizza inherits the crust allergens', () => {
   assert.ok(menu.allergensFor({ ...plain, proteins: ['bacon'] }).includes('pork'), 'bacon is a protein now');
 });
 
-test('pizza and pasta cannot share one order', () => {
+test('two kinds cannot share one order', () => {
   const mixed = pizzaDraft();
   mixed.lines.push({ pasta: 'penne', sauces: ['marinara'], portion: 'regular' });
-  assert.ok(order.validateDraft(mixed, config).some((e) => /separate orders/.test(e)));
+  assert.ok(order.validateDraft(mixed, config).some((e) => /separate order/.test(e)));
+
+  // Same rule for a burger, which routes to a third station again.
+  const withBurger = pizzaDraft();
+  withBurger.lines.push(burgerLine());
+  assert.ok(order.validateDraft(withBurger, config).some((e) => /separate order/.test(e)));
 });
 
 test('pizza sauces and pasta sauces are not interchangeable', () => {
@@ -1270,6 +1291,146 @@ test('the demo night costs out end to end', () => {
     rep.totals.known,
     'contributors reconcile to the total',
   );
+});
+
+// ------------------------------------------------------------ burger night
+
+
+test('a night decides which kinds a guest can order', () => {
+  assert.deepStrictEqual(kindsForNight('neapolitan'), ['pasta', 'pizza']);
+  assert.deepStrictEqual(kindsForNight('burger'), ['burger']);
+  // An unknown night must not empty the menu - it falls back.
+  assert.deepStrictEqual(kindsForNight('karaoke'), ['pasta', 'pizza']);
+  assert.strictEqual(nightById('karaoke').id, config.defaultNight);
+
+  // Every kind a night claims must actually have somewhere to cook.
+  Object.values(config.nights).forEach((n) => n.kinds.forEach((kind) => {
+    const stations = config.kitchen.stations.filter((s) => s.kind === kind);
+    assert.ok(stations.length > 0, kind + ' has a station on ' + n.label);
+  }));
+});
+
+test('a burger is a valid order, and routes to the grill', () => {
+  assert.deepStrictEqual(menu.validateLine(burgerLine(), config.order), []);
+
+  const built = order.buildOrder(burgerDraft(), {
+    ticketNo: 1, claimCode: 'ABCD', serviceDate: '2026-10-02', tag: null,
+  });
+  assert.strictEqual(built.kind, 'burger');
+  assert.strictEqual(built.lines[0].base, 'bun_brioche');
+  assert.ok(built.cookEstimateSec > 0, 'the grill clock is a real number');
+
+  const station = order.stationForTicket(1, config.kitchen.stations, true, 'burger');
+  assert.ok(/^GRILL-/.test(station), 'burgers go to a grill, got ' + station);
+  // And never to a pan or a deck, whatever the ticket number.
+  for (let n = 1; n <= 8; n += 1) {
+    assert.ok(/^GRILL-/.test(order.stationForTicket(n, config.kitchen.stations, true, 'burger')));
+  }
+});
+
+test('a burger takes one patty, one cheese and one basket', () => {
+  const lim = config.order;
+  assert.ok(menu.validateLine(burgerLine({ proteins: [] }), lim).some((e) => /one patty/i.test(e)));
+  assert.ok(menu.validateLine(burgerLine({ proteins: ['smash', 'patty_turkey'] }), lim).some((e) => /one patty/i.test(e)));
+  assert.ok(menu.validateLine(burgerLine({ base: null }), lim).some((e) => /bun/i.test(e)));
+  assert.ok(menu.validateLine(burgerLine({ cheeses: [] }), lim).some((e) => /cheese/i.test(e)));
+  assert.ok(menu.validateLine(burgerLine({ cheeses: ['ch_american', 'ch_swiss'] }), lim).some((e) => /one cheese/i.test(e)));
+  assert.ok(menu.validateLine(burgerLine({ sides: ['side_fries', 'side_tots'] }), lim).some((e) => /one side/i.test(e)));
+
+  // "No Cheese" is an answer, not an absence.
+  assert.deepStrictEqual(menu.validateLine(burgerLine({ cheeses: ['ch_none'] }), lim), []);
+  // And it cannot be combined with a real cheese.
+  assert.ok(menu.validateLine(burgerLine({ cheeses: ['ch_none', 'ch_swiss'] }), lim).length > 0);
+});
+
+test('a burger is only gluten free if its bun is', () => {
+  const onBrioche = menu.allergensFor(burgerLine());
+  assert.ok(onBrioche.includes('gluten'), 'a brioche bun carries gluten');
+
+  const wrapped = menu.allergensFor(burgerLine({ base: 'bun_lettuce', cheeses: ['ch_none'], sides: [] }));
+  assert.ok(!wrapped.includes('gluten'), 'a lettuce wrap carries none');
+  assert.ok(!wrapped.includes('dairy'), 'and no cheese means no dairy');
+
+  // Onion rings are breaded, so the basket can put gluten back on the plate.
+  const rings = menu.allergensFor(burgerLine({ base: 'bun_lettuce', cheeses: ['ch_none'], sides: ['side_rings'] }));
+  assert.ok(rings.includes('gluten'), 'the side counts too');
+
+  assert.ok(menu.allergensFor(burgerLine({ toppings: ['bt_bacon'] })).includes('pork'));
+  assert.ok(menu.allergensFor(burgerLine({ toppings: ['bt_egg'] })).includes('egg'));
+});
+
+test('a burger reads as a burger on the chit', () => {
+  const text = menu.describe(burgerLine());
+  assert.ok(/Smash Patty/.test(text), 'the patty leads: ' + text);
+  assert.ok(/Brioche/.test(text), 'the bun is named');
+  assert.ok(/Fries/.test(text), 'and the basket');
+
+  const es = menu.describe(burgerLine(), 'es');
+  assert.ok(/Carne Smash/.test(es), 'Spanish names the patty: ' + es);
+  assert.ok(/Papas Fritas/.test(es));
+
+  // A no-cheese burger says so rather than going quiet about it.
+  assert.ok(/Sin Queso/.test(menu.describe(burgerLine({ cheeses: ['ch_none'] }), 'es')));
+});
+
+test('the grill batches a table rather than cooking one at a time', () => {
+  const one = cooktime.orderCookSec([burgerLine()]);
+  const six = cooktime.orderCookSec(Array.from({ length: 6 }, () => burgerLine()));
+  const seven = cooktime.orderCookSec(Array.from({ length: 7 }, () => burgerLine()));
+
+  assert.ok(six < one * 6, 'six on the flat-top is not six times one');
+  // The seventh does not fit the pass, so it costs a second one.
+  assert.ok(seven > six + 60, 'a seventh burger starts another pass');
+});
+
+test('the close-out counts burgers, and does not lose pasta doing it', () => {
+  const o = (kind, lines) => ({
+    id: kind, status: 'delivered', kind, ticketNo: 1, memberNumber: '1794',
+    guestCount: 2, submittedAt: '2026-10-02T18:00:00.000Z',
+    acceptedAt: '2026-10-02T18:01:00.000Z', readyAt: '2026-10-02T18:08:00.000Z',
+    deliveredAt: '2026-10-02T18:10:00.000Z', cookEstimateSec: 420, lines,
+  });
+  const rep = order.shiftReport([
+    o('burger', [burgerLine(), burgerLine({ proteins: ['patty_chicken'] })]),
+    o('pasta', [{ pasta: 'penne', sauces: ['marinara'], proteins: [], toppings: [], sides: [], portion: 'regular' }]),
+  ], config.sla);
+
+  assert.strictEqual(rep.byKind.burger.items, 2);
+  assert.strictEqual(rep.byKind.pasta.items, 1);
+  assert.strictEqual(rep.byKind.pizza.items, 0, 'a kind with no orders is zero, not missing');
+
+  const patties = rep.mix.burger.patties.map((p) => p.id).sort();
+  assert.deepStrictEqual(patties, ['patty_chicken', 'smash']);
+  assert.strictEqual(rep.mix.burger.buns[0].name, 'Brioche Bun', 'buns are tallied for prep');
+  assert.ok(rep.mix.pasta.pastas.length > 0, 'the pasta lane still reports');
+
+  // The member row counts burgers in its own column and in the item total.
+  const m = rep.members[0];
+  assert.strictEqual(m.burgers, 2);
+  assert.strictEqual(m.bowls, 1);
+  assert.strictEqual(m.items, 3);
+});
+
+test('every burger ingredient can be priced', () => {
+  const priceable = new Set(costing.costableIds());
+  ['burgerBuns', 'burgerPatties', 'burgerCheeses', 'burgerToppings', 'burgerSauces', 'burgerSides']
+    .forEach((key) => menu.catalog()[key]
+      .filter((i) => !i.exclusive && !i.amount)
+      .forEach((i) => assert.ok(priceable.has(i.id), i.name + ' (' + i.id + ') has a price box')));
+
+  // And a built burger costs what its parts cost.
+  const pantry = {
+    bun_brioche: { price: 6, yield: 12 },      // 0.50
+    smash: { price: 40, yield: 20 },           // 2.00
+    ch_american: { price: 9, yield: 36 },      // 0.25
+    bt_lettuce: { price: 4, yield: 40 },       // 0.10
+    bt_pickles: { price: 7, yield: 70 },       // 0.10
+    bs_burger: { price: 8, yield: 80 },        // 0.10
+    side_fries: { price: 12, yield: 24 },      // 0.50
+  };
+  const c = costing.lineCost(burgerLine(), pantry);
+  assert.ok(c.complete, 'nothing unpriced: ' + JSON.stringify(c.missing));
+  near(c.total, 3.55, 'bun + patty + cheese + 2 toppings + sauce + fries');
 });
 
 test('"no charge entered" never round-trips as a charge of zero', () => {

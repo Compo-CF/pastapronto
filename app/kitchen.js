@@ -176,8 +176,13 @@ const CATALOG = menu.catalog();
   }
 
   /** Which catalog group a line's toppings live in. */
+  /** A line's groups, so a third kind does not fall into the pasta branch. */
+  function lineGroups(line) {
+    return menu.GROUPS_FOR[menu.kindOf(line)] || menu.GROUPS_FOR.pasta;
+  }
+
   function toppingGroup(line) {
-    return menu.kindOf(line) === 'pizza' ? 'pizzaToppings' : 'toppings';
+    return lineGroups(line).toppings;
   }
 
   /**
@@ -199,6 +204,8 @@ const CATALOG = menu.catalog();
       + '<span class="note-orig"><span class="note-es">ES</span> ' + escapeHtml(text) + '</span></div>';
   }
 
+  var KIND_LABEL = { pasta: 'Pasta', pizza: 'Pizza', burger: 'Burger' };
+
   function renderLine(line, orderLang) {
     var isPizza = menu.kindOf(line) === 'pizza';
     var adds = [];
@@ -206,10 +213,16 @@ const CATALOG = menu.catalog();
       adds.push(line.toppings.map(function (t) { return menuName(toppingGroup(line), t); }).join(', '));
     }
     if (!isPizza && line.sides && line.sides.length) {
-      adds.push(t('kitchen.side') + ': ' + line.sides.map(function (s) { return menuName('sides', s); }).join(', '));
+      adds.push(t('kitchen.side') + ': ' + line.sides.map(function (s) {
+        return menuName(lineGroups(line).sides || 'sides', s);
+      }).join(', '));
     }
 
-    var flags = isPizza ? [t('kitchen.pie')] : [menuName('portions', line.portion)];
+    var kindOfLine = menu.kindOf(line);
+    var flags = [];
+    if (isPizza) flags.push(t('kitchen.pie'));
+    else if (kindOfLine === 'burger') flags.push(menuName('burgerBuns', line.base));
+    else flags.push(menuName('portions', line.portion));
     if (!isPizza && line.spice && line.spice !== 'mild') flags.push(line.spice.toUpperCase());
     if (line.allergens && line.allergens.length) flags.push(line.allergens.join('/'));
 
@@ -234,7 +247,7 @@ const CATALOG = menu.catalog();
     if (order.priority === 'rush') badges.push('<span class="badge badge-rush">Rush</span>');
     if (order.priority === 'allergy') badges.push('<span class="badge badge-allergy">Allergy</span>');
     var kind = order.kind || 'pasta';
-    badges.push('<span class="badge badge-kind is-' + kind + '">' + (kind === 'pizza' ? 'Pizza' : 'Pasta') + '</span>');
+    badges.push('<span class="badge badge-kind is-' + kind + '">' + KIND_LABEL[kind] + '</span>');
     badges.push('<span class="badge badge-station">' + escapeHtml(order.station) + '</span>');
     badges.push('<span class="badge badge-guests">' + order.guestCount + ' guests</span>');
     if (order.memberStatus === 'unverified') badges.push('<span class="badge badge-unverified">Member unverified</span>');

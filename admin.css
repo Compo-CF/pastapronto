@@ -61,6 +61,38 @@
 }
 .subpill[aria-selected="true"] .subpill-badge { background: #fff; color: var(--tomato); }
 
+/* ------------------------------------------------------------------- night
+   Same two-card shape as the brand switch that used to live in the quiet
+   corner, but this one sits at the top of the screen and is meant to be seen:
+   it changes what every guest in the building can order. */
+
+.nightrow { align-items: center; gap: 18px; flex-wrap: wrap; }
+.nightswitch { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.nightopt {
+  display: flex; flex-direction: column; gap: 2px;
+  min-height: 48px; padding: 9px 18px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--card); color: var(--ink-soft);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.nightopt:hover { border-color: var(--tomato); color: var(--tomato-dark); }
+.nightopt:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
+.nightopt-name { font-size: 15px; font-weight: 750; }
+.nightopt-sub {
+  font-size: 11px; color: var(--ink-faint);
+  font-family: var(--mono); letter-spacing: .02em;
+}
+
+/* The running night carries a tick as well as a fill, so it survives a
+   greyscale screen and reads from across a pass. */
+.nightopt[aria-pressed="true"] {
+  background: var(--tomato); border-color: var(--tomato); color: #fff;
+}
+.nightopt[aria-pressed="true"] .nightopt-name::after { content: ' \2713'; }
+.nightopt[aria-pressed="true"] .nightopt-sub { color: rgba(255, 255, 255, 0.82); }
+
 /* -------------------------------------------------------------------- stats */
 
 .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; }

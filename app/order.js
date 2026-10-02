@@ -90,6 +90,9 @@ export function normalizeMemberNumber(raw) {
  * than only in the UI so an order cannot slip through from a stale tab that
  * still shows something the kitchen has run out of.
  */
+// Name the thing the guest is looking at: "Pizza 2", not "Bowl 2".
+const LINE_LABEL = { pasta: 'Bowl ', pizza: 'Pizza ', burger: 'Burger ' };
+
 export function validateDraft(draft, cfg, unavailable = []) {
   const errors = [];
   if (!normalizeMemberNumber(draft.memberNumber)) {
@@ -109,11 +112,11 @@ export function validateDraft(draft, cfg, unavailable = []) {
   // equipment and neither should wait on the other.
   const kinds = [...new Set(lines.map(menu.kindOf))];
   if (kinds.length > 1) {
-    errors.push('Send pasta and pizza as separate orders - they cook at different stations.');
+    errors.push('Send each kind as a separate order - they cook at different stations.');
   }
   lines.forEach((line, i) => {
     // Name the thing the guest is looking at: "Pizza 2", not "Bowl 2".
-    const label = (menu.kindOf(line) === 'pizza' ? 'Pizza ' : 'Bowl ') + (i + 1);
+    const label = LINE_LABEL[menu.kindOf(line)] + (i + 1);
     menu.validateLine(line, cfg.order).forEach((e) => errors.push(`${label}: ${e}`));
 
     if (unavailable.length) {
@@ -165,6 +168,17 @@ export function buildOrder(draft, ctx) {
       cookSec: cooktime.lineCookSec(line),
       dish: menu.describe(line),
     };
+
+    if (kind === 'burger') {
+      // The bun is the base, the patty is the protein, and one basket rides
+      // along as a side. No portion and no spice level - a burger is one size.
+      return {
+        ...common,
+        base: line.base,
+        cheeses: menu.cheesesOf(line),
+        sides: line.sides || [],
+      };
+    }
 
     if (kind === 'pizza') {
       // No portion (every pizza is the same size), no protein or sides - meats
@@ -315,6 +329,9 @@ export function publicView(order) {
  * once per trip to the app. Everything else (orders, bowls, pizzas) is a
  * consumption signal rather than a billing one.
  */
+// Which counter on a member row each kind feeds.
+const ROLLUP_FIELD = { pasta: 'bowls', pizza: 'pizzas', burger: 'burgers' };
+
 export function memberRollup(orders) {
   const live = orders.filter((o) => o.status !== STATUS.VOIDED);
   const byMember = new Map();
@@ -330,6 +347,7 @@ export function memberRollup(orders) {
         partySize: 0,
         bowls: 0,
         pizzas: 0,
+        burgers: 0,
         items: 0,
         firstAt: o.submittedAt,
         lastAt: o.submittedAt,
@@ -340,10 +358,10 @@ export function memberRollup(orders) {
     m.orders += 1;
     m.partySize = Math.max(m.partySize, Number(o.guestCount) || 0);
 
-    const isPizza = (o.kind || 'pasta') === 'pizza';
-    m[isPizza ? 'pizzas' : 'bowls'] += o.lines.length;
+    const k = menu.kindOf({ kind: o.kind });
+    m[ROLLUP_FIELD[k]] += o.lines.length;
     m.items += o.lines.length;
-    m.kinds.add(isPizza ? 'pizza' : 'pasta');
+    m.kinds.add(k);
 
     if (o.memberName && !m.name) m.name = o.memberName;
     if (o.memberStatus === 'verified') m.status = 'verified';
@@ -506,11 +524,10 @@ export function shiftReport(orders, sla) {
     const d = new Date(o.submittedAt);
     const key = `${String(d.getHours()).padStart(2, '0')}:${String(Math.floor(d.getMinutes() / 15) * 15).padStart(2, '0')}`;
     if (!buckets[key]) {
-      buckets[key] = { bucket: key, orders: 0, bowls: 0, pizzas: 0, items: 0, covers: 0 };
+      buckets[key] = { bucket: key, orders: 0, bowls: 0, pizzas: 0, burgers: 0, items: 0, covers: 0 };
     }
-    const isPizza = (o.kind || 'pasta') === 'pizza';
     buckets[key].orders += 1;
-    buckets[key][isPizza ? 'pizzas' : 'bowls'] += o.lines.length;
+    buckets[key][ROLLUP_FIELD[menu.kindOf({ kind: o.kind })]] += o.lines.length;
     buckets[key].items += o.lines.length;
     buckets[key].covers += o.guestCount;
   });
@@ -535,11 +552,12 @@ export function shiftReport(orders, sla) {
   };
 
   const linesOfKind = (kind) => alive
-    .filter((o) => (o.kind || 'pasta') === kind)
+    .filter((o) => menu.kindOf({ kind: o.kind }) === kind)
     .flatMap((o) => o.lines);
 
   const pastaLines = linesOfKind('pasta');
   const pizzaLines = linesOfKind('pizza');
+  const burgerLines = linesOfKind('burger');
 
   const mix = {
     pasta: {
@@ -556,10 +574,20 @@ export function shiftReport(orders, sla) {
       proteins: tally(pizzaLines, (l) => menu.proteinsOf(l)),
       toppings: tally(pizzaLines, (l) => l.toppings || []),
     },
+    // Buns and patties lead, because those are the two counts a grill cook
+    // needs before service: how many to thaw, how many to warm.
+    burger: {
+      buns: tally(burgerLines, (l) => [l.base]),
+      patties: tally(burgerLines, (l) => menu.proteinsOf(l)),
+      cheeses: tally(burgerLines, (l) => menu.cheesesOf(l)),
+      toppings: tally(burgerLines, (l) => l.toppings || []),
+      sauces: tally(burgerLines, (l) => menu.saucesOf(l)),
+      sides: tally(burgerLines, (l) => l.sides || []),
+    },
   };
 
-  const byKind = ['pasta', 'pizza'].reduce((acc, kind) => {
-    const mine = alive.filter((o) => (o.kind || 'pasta') === kind);
+  const byKind = menu.KINDS.reduce((acc, kind) => {
+    const mine = alive.filter((o) => menu.kindOf({ kind: o.kind }) === kind);
     acc[kind] = {
       orders: mine.length,
       items: mine.reduce((a, o) => a + o.lines.length, 0),

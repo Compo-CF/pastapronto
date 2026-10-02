@@ -44,6 +44,14 @@ export const MODEL = {
     platePerItemSec: 15,
     perToppingSec: 10,
   },
+  burger: {
+    // A flat-top takes a row of patties at once, so a table of six is one
+    // pass rather than six. Clearing the top and starting the next row is
+    // what costs, not each individual burger.
+    pattiesPerStation: 6,
+    batchPenaltySec: 90,
+    platePerItemSec: 15,
+  },
   extraSaucePenaltySec: 20,
   extraProteinPenaltySec: 15,
   // Rough queue drag used only for the guest-facing promise, not the SLA.
@@ -75,6 +83,34 @@ export function lineCookSec(line) {
       + cheese.reduce((a, c) => a + (c.addSec || 0), 0);
     // Sauce is spread before the bake, so it does not extend the oven clock.
     return menu.PIZZA_BASE.bakeSec + load;
+  }
+
+  if (kind === 'burger') {
+    // The patty owns the clock. Everything else is assembly that happens while
+    // it cooks - except a fried egg, which needs its own pan time, and the
+    // basket, which runs in the fryer alongside. So the side is a max, not a
+    // sum, the same way a pasta side bakes beside the boil.
+    const patty = menu.proteinsOf(line)
+      .map((id) => menu.find('burgerPatties', id))
+      .filter(Boolean)[0];
+    const bun = menu.find('burgerBuns', line.base);
+    const tops = (line.toppings || [])
+      .map((id) => menu.find('burgerToppings', id))
+      .filter(Boolean);
+
+    const grill = (patty ? patty.grillSec : 240)
+      + (bun ? bun.addSec : 0)
+      + tops.reduce((a, t) => a + (t.addSec || 0), 0)
+      + menu.cheesesOf(line)
+        .map((id) => menu.find('burgerCheeses', id))
+        .filter(Boolean)
+        .reduce((a, c) => a + (c.addSec || 0), 0);
+
+    const basket = (line.sides || []).reduce((acc, id) => {
+      const x = menu.find('burgerSides', id);
+      return Math.max(acc, x ? x.cookSec : 0);
+    }, 0);
+    return Math.max(grill, basket);
   }
 
   const pasta = menu.find('pastas', line.pasta);
@@ -125,6 +161,12 @@ export function orderCookSec(lines) {
     return slowest + (batches - 1) * m.deckReloadSec + lines.length * m.platePerItemSec;
   }
 
+  if (kind === 'burger') {
+    const bm = MODEL.burger;
+    const passes = Math.ceil(lines.length / bm.pattiesPerStation);
+    return slowest + (passes - 1) * bm.batchPenaltySec + lines.length * bm.platePerItemSec;
+  }
+
   const m = MODEL.pasta;
   const panLoads = Math.ceil(lines.length / m.pansPerStation);
   return slowest + (panLoads - 1) * m.batchPenaltySec + lines.length * m.platePerItemSec;
@@ -141,6 +183,13 @@ export function promiseSec(lines, queueDepth = 0) {
   return Math.max(MODEL.minPromiseSec, cook + drag);
 }
 
+/** How many items of a kind cook together at one station. */
+function batchSizeFor(kind) {
+  if (kind === 'pizza') return MODEL.pizza.decks * MODEL.pizza.piesPerDeck;
+  if (kind === 'burger') return MODEL.burger.pattiesPerStation;
+  return MODEL.pasta.pansPerStation;
+}
+
 /** Per-bowl breakdown, used by the admin screen to explain an estimate. */
 export function explain(lines) {
   return {
@@ -150,9 +199,7 @@ export function explain(lines) {
       dish: menu.describe(l),
       cookSec: lineCookSec(l),
     })),
-    batches: menu.kindOf(lines[0] || {}) === 'pizza'
-      ? Math.ceil(lines.length / (MODEL.pizza.decks * MODEL.pizza.piesPerDeck))
-      : Math.ceil(lines.length / MODEL.pasta.pansPerStation),
+    batches: Math.ceil(lines.length / batchSizeFor(menu.kindOf(lines[0] || {}))),
     orderCookSec: orderCookSec(lines),
     model: MODEL,
   };

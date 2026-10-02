@@ -60,6 +60,13 @@ service cloud.firestore {
         (docId == 'costs'
           && request.resource.data.items is map
           && request.resource.data.items.size() <= 200)
+        ||
+        // Which night the venue is running. A short string and nothing else -
+        // the client checks it against config.nights before using it, so an
+        // unknown value falls back rather than emptying the menu.
+        (docId == 'service'
+          && request.resource.data.night is string
+          && request.resource.data.night.size() <= 40)
       );
     }
 
@@ -81,7 +88,7 @@ service cloud.firestore {
       function validNewOrder() {
         let d = request.resource.data;
         return d.status == 'queued'
-          && d.kind in ['pasta', 'pizza']
+          && d.kind in ['pasta', 'pizza', 'burger']
           && d.ticketNo is int && d.ticketNo > 0
           && d.serviceDate is string
           && d.memberNumber is string

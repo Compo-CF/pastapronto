@@ -301,6 +301,11 @@ export function buildReportPdf(report, date, brand = {}) {
       ['Sauces', report.mix.pizza.sauces], ['Cheeses', report.mix.pizza.cheeses],
       ['Proteins', report.mix.pizza.proteins], ['Toppings', report.mix.pizza.toppings],
     ]],
+    ['Grill', 'burger', [
+      ['Buns', report.mix.burger.buns], ['Patties', report.mix.burger.patties],
+      ['Cheeses', report.mix.burger.cheeses], ['Toppings', report.mix.burger.toppings],
+      ['Sauces', report.mix.burger.sauces], ['Sides', report.mix.burger.sides],
+    ]],
   ];
   const live = lanes.filter(([, , groups]) => groups.some(([, rows]) => (rows || []).length));
 

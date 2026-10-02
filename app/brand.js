@@ -88,19 +88,24 @@ export function taglineFor(lang) {
  *
  * @param {string} markSvg  inline SVG for the default brand
  */
-export function mastheadHtml(markSvg) {
+export function mastheadHtml(markSvg, eventName) {
   const brand = activeBrand();
+  // The night names the event; the brand names the venue. On a burger night
+  // the crest is still the club's, but the words beside it are not "Neapolitan
+  // Night" - which is the one thing a guest would notice as wrong.
+  const event = eventName || brand.venueName;
 
   if (brand.logo) {
     return `<img class="brand-logo" src="${brand.logo}" alt="${brand.logoAlt || brand.orgName}">`
-      + `<span class="brand-event">${brand.venueName}</span>`;
+      + `<span class="brand-event">${event}</span>`;
   }
   return `<span class="brand-mark">${markSvg}</span><span>${brand.wordmark}</span>`;
 }
 
 /** Page title, so a branded tab does not say PastaPresto. */
-export function pageTitle(screen) {
+export function pageTitle(screen, eventName) {
   const brand = activeBrand();
-  const lead = brand.orgName ? `${brand.venueName} - ${brand.orgName}` : brand.venueName;
+  const event = eventName || brand.venueName;
+  const lead = brand.orgName ? `${event} - ${brand.orgName}` : event;
   return screen ? `${lead} - ${screen}` : lead;
 }

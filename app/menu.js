@@ -176,17 +176,89 @@ const PIZZA_TOPPINGS = [
   { id: 'fin_oregano',  name: 'Oregano', es: 'Orégano',                  icon: 'oregano',      addSec: 0,  allergens: [], kid: true, postBake: true },
 ];
 
+// ------------------------------------------------------------------ burgers
+//
+// Burger Night replaces the pasta and pizza lanes rather than joining them -
+// it is its own night, with the grill running and the pans and decks dark.
+//
+// Same field contract as everything above, and the same two markers that make
+// a group of choices behave: `exclusive` for an answer that ends the question
+// ("No Cheese"), and nothing is a `amount` chip here because a burger is not
+// built in ladles.
+
+const BURGER_BUNS = [
+  { id: 'bun_brioche', name: 'Brioche Bun', es: 'Pan Brioche',      icon: 'bread',  addSec: 30, allergens: ['gluten', 'dairy', 'egg'], kid: true },
+  { id: 'bun_potato',  name: 'Potato Roll', es: 'Pan de Papa',      icon: 'bread',  addSec: 30, allergens: ['gluten'], kid: true },
+  { id: 'bun_gf',      name: 'Gluten-Free Bun', es: 'Pan Sin Gluten', icon: 'bread', addSec: 45, allergens: [], glutenFree: true, kid: false },
+  // Not a bun at all, which is the point - it is how someone avoids one.
+  { id: 'bun_lettuce', name: 'Lettuce Wrap', es: 'Envuelto en Lechuga', icon: 'spinach', addSec: 0, allergens: [], glutenFree: true, kid: false },
+];
+
+const BURGER_PATTIES = [
+  { id: 'smash',       name: 'Smash Patty', es: 'Carne Smash',         icon: 'meatball', grillSec: 210, allergens: [], kid: true },
+  { id: 'smash_double', name: 'Double Smash', es: 'Doble Smash',       icon: 'meatball', grillSec: 270, allergens: [], kid: false },
+  { id: 'patty_chicken', name: 'Grilled Chicken', es: 'Pollo a la Parrilla', icon: 'chicken', grillSec: 330, allergens: [], kid: true },
+  { id: 'patty_turkey', name: 'Turkey Burger', es: 'Hamburguesa de Pavo', icon: 'chicken', grillSec: 300, allergens: [], kid: false },
+  { id: 'patty_bean',  name: 'Black Bean Patty', es: 'Carne de Frijol Negro', icon: 'beans', grillSec: 240, allergens: ['soy'], kid: false },
+];
+
+const BURGER_CHEESES = [
+  { id: 'ch_american', name: 'American', es: 'Americano',       icon: 'cheese', addSec: 15, allergens: ['dairy'], kid: true },
+  { id: 'ch_cheddar',  name: 'Sharp Cheddar', es: 'Cheddar Fuerte', icon: 'cheese', addSec: 15, allergens: ['dairy'], kid: true },
+  { id: 'ch_swiss',    name: 'Swiss', es: 'Suizo',              icon: 'cheese', addSec: 15, allergens: ['dairy'], kid: false },
+  { id: 'ch_pepper',   name: 'Pepper Jack', es: 'Pepper Jack',  icon: 'cheese', addSec: 15, allergens: ['dairy'], spicy: true, kid: false },
+  { id: 'ch_none',     name: 'No Cheese', es: 'Sin Queso',      icon: 'cheese_none', addSec: 0, allergens: [], kid: true, exclusive: true },
+];
+
+const BURGER_TOPPINGS = [
+  { id: 'bt_lettuce',  name: 'Lettuce', es: 'Lechuga',              icon: 'spinach',  addSec: 0,  allergens: [], kid: true },
+  { id: 'bt_tomato',   name: 'Tomato', es: 'Tomate',                icon: 'tomato',   addSec: 0,  allergens: [], kid: true },
+  { id: 'bt_onion',    name: 'Raw Onion', es: 'Cebolla Cruda',      icon: 'onion',    addSec: 0,  allergens: [], kid: false },
+  { id: 'bt_grilled_onion', name: 'Grilled Onions', es: 'Cebolla Asada', icon: 'onion', addSec: 30, allergens: [], kid: true },
+  { id: 'bt_pickles',  name: 'Pickles', es: 'Pepinillos',           icon: 'olive',    addSec: 0,  allergens: [], kid: true },
+  { id: 'bt_bacon',    name: 'Bacon', es: 'Tocino',                 icon: 'bacon',    addSec: 20, allergens: ['pork'], kid: true },
+  { id: 'bt_mushroom', name: 'Sauteed Mushrooms', es: 'Champiñones Salteados', icon: 'mushroom', addSec: 30, allergens: [], kid: false },
+  { id: 'bt_jalapeno', name: 'Jalapenos', es: 'Jalapeños',          icon: 'jalapeno', addSec: 0,  allergens: [], spicy: true, kid: false },
+  { id: 'bt_avocado',  name: 'Avocado', es: 'Aguacate',             icon: 'spinach',  addSec: 10, allergens: [], kid: false },
+  { id: 'bt_egg',      name: 'Fried Egg', es: 'Huevo Frito',        icon: 'butter',   addSec: 75, allergens: ['egg'], kid: false },
+];
+
+const BURGER_SAUCES = [
+  { id: 'bs_burger',  name: 'Burger Sauce', es: 'Salsa de la Casa', icon: 'sauce_light', allergens: ['egg'], kid: true },
+  { id: 'bs_ketchup', name: 'Ketchup', es: 'Catsup',                icon: 'tomato',  allergens: [], kid: true },
+  { id: 'bs_mustard', name: 'Mustard', es: 'Mostaza',               icon: 'butter',  allergens: [], kid: true },
+  { id: 'bs_mayo',    name: 'Mayo', es: 'Mayonesa',                 icon: 'cream',   allergens: ['egg'], kid: true },
+  { id: 'bs_bbq',     name: 'BBQ Sauce', es: 'Salsa BBQ',           icon: 'bbq',     allergens: [], kid: true },
+  { id: 'bs_aioli',   name: 'Garlic Aioli', es: 'Alioli de Ajo',    icon: 'garlic',  allergens: ['egg'], kid: false },
+  { id: 'bs_none',    name: 'No Sauce', es: 'Sin Salsa',            icon: 'sauce_none', allergens: [], kid: true, exclusive: true },
+];
+
+// Three, and only three. The fryer runs one basket at a time at this volume,
+// so the side list is deliberately short rather than aspirational.
+const BURGER_SIDES = [
+  { id: 'side_fries', name: 'Fries', es: 'Papas Fritas',        icon: 'sticks', cookSec: 210, allergens: [], kid: true },
+  { id: 'side_tots',  name: 'Tots', es: 'Tots de Papa',         icon: 'sticks', cookSec: 240, allergens: [], kid: true },
+  { id: 'side_rings', name: 'Onion Rings', es: 'Aros de Cebolla', icon: 'onion', cookSec: 270, allergens: ['gluten'], kid: true },
+];
+
 const GROUPS = {
   pastas: PASTAS, sauces: SAUCES, proteins: PROTEINS,
   toppings: TOPPINGS, sides: SIDES, portions: PORTIONS,
   pizzaSauces: PIZZA_SAUCES, pizzaCheeses: PIZZA_CHEESES,
   pizzaProteins: PIZZA_PROTEINS,
   pizzaToppings: PIZZA_TOPPINGS,
+  burgerBuns: BURGER_BUNS, burgerPatties: BURGER_PATTIES,
+  burgerCheeses: BURGER_CHEESES, burgerToppings: BURGER_TOPPINGS,
+  burgerSauces: BURGER_SAUCES, burgerSides: BURGER_SIDES,
 };
+
+/** Every kind any night can serve. */
+export const KINDS = ['pasta', 'pizza', 'burger'];
 
 /** 'pasta' unless the line says otherwise. Old documents have no kind. */
 export function kindOf(line) {
-  return line && line.kind === 'pizza' ? 'pizza' : 'pasta';
+  const k = line && line.kind;
+  return KINDS.indexOf(k) === -1 ? 'pasta' : k;
 }
 
 /** Which group a kind's sauces and toppings come from. */
@@ -195,6 +267,15 @@ export const GROUPS_FOR = {
   pizza: {
     sauces: 'pizzaSauces', cheeses: 'pizzaCheeses',
     proteins: 'pizzaProteins', toppings: 'pizzaToppings',
+  },
+  // A burger's patty is its protein and its bun is its base, so they map onto
+  // the slots the other kinds already use rather than inventing new ones. That
+  // is what lets validateLine(), the cost sheet and the close-out handle a
+  // burger without any of them knowing it is a burger.
+  burger: {
+    sauces: 'burgerSauces', cheeses: 'burgerCheeses',
+    proteins: 'burgerPatties', toppings: 'burgerToppings',
+    sides: 'burgerSides', base: 'burgerBuns',
   },
 };
 
@@ -307,6 +388,13 @@ export function allergensFor(line) {
     // actually chosen, so a no-cheese pie is genuinely dairy free.
     PIZZA_BASE.allergens.forEach((a) => out.add(a));
     cheesesOf(line).forEach((id) => add(find('pizzaCheeses', id)));
+  } else if (kindOf(line) === 'burger') {
+    // The bun is chosen, not assumed - which is the whole reason the lettuce
+    // wrap and the gluten-free bun are on the menu. A burger is only gluten
+    // free if the bun it was built on is.
+    add(find('burgerBuns', line.base));
+    cheesesOf(line).forEach((id) => add(find('burgerCheeses', id)));
+    (line.sides || []).forEach((id) => add(find('burgerSides', id)));
   } else {
     add(find('pastas', line.pasta));
     (line.sides || []).forEach((id) => add(find('sides', id)));
@@ -392,6 +480,33 @@ export function describe(line, lang) {
     return parts.join(' ');
   }
 
+  if (kindOf(line) === 'burger') {
+    // The patty leads, because that is what goes on the grill and the grill is
+    // the clock. Bun, cheese and the rest follow in the order they are built.
+    const es = lang === 'es';
+    const cheeseRule = groupRules('burgerCheeses', cheesesOf(line));
+    const sauceRule = groupRules('burgerSauces', saucesOf(line));
+
+    const patty = proteins.length ? proteins.join(' + ') : (es ? 'Hamburguesa' : 'Burger');
+    const bun = nameOf('burgerBuns', line.base, lang);
+    const cheese = cheeseRule.exclusive
+      ? nameOf('burgerCheeses', cheeseRule.exclusive.id, lang)
+      : cheeseRule.bases.map(name('burgerCheeses')).filter(Boolean).join(' + ');
+    const toppings = (line.toppings || []).map(name('burgerToppings')).filter(Boolean);
+    const sauceLabel = sauceRule.exclusive
+      ? nameOf('burgerSauces', sauceRule.exclusive.id, lang)
+      : sauceRule.bases.map(name('burgerSauces')).filter(Boolean).join(' + ');
+    const sides = (line.sides || []).map(name('burgerSides')).filter(Boolean);
+
+    const out = [patty];
+    if (bun) out.push((es ? 'en ' : 'on ') + bun);
+    if (cheese) out.push((cheeseRule.exclusive ? '- ' : '+ ') + cheese);
+    if (toppings.length) out.push('+ ' + toppings.join(', '));
+    if (sauceLabel) out.push((sauceRule.exclusive ? '- ' : '+ ') + sauceLabel);
+    if (sides.length) out.push((es ? 'con ' : 'w/ ') + sides.join(', '));
+    return out.join(' ');
+  }
+
   const parts = [];
   const pasta = nameOf('pastas', line.pasta, lang);
   if (pasta) parts.push(pasta);
@@ -451,6 +566,34 @@ export function validateLine(line, limits) {
     return errors;
   }
 
+  if (kind === 'burger') {
+    // A burger must have exactly one patty. The protein cap above allows
+    // several, which is right for a bowl and wrong for a bun.
+    if (proteins.length !== 1) errors.push('Pick one patty.');
+    if (!find('burgerBuns', line.base)) errors.push('Pick a bun.');
+
+    const cheeses = cheesesOf(line);
+    if (cheeses.length === 0) errors.push('Pick a cheese, or No Cheese.');
+    if (cheeses.some((id) => !find('burgerCheeses', id))) errors.push('That cheese is not on the menu.');
+    const cheeseRule = groupRules('burgerCheeses', cheeses);
+    if (cheeseRule.error) errors.push(cheeseRule.error);
+    if (cheeses.some((id) => cheeseRule.blocked[id])) {
+      errors.push('Those cheese choices contradict each other.');
+    }
+    if (cheeseRule.bases.length > 1) errors.push('One cheese per burger.');
+
+    if (toppings.length > limits.maxToppingsPerBurger) {
+      errors.push('Up to ' + limits.maxToppingsPerBurger + ' toppings per burger.');
+    }
+    const bSides = line.sides || [];
+    if (bSides.some((x) => !find('burgerSides', x))) errors.push('Unknown side.');
+    // One basket. The fryer runs one at a time at this volume.
+    if (bSides.length > limits.maxSidesPerBurger) {
+      errors.push('Pick one side.');
+    }
+    return errors;
+  }
+
   if (!find('pastas', line.pasta)) errors.push('Pick a pasta shape.');
   if (!find('portions', line.portion)) errors.push('Pick a portion size.');
   if (toppings.length > limits.maxToppingsPerBowl) {
@@ -468,6 +611,8 @@ export function validateLine(line, limits) {
 export {
   ALLERGENS, PASTAS, SAUCES, PROTEINS, TOPPINGS, SIDES, PORTIONS, SPICE_LEVELS,
   PIZZA_SAUCES, PIZZA_CHEESES, PIZZA_PROTEINS, PIZZA_TOPPINGS,
+  BURGER_BUNS, BURGER_PATTIES, BURGER_CHEESES, BURGER_TOPPINGS,
+  BURGER_SAUCES, BURGER_SIDES,
   find,
 };
 
@@ -480,5 +625,8 @@ export function catalog() {
     pizzaProteins: PIZZA_PROTEINS,
     pizzaToppings: PIZZA_TOPPINGS,
     pizzaBase: PIZZA_BASE,
+    burgerBuns: BURGER_BUNS, burgerPatties: BURGER_PATTIES,
+    burgerCheeses: BURGER_CHEESES, burgerToppings: BURGER_TOPPINGS,
+    burgerSauces: BURGER_SAUCES, burgerSides: BURGER_SIDES,
   };
 }
