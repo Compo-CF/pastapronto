@@ -151,6 +151,126 @@ var ICONS = {
   onion:
     '<circle cx="32" cy="34" r="20" fill="#c9a8d4"/><circle cx="32" cy="34" r="14" fill="#ddc4e5"/>' +
     '<circle cx="32" cy="34" r="8" fill="#efe2f3"/><circle cx="32" cy="34" r="3" fill="#c9a8d4"/>',
+
+  // --------------------------------------------------------------- burgers
+  //
+  // Drawn so any two tiles in one list differ in SILHOUETTE, not only in fill.
+  // A guest taps a 90px tile and a cook reads the rail on a dark screen at a
+  // glance; two shapes that differ by a shade are two tiles nobody can tell
+  // apart, which is what the shared-glyph test exists to stop.
+
+  // One beef patty: a disc from slightly above, with a seared edge.
+  patty:
+    '<ellipse cx="32" cy="36" rx="22" ry="14" fill="#6f4126"/>' +
+    '<ellipse cx="32" cy="32" rx="22" ry="14" fill="#8a5330"/>' +
+    '<g fill="#a9693c" opacity=".8"><ellipse cx="24" cy="29" rx="4" ry="2.4"/>' +
+    '<ellipse cx="38" cy="33" rx="5" ry="2.6"/><ellipse cx="31" cy="37" rx="3.5" ry="2"/></g>',
+  // Two of them, stacked. The difference is countable rather than a tint.
+  patty_double:
+    '<ellipse cx="32" cy="46" rx="21" ry="12" fill="#6f4126"/>' +
+    '<ellipse cx="32" cy="42" rx="21" ry="12" fill="#8a5330"/>' +
+    '<ellipse cx="32" cy="28" rx="21" ry="12" fill="#6f4126"/>' +
+    '<ellipse cx="32" cy="24" rx="21" ry="12" fill="#8a5330"/>' +
+    '<g fill="#a9693c" opacity=".75"><ellipse cx="25" cy="22" rx="4" ry="2.2"/>' +
+    '<ellipse cx="38" cy="25" rx="4.5" ry="2.4"/></g>',
+
+  // Buns that differ by crown and crumb rather than by tint.
+  bun_soft:
+    '<path d="M10 40c0-14 10-22 22-22s22 8 22 22z" fill="#e0b068"/>' +
+    '<path d="M10 40h44v6a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6z" fill="#c9954c"/>' +
+    '<path d="M16 32c5-6 27-6 32 0" stroke="#efc98f" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  bun_seeded:
+    '<path d="M10 40c0-14 10-22 22-22s22 8 22 22z" fill="#d9a558"/>' +
+    '<path d="M10 40h44v6a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6z" fill="#c08f43"/>' +
+    '<g fill="#fdf0d2"><ellipse cx="22" cy="31" rx="2.6" ry="1.5"/>' +
+    '<ellipse cx="32" cy="26" rx="2.6" ry="1.5"/><ellipse cx="42" cy="31" rx="2.6" ry="1.5"/>' +
+    '<ellipse cx="27" cy="36" rx="2.4" ry="1.4"/><ellipse cx="38" cy="36" rx="2.4" ry="1.4"/></g>',
+  // Gluten free: the same bun with a leaf, which is the convention everywhere.
+  bun_gf:
+    '<path d="M8 38c0-13 10-20 21-20s21 7 21 20z" fill="#dcb682"/>' +
+    '<path d="M8 38h42v6a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6z" fill="#c49a62"/>' +
+    '<path d="M44 52c0-9 6-15 14-16-1 10-6 15-14 16z" fill="#3f9150"/>' +
+    '<path d="M46 52c3-5 7-8 11-10" stroke="#2c6c3a" stroke-width="2" fill="none" stroke-linecap="round"/>',
+
+  // A plain slice, a holed slice and a flecked slice read apart at tile size
+  // in a way that four wedges never will.
+  cheese_slice:
+    '<rect x="12" y="16" width="40" height="32" rx="3" fill="#f2b327"/>' +
+    '<path d="M12 16h40l-9 9H21z" fill="#ffd166" opacity=".75"/>' +
+    '<rect x="12" y="16" width="40" height="32" rx="3" fill="none" stroke="#c98d12" stroke-width="2"/>',
+  cheese_holes:
+    '<rect x="12" y="16" width="40" height="32" rx="3" fill="#f6d98a"/>' +
+    '<g fill="#dcb757"><circle cx="23" cy="27" r="4.5"/><circle cx="39" cy="24" r="3.2"/>' +
+    '<circle cx="33" cy="38" r="5"/><circle cx="45" cy="38" r="2.8"/></g>' +
+    '<rect x="12" y="16" width="40" height="32" rx="3" fill="none" stroke="#c9a94e" stroke-width="2"/>',
+  cheese_flecks:
+    '<rect x="12" y="16" width="40" height="32" rx="3" fill="#f7dea0"/>' +
+    '<g fill="#b8342a"><circle cx="22" cy="26" r="2.2"/><circle cx="36" cy="23" r="1.8"/>' +
+    '<circle cx="29" cy="34" r="2"/><circle cx="43" cy="33" r="2.2"/>' +
+    '<circle cx="20" cy="40" r="1.8"/><circle cx="38" cy="42" r="2"/></g>' +
+    '<rect x="12" y="16" width="40" height="32" rx="3" fill="none" stroke="#caa54e" stroke-width="2"/>',
+
+  // Grilled onions: browned strands in a heap. Nothing like the raw onion's
+  // concentric rings, which is the entire point of drawing it separately.
+  onion_grilled:
+    '<g fill="none" stroke="#c98f4e" stroke-width="5" stroke-linecap="round">' +
+    '<path d="M12 42c8-10 18-10 26-2"/><path d="M16 50c9-9 21-12 32-6"/></g>' +
+    '<g fill="none" stroke="#e0b887" stroke-width="4" stroke-linecap="round">' +
+    '<path d="M14 34c9-8 20-7 28 1"/><path d="M20 25c8-5 17-3 24 3"/></g>',
+  lettuce:
+    '<path d="M32 50c-14 0-24-9-24-19 0-3 2-5 5-4 2-6 8-8 12-5 3-6 11-6 14 0 4-3 10-1 12 5 3-1 5 1 5 4 0 10-10 19-24 19z" fill="#4faa4f"/>' +
+    '<g stroke="#2f7a34" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8">' +
+    '<path d="M20 30c3 7 7 11 12 13"/><path d="M44 30c-3 7-7 11-12 13"/></g>',
+  avocado:
+    '<path d="M32 10c10 0 17 10 17 22 0 13-8 22-17 22s-17-9-17-22c0-12 7-22 17-22z" fill="#4e7c2f"/>' +
+    '<path d="M32 16c7 0 12 8 12 17 0 10-6 16-12 16s-12-6-12-16c0-9 5-17 12-17z" fill="#cfe08a"/>' +
+    '<ellipse cx="32" cy="36" rx="8" ry="9" fill="#7a4a21"/>',
+
+  // Squeeze bottles. The two condiments differ by colour and by cap.
+  ketchup:
+    '<path d="M27 9h10v7l4 5v33a4 4 0 0 1-4 4H27a4 4 0 0 1-4-4V21l4-5z" fill="#cf2e26"/>' +
+    '<rect x="27" y="4" width="10" height="6" rx="2" fill="#8f1d18"/>' +
+    '<rect x="26" y="29" width="12" height="13" rx="2" fill="#ffffff" opacity=".88"/>',
+  mustard:
+    '<path d="M24 21l6-7h4l6 7v29a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4z" fill="#e8b713"/>' +
+    '<rect x="30" y="5" width="4" height="9" rx="1.5" fill="#a37f08"/>' +
+    '<rect x="26" y="30" width="12" height="13" rx="2" fill="#ffffff" opacity=".9"/>',
+  // Mayo was cream drawn on cream and vanished against the tile. Same jar,
+  // now with a coloured lid and an outline that survive a pale background.
+  mayo:
+    '<rect x="18" y="20" width="28" height="34" rx="5" fill="#fdfaf0" stroke="#9a8f74" stroke-width="2.4"/>' +
+    '<rect x="15" y="11" width="34" height="10" rx="3" fill="#3f6fb5"/>' +
+    '<rect x="23" y="31" width="18" height="13" rx="2" fill="#e8dfc6"/>',
+
+  // Three baskets, three different shapes.
+  fries:
+    '<path d="M18 26h28l-3 26a6 6 0 0 1-6 5H27a6 6 0 0 1-6-5z" fill="#d6413a"/>' +
+    '<g fill="#f0c463"><rect x="20" y="8" width="7" height="24" rx="3.5"/>' +
+    '<rect x="29" y="4" width="7" height="28" rx="3.5"/>' +
+    '<rect x="38" y="8" width="7" height="24" rx="3.5"/></g>',
+  tots:
+    '<g fill="#deb071">' +
+    '<rect x="11" y="29" width="16" height="13" rx="4.5"/><rect x="31" y="24" width="16" height="13" rx="4.5"/>' +
+    '<rect x="21" y="44" width="16" height="13" rx="4.5"/><rect x="40" y="41" width="14" height="13" rx="4.5"/></g>' +
+    '<g stroke="#b5833f" stroke-width="1.6" opacity=".7" fill="none" stroke-linecap="round">' +
+    '<path d="M15 33h8"/><path d="M35 28h8"/><path d="M25 48h8"/><path d="M44 45h6"/></g>',
+  // Not on the list of asked-for fixes, but miscast in the same way: the egg
+  // was drawn with the butter glyph and the pickle with the olive.
+  fried_egg:
+    '<path d="M14 36c-6-10 2-20 12-20 4-8 16-10 22-3 8 2 11 11 6 17 3 8-4 15-12 14-6 6-16 5-20-2-4 1-8-2-8-6z" fill="#fffdf6" stroke="#e6ddc6" stroke-width="1.6"/>' +
+    '<circle cx="31" cy="31" r="9" fill="#f2b22c"/>' +
+    '<circle cx="28" cy="28" r="3" fill="#f8cf6a" opacity=".8"/>',
+  pickle:
+    '<g transform="rotate(-24 32 32)">' +
+    '<rect x="23" y="10" width="18" height="44" rx="9" fill="#4e8c37"/>' +
+    '<rect x="26" y="14" width="12" height="36" rx="6" fill="#6fae4d"/>' +
+    '<g fill="#3d6f2a" opacity=".7"><circle cx="30" cy="22" r="1.6"/><circle cx="35" cy="29" r="1.6"/>' +
+    '<circle cx="29" cy="36" r="1.6"/><circle cx="34" cy="43" r="1.6"/></g></g>',
+  onion_ring:
+    '<g fill="#dfae6a" stroke="#b9873e" stroke-width="2">' +
+    '<ellipse cx="24" cy="25" rx="14" ry="11"/><ellipse cx="40" cy="43" rx="14" ry="11"/></g>' +
+    '<g fill="#fbf0dc"><ellipse cx="24" cy="25" rx="6" ry="4.5"/>' +
+    '<ellipse cx="40" cy="43" rx="6" ry="4.5"/></g>',
   pineapple:
     '<ellipse cx="32" cy="38" rx="16" ry="19" fill="#f0c33c"/>' +
     '<g stroke="#c99b1f" stroke-width="2" fill="none"><path d="M20 30l24 16M44 30L20 46"/></g>' +

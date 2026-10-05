@@ -46,7 +46,7 @@ const burgerLine = (over = {}) => ({
   kind: 'burger',
   guestLabel: 'Ada',
   base: 'bun_brioche',
-  proteins: ['smash'],
+  proteins: ['beef_single'],
   cheeses: ['ch_american'],
   toppings: ['bt_lettuce', 'bt_pickles'],
   sauces: ['bs_burger'],
@@ -909,9 +909,15 @@ test('items in one list do not share a glyph', () => {
   // Two tiles side by side with identical artwork is a tile a guest cannot
   // tell apart. It happened to shredded vs fresh mozzarella, and to the red
   // pepper flakes vs the jalapenos.
+  // Every group in the catalog, not a list written by hand. The hardcoded list
+  // went stale the moment Burger Night added six groups, and shipped a grilled
+  // onion drawn exactly like a raw one - the precise bug this test exists to
+  // catch, missed because the test did not know the group existed.
   const c = menu.catalog();
   const clashes = [];
-  ['pizzaSauces', 'pizzaCheeses', 'pizzaToppings', 'pizzaProteins', 'toppings'].forEach((g) => {
+  Object.keys(c)
+    .filter((k) => Array.isArray(c[k]) && c[k].some((x) => x && (x.icon || x.shape)))
+    .forEach((g) => {
     const byArt = new Map();
     c[g].forEach((x) => {
       const svg = art(x.shape || x.icon);
@@ -1331,7 +1337,7 @@ test('a burger is a valid order, and routes to the grill', () => {
 test('a burger takes one patty, one cheese and one basket', () => {
   const lim = config.order;
   assert.ok(menu.validateLine(burgerLine({ proteins: [] }), lim).some((e) => /one patty/i.test(e)));
-  assert.ok(menu.validateLine(burgerLine({ proteins: ['smash', 'patty_turkey'] }), lim).some((e) => /one patty/i.test(e)));
+  assert.ok(menu.validateLine(burgerLine({ proteins: ['beef_single', 'beef_double'] }), lim).some((e) => /one patty/i.test(e)));
   assert.ok(menu.validateLine(burgerLine({ base: null }), lim).some((e) => /bun/i.test(e)));
   assert.ok(menu.validateLine(burgerLine({ cheeses: [] }), lim).some((e) => /cheese/i.test(e)));
   assert.ok(menu.validateLine(burgerLine({ cheeses: ['ch_american', 'ch_swiss'] }), lim).some((e) => /one cheese/i.test(e)));
@@ -1361,12 +1367,12 @@ test('a burger is only gluten free if its bun is', () => {
 
 test('a burger reads as a burger on the chit', () => {
   const text = menu.describe(burgerLine());
-  assert.ok(/Smash Patty/.test(text), 'the patty leads: ' + text);
+  assert.ok(/Beef - Single/.test(text), 'the patty leads: ' + text);
   assert.ok(/Brioche/.test(text), 'the bun is named');
   assert.ok(/Fries/.test(text), 'and the basket');
 
   const es = menu.describe(burgerLine(), 'es');
-  assert.ok(/Carne Smash/.test(es), 'Spanish names the patty: ' + es);
+  assert.ok(/Carne de Res/.test(es), 'Spanish names the patty: ' + es);
   assert.ok(/Papas Fritas/.test(es));
 
   // A no-cheese burger says so rather than going quiet about it.
@@ -1391,7 +1397,7 @@ test('the close-out counts burgers, and does not lose pasta doing it', () => {
     deliveredAt: '2026-10-02T18:10:00.000Z', cookEstimateSec: 420, lines,
   });
   const rep = order.shiftReport([
-    o('burger', [burgerLine(), burgerLine({ proteins: ['patty_chicken'] })]),
+    o('burger', [burgerLine(), burgerLine({ proteins: ['patty_bean'] })]),
     o('pasta', [{ pasta: 'penne', sauces: ['marinara'], proteins: [], toppings: [], sides: [], portion: 'regular' }]),
   ], config.sla);
 
@@ -1400,7 +1406,7 @@ test('the close-out counts burgers, and does not lose pasta doing it', () => {
   assert.strictEqual(rep.byKind.pizza.items, 0, 'a kind with no orders is zero, not missing');
 
   const patties = rep.mix.burger.patties.map((p) => p.id).sort();
-  assert.deepStrictEqual(patties, ['patty_chicken', 'smash']);
+  assert.deepStrictEqual(patties, ['beef_single', 'patty_bean']);
   assert.strictEqual(rep.mix.burger.buns[0].name, 'Brioche Bun', 'buns are tallied for prep');
   assert.ok(rep.mix.pasta.pastas.length > 0, 'the pasta lane still reports');
 
@@ -1421,7 +1427,7 @@ test('every burger ingredient can be priced', () => {
   // And a built burger costs what its parts cost.
   const pantry = {
     bun_brioche: { price: 6, yield: 12 },      // 0.50
-    smash: { price: 40, yield: 20 },           // 2.00
+    beef_single: { price: 40, yield: 20 },           // 2.00
     ch_american: { price: 9, yield: 36 },      // 0.25
     bt_lettuce: { price: 4, yield: 40 },       // 0.10
     bt_pickles: { price: 7, yield: 70 },       // 0.10

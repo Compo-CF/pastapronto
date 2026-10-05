@@ -187,47 +187,43 @@ const PIZZA_TOPPINGS = [
 // built in ladles.
 
 const BURGER_BUNS = [
-  { id: 'bun_brioche', name: 'Brioche Bun', es: 'Pan Brioche',      icon: 'bread',  addSec: 30, allergens: ['gluten', 'dairy', 'egg'], kid: true },
-  { id: 'bun_potato',  name: 'Potato Roll', es: 'Pan de Papa',      icon: 'bread',  addSec: 30, allergens: ['gluten'], kid: true },
-  { id: 'bun_gf',      name: 'Gluten-Free Bun', es: 'Pan Sin Gluten', icon: 'bread', addSec: 45, allergens: [], glutenFree: true, kid: false },
-  // Not a bun at all, which is the point - it is how someone avoids one.
-  { id: 'bun_lettuce', name: 'Lettuce Wrap', es: 'Envuelto en Lechuga', icon: 'spinach', addSec: 0, allergens: [], glutenFree: true, kid: false },
+  { id: 'bun_brioche', name: 'Brioche Bun', es: 'Pan Brioche',        icon: 'bun_soft',   addSec: 30, allergens: ['gluten', 'dairy', 'egg'], kid: true },
+  { id: 'bun_potato',  name: 'Potato Roll', es: 'Pan de Papa',        icon: 'bun_seeded', addSec: 30, allergens: ['gluten'], kid: true },
+  { id: 'bun_gf',      name: 'Gluten-Free Bun', es: 'Pan Sin Gluten', icon: 'bun_gf',     addSec: 45, allergens: [], glutenFree: true, kid: false },
 ];
 
 const BURGER_PATTIES = [
-  { id: 'smash',       name: 'Smash Patty', es: 'Carne Smash',         icon: 'meatball', grillSec: 210, allergens: [], kid: true },
-  { id: 'smash_double', name: 'Double Smash', es: 'Doble Smash',       icon: 'meatball', grillSec: 270, allergens: [], kid: false },
-  { id: 'patty_chicken', name: 'Grilled Chicken', es: 'Pollo a la Parrilla', icon: 'chicken', grillSec: 330, allergens: [], kid: true },
-  { id: 'patty_turkey', name: 'Turkey Burger', es: 'Hamburguesa de Pavo', icon: 'chicken', grillSec: 300, allergens: [], kid: false },
-  { id: 'patty_bean',  name: 'Black Bean Patty', es: 'Carne de Frijol Negro', icon: 'beans', grillSec: 240, allergens: ['soy'], kid: false },
+  { id: 'beef_single', name: 'Beef - Single', es: 'Carne de Res - Sencilla', icon: 'patty',        grillSec: 210, allergens: [], kid: true },
+  { id: 'beef_double', name: 'Beef - Double', es: 'Carne de Res - Doble',   icon: 'patty_double', grillSec: 285, allergens: [], kid: false },
+  { id: 'patty_bean',  name: 'Black Bean Patty', es: 'Carne de Frijol Negro', icon: 'beans',       grillSec: 240, allergens: ['soy'], kid: false },
 ];
 
 const BURGER_CHEESES = [
-  { id: 'ch_american', name: 'American', es: 'Americano',       icon: 'cheese', addSec: 15, allergens: ['dairy'], kid: true },
+  { id: 'ch_american', name: 'American', es: 'Americano',       icon: 'cheese_slice', addSec: 15, allergens: ['dairy'], kid: true },
   { id: 'ch_cheddar',  name: 'Sharp Cheddar', es: 'Cheddar Fuerte', icon: 'cheese', addSec: 15, allergens: ['dairy'], kid: true },
-  { id: 'ch_swiss',    name: 'Swiss', es: 'Suizo',              icon: 'cheese', addSec: 15, allergens: ['dairy'], kid: false },
-  { id: 'ch_pepper',   name: 'Pepper Jack', es: 'Pepper Jack',  icon: 'cheese', addSec: 15, allergens: ['dairy'], spicy: true, kid: false },
+  { id: 'ch_swiss',    name: 'Swiss', es: 'Suizo',              icon: 'cheese_holes', addSec: 15, allergens: ['dairy'], kid: false },
+  { id: 'ch_pepper',   name: 'Pepper Jack', es: 'Pepper Jack',  icon: 'cheese_flecks', addSec: 15, allergens: ['dairy'], spicy: true, kid: false },
   { id: 'ch_none',     name: 'No Cheese', es: 'Sin Queso',      icon: 'cheese_none', addSec: 0, allergens: [], kid: true, exclusive: true },
 ];
 
 const BURGER_TOPPINGS = [
-  { id: 'bt_lettuce',  name: 'Lettuce', es: 'Lechuga',              icon: 'spinach',  addSec: 0,  allergens: [], kid: true },
+  { id: 'bt_lettuce',  name: 'Lettuce', es: 'Lechuga',              icon: 'lettuce',  addSec: 0,  allergens: [], kid: true },
   { id: 'bt_tomato',   name: 'Tomato', es: 'Tomate',                icon: 'tomato',   addSec: 0,  allergens: [], kid: true },
   { id: 'bt_onion',    name: 'Raw Onion', es: 'Cebolla Cruda',      icon: 'onion',    addSec: 0,  allergens: [], kid: false },
-  { id: 'bt_grilled_onion', name: 'Grilled Onions', es: 'Cebolla Asada', icon: 'onion', addSec: 30, allergens: [], kid: true },
-  { id: 'bt_pickles',  name: 'Pickles', es: 'Pepinillos',           icon: 'olive',    addSec: 0,  allergens: [], kid: true },
+  { id: 'bt_grilled_onion', name: 'Grilled Onions', es: 'Cebolla Asada', icon: 'onion_grilled', addSec: 30, allergens: [], kid: true },
+  { id: 'bt_pickles',  name: 'Pickles', es: 'Pepinillos',           icon: 'pickle',    addSec: 0,  allergens: [], kid: true },
   { id: 'bt_bacon',    name: 'Bacon', es: 'Tocino',                 icon: 'bacon',    addSec: 20, allergens: ['pork'], kid: true },
   { id: 'bt_mushroom', name: 'Sauteed Mushrooms', es: 'Champiñones Salteados', icon: 'mushroom', addSec: 30, allergens: [], kid: false },
   { id: 'bt_jalapeno', name: 'Jalapenos', es: 'Jalapeños',          icon: 'jalapeno', addSec: 0,  allergens: [], spicy: true, kid: false },
-  { id: 'bt_avocado',  name: 'Avocado', es: 'Aguacate',             icon: 'spinach',  addSec: 10, allergens: [], kid: false },
-  { id: 'bt_egg',      name: 'Fried Egg', es: 'Huevo Frito',        icon: 'butter',   addSec: 75, allergens: ['egg'], kid: false },
+  { id: 'bt_avocado',  name: 'Avocado', es: 'Aguacate',             icon: 'avocado',  addSec: 10, allergens: [], kid: false },
+  { id: 'bt_egg',      name: 'Fried Egg', es: 'Huevo Frito',        icon: 'fried_egg',   addSec: 75, allergens: ['egg'], kid: false },
 ];
 
 const BURGER_SAUCES = [
   { id: 'bs_burger',  name: 'Burger Sauce', es: 'Salsa de la Casa', icon: 'sauce_light', allergens: ['egg'], kid: true },
-  { id: 'bs_ketchup', name: 'Ketchup', es: 'Catsup',                icon: 'tomato',  allergens: [], kid: true },
-  { id: 'bs_mustard', name: 'Mustard', es: 'Mostaza',               icon: 'butter',  allergens: [], kid: true },
-  { id: 'bs_mayo',    name: 'Mayo', es: 'Mayonesa',                 icon: 'cream',   allergens: ['egg'], kid: true },
+  { id: 'bs_ketchup', name: 'Ketchup', es: 'Catsup',                icon: 'ketchup',  allergens: [], kid: true },
+  { id: 'bs_mustard', name: 'Mustard', es: 'Mostaza',               icon: 'mustard',  allergens: [], kid: true },
+  { id: 'bs_mayo',    name: 'Mayo', es: 'Mayonesa',                 icon: 'mayo',   allergens: ['egg'], kid: true },
   { id: 'bs_bbq',     name: 'BBQ Sauce', es: 'Salsa BBQ',           icon: 'bbq',     allergens: [], kid: true },
   { id: 'bs_aioli',   name: 'Garlic Aioli', es: 'Alioli de Ajo',    icon: 'garlic',  allergens: ['egg'], kid: false },
   { id: 'bs_none',    name: 'No Sauce', es: 'Sin Salsa',            icon: 'sauce_none', allergens: [], kid: true, exclusive: true },
@@ -236,9 +232,9 @@ const BURGER_SAUCES = [
 // Three, and only three. The fryer runs one basket at a time at this volume,
 // so the side list is deliberately short rather than aspirational.
 const BURGER_SIDES = [
-  { id: 'side_fries', name: 'Fries', es: 'Papas Fritas',        icon: 'sticks', cookSec: 210, allergens: [], kid: true },
-  { id: 'side_tots',  name: 'Tots', es: 'Tots de Papa',         icon: 'sticks', cookSec: 240, allergens: [], kid: true },
-  { id: 'side_rings', name: 'Onion Rings', es: 'Aros de Cebolla', icon: 'onion', cookSec: 270, allergens: ['gluten'], kid: true },
+  { id: 'side_fries', name: 'Fries', es: 'Papas Fritas',        icon: 'fries', cookSec: 210, allergens: [], kid: true },
+  { id: 'side_tots',  name: 'Tater Tots', es: 'Tater Tots',      icon: 'tots', cookSec: 240, allergens: [], kid: true },
+  { id: 'side_rings', name: 'Onion Rings', es: 'Aros de Cebolla', icon: 'onion_ring', cookSec: 270, allergens: ['gluten'], kid: true },
 ];
 
 const GROUPS = {
