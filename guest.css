@@ -256,3 +256,47 @@
   border-color: var(--tomato); border-width: 3px;
   background: var(--tomato-wash); color: var(--tomato-dark);
 }
+
+/* ------------------------------------------------------- burger stack
+   The burger assembling as it is chosen. A hero on the build screen and a
+   thumbnail on review, from the same drawing.
+
+   The height is clamped against the VIEWPORT, not just set: at 220px this is
+   the largest thing on the screen, and on a short phone that would push the
+   tiles below the fold - which is the one thing it must not do. On a 667px
+   iPhone SE it settles near 150px and the choices stay reachable. */
+
+.bstack-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 2px 0 6px;
+}
+.bstack-wrap .bstack {
+  width: 100%;
+  max-width: 210px;
+  /* height follows the drawing, so a one-layer burger is a short element and
+     the stack visibly grows. The cap is what keeps the tiles reachable. */
+  height: auto;
+  max-height: clamp(118px, 26vh, 220px);
+  display: block;
+}
+
+/* On review it sits in the card's art slot, so it takes that slot's size. */
+.bowl-art.is-stack {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 74px;
+  flex: 0 0 74px;
+}
+.bowl-art.is-stack .bstack { width: 100%; height: 86px; display: block; }
+
+/* It redraws on every tap. Nothing moves except the new layer, so a fade is
+   enough to show something landed without animating the whole stack. */
+@media (prefers-reduced-motion: no-preference) {
+  .bstack-wrap .bstack { animation: bstack-in 160ms ease-out; }
+}
+@keyframes bstack-in {
+  from { opacity: .75; transform: translateY(2px); }
+  to   { opacity: 1; transform: none; }
+}

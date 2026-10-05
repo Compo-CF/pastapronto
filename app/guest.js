@@ -16,6 +16,7 @@ import * as cooktime from './cooktime.js';
 import * as order from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
+import { burgerStackSvg } from './burgerstack.js';
 import { mastheadHtml, pageTitle, activeBrand, taglineFor } from './brand.js';
 import {
   html, raw, humanMins, escapeHtml,
@@ -598,8 +599,15 @@ import {
         t('guest.cheese.one'));
     }
 
+    // The burger so far, assembling as they tap. Only the burger lane has it:
+    // a bowl is a bowl from above and a stack drawing says nothing useful.
+    var hero = state.kind === 'burger'
+      ? html`<div class="bstack-wrap">${raw(burgerStackSvg(bowl))}</div>`
+      : '';
+
     return html`
       <div class="bowltabs">${tabs}</div>
+      ${raw(hero)}
       <div class="step-head">
         <p class="step-kicker">${lane().one[0].toUpperCase() + lane().one.slice(1)} ${state.activeBowl + 1} of ${state.bowls.length} &middot; ${bowl.guestLabel}</p>
         <h1 class="step-title">${t(step.titleKey)}</h1>
@@ -742,8 +750,14 @@ import {
       }
       if (bowl.notes) extras.push('Note: ' + bowl.notes);
 
+      // On review a burger shows the thing itself rather than a badge, so the
+      // guest confirms a picture before sending instead of a list of words.
+      var artCell = isBurger
+        ? html`<span class="bowl-art is-stack">${raw(burgerStackSvg(bowl, { height: 190 }))}</span>`
+        : html`<span class="bowl-art">${raw(art(glyph))}</span>`;
+
       return html`<div class="bowl">
-        <span class="bowl-art">${raw(art(glyph))}</span>
+        ${raw(artCell)}
         <div class="grow">
           <div class="bowl-who">${bowl.guestLabel}</div>
           <div class="bowl-dish">${dishText(bowl)}</div>

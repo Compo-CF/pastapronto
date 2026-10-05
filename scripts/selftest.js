@@ -11,6 +11,7 @@ import * as order from '../app/order.js';
 import * as cooktime from '../app/cooktime.js';
 import * as menu from '../app/menu.js';
 import * as costing from '../app/costing.js';
+import * as stack from '../app/burgerstack.js';
 import * as seed from '../app/seed.js';
 import { art, has as hasArt } from '../app/art.js';
 import * as pdf from '../app/pdf.js';
@@ -1415,6 +1416,56 @@ test('the close-out counts burgers, and does not lose pasta doing it', () => {
   assert.strictEqual(m.burgers, 2);
   assert.strictEqual(m.bowls, 1);
   assert.strictEqual(m.items, 3);
+});
+
+test('the burger stack can draw everything a guest can pick', () => {
+  // The gap this closes is the one the glyph test had: an ingredient added to
+  // the menu with no artwork behind it. A missing layer here does not throw -
+  // it silently draws a burger with a piece absent, which is worse.
+  const drawable = new Set(stack.stackableIds());
+  const c = menu.catalog();
+  ['burgerBuns', 'burgerPatties', 'burgerCheeses', 'burgerToppings', 'burgerSauces']
+    .forEach((g) => c[g]
+      .filter((i) => !i.exclusive)
+      .forEach((i) => assert.ok(drawable.has(i.id), i.name + ' (' + i.id + ') has a stack layer')));
+});
+
+test('the stack draws kitchen order, not tap order', () => {
+  // Toppings picked back to front still come out as a burger.
+  const backwards = burgerLine({ toppings: ['bt_lettuce', 'bt_bacon'] });
+  const forwards = burgerLine({ toppings: ['bt_bacon', 'bt_lettuce'] });
+  assert.strictEqual(stack.burgerStackSvg(backwards), stack.burgerStackSvg(forwards),
+    'the drawing is of the finished burger, not of the order it was tapped in');
+
+  const svg = stack.burgerStackSvg(burgerLine());
+  assert.ok(svg.startsWith('<svg'), 'it is an svg');
+  assert.ok(svg.includes('</svg>'), 'and a closed one');
+
+  // An empty line draws a plate rather than nothing, so the space does not
+  // read as a broken image before the first tap.
+  const empty = stack.burgerStackSvg({ kind: 'burger', proteins: [], cheeses: [], toppings: [], sauces: [] });
+  assert.ok(empty.includes('<ellipse'), 'empty draws a plate');
+});
+
+test('a loaded burger scales to fit instead of growing off the screen', () => {
+  const everything = burgerLine({
+    proteins: ['beef_double'],
+    toppings: ['bt_bacon', 'bt_grilled_onion', 'bt_mushroom', 'bt_egg', 'bt_tomato', 'bt_lettuce'],
+  });
+
+  // At the full hero size even a double with six toppings fits, which is the
+  // headroom the box was chosen for. Nothing is scaled when nothing needs to be.
+  assert.ok(!stack.burgerStackSvg(everything).includes('scale('), 'a full burger fits the hero box');
+
+  // The safety net is for a short screen, where the hero is given less room.
+  const squeezed = stack.burgerStackSvg(everything, { height: 150 });
+  assert.ok(squeezed.includes('scale('), 'a short box scales the stack down');
+  const factor = Number(squeezed.match(/scale\(([\d.]+)\)/)[1]);
+  assert.ok(factor > 0 && factor < 1, 'scale is a real reduction, got ' + factor);
+
+  // However it is scaled, it renders into the box it was given - that is what
+  // keeps the choices on screen rather than pushed below the fold.
+  assert.ok(stack.burgerStackSvg(everything, { height: 150 }).includes('viewBox="0 110 200 150"'));
 });
 
 test('every burger ingredient can be priced', () => {
