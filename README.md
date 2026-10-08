@@ -73,7 +73,7 @@ from that answer.
 
 | | Pasta | Pizza |
 | --- | --- | --- |
-| Stations | `PASTA-1`, `PASTA-2` | `PIZZA-1`, `PIZZA-2` |
+| Stations | `PASTA-1`, `PASTA-2` | `PIZZA-1` |
 | Equipment | 3 pans per station | 2-deck oven, one 12" pie per deck |
 | Build steps | pasta, sauce, protein, toppings, size | sauce, cheese, protein, toppings |
 | Sauces | 8, pick up to 3 | 4, pick up to 3, plus No / Light / Heavy |

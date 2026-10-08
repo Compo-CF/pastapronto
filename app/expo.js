@@ -14,13 +14,16 @@ import { mastheadHtml, pageTitle } from './brand.js';
 import * as i18n from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
-  remember, recall, chime, unlockAudio, toast, requireStaff,
+  remember, recall, chime, unlockAudio, toast, requireStaff, keepScreenAwake,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
 
 (function () {
   'use strict';
+
+  // Tells the plain-script watchdog in expo.html that the modules loaded.
+  window.__ppBooted = true;
 
   var state = { orders: [], sound: recall('expo.sound', false), firstLoadDone: false };
 
@@ -203,9 +206,15 @@ const CATALOG = menu.catalog();
     }
 
     setSound(state.sound);
+
+    // The expo board is read at a glance while someone's hands are full; a
+    // screen that has dimmed defeats the point of having it.
+    keepScreenAwake();
+
     await db.ready();
     el.conn.className = 'conn is-live';
     el.conn.textContent = 'live';
+    if (db.cacheWarning) toast(db.cacheWarning, true);
 
     db.watchToday(onSnapshotOrders, {
       onError: function (err) {

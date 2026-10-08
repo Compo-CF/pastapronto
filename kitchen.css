@@ -379,3 +379,43 @@
   display: block; margin-top: 4px;
   font-size: 12px; font-weight: 600; color: var(--kmuted);
 }
+
+
+/* ------------------------------------------------------------- boot failure */
+
+/* Shown only by the watchdog in kitchen.html / expo.html, when the module
+   scripts never ran. Styled here rather than inline so it reads like the rest
+   of the rail - but it deliberately sets its own colours, because the reason
+   it is on screen may well be that nothing else loaded. */
+.bootfail {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #14171c;
+  color: #f2f5f8;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.bootfail[hidden] { display: none; }
+.bootfail-card {
+  max-width: 560px;
+  background: #1b1f26;
+  border: 1px solid #343b47;
+  border-radius: 16px;
+  padding: 28px 32px;
+}
+.bootfail-card h1 { margin: 0 0 10px; font-size: 28px; letter-spacing: -0.02em; }
+.bootfail-card p { margin: 0 0 16px; font-size: 18px; color: #9aa5b4; }
+.bootfail-card ul { margin: 0 0 18px; padding-left: 22px; font-size: 17px; line-height: 1.6; }
+.bootfail-card code {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f1216;
+  color: #9aa5b4;
+  font-size: 13px;
+  word-break: break-all;
+}

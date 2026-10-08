@@ -19,23 +19,25 @@ export const config = {
   },
 
   kitchen: {
-    // Every station cooks exactly one kind. Orders are routed by their kind,
-    // so a pizza can never land on a pasta rail.
-    // `area` is where the station physically stands. The two kinds are not in
-    // the same room - pasta is in the main kitchen, pizza is out on the patio -
-    // so anything drawing a floor plan has to read this rather than assume one
-    // kitchen.
-    // Every station in the building, across every night. A station only ever
-    // cooks one kind, and order.stationForTicket() picks from the kinds that
-    // match - so the grill simply sits idle on a pasta night and the pans sit
-    // idle on a burger night, with no routing change needed either way.
+    // Every station in the building, across every night. A station cooks
+    // exactly one kind, and order.stationForTicket() picks from the stations
+    // whose kind matches - so the grill sits idle on a Neapolitan night and
+    // the pans sit idle on a burger night, with no routing change either way.
+    //
+    // This is the real line at Carlton Woods: two pasta ranges and one pizza
+    // oven. Do not add a station here to "balance" the rail - an id in this
+    // list is a physical piece of equipment someone stands at, and inventing
+    // one silently halves the tickets each real cook sees.
+    //
+    // `area` is where the station physically stands, and the kinds are not in
+    // the same room - pasta and the grill are in the main kitchen, the pizza
+    // oven is out on the patio - so anything drawing a floor plan has to read
+    // this rather than assume one kitchen.
     stations: [
       { id: 'PASTA-1', label: 'Pasta 1', kind: 'pasta', pans: 3, area: 'Main kitchen' },
       { id: 'PASTA-2', label: 'Pasta 2', kind: 'pasta', pans: 3, area: 'Main kitchen' },
       { id: 'PIZZA-1', label: 'Pizza 1', kind: 'pizza', decks: 2, area: 'Patio' },
-      { id: 'PIZZA-2', label: 'Pizza 2', kind: 'pizza', decks: 2, area: 'Patio' },
       { id: 'GRILL-1', label: 'Grill 1', kind: 'burger', patties: 6, area: 'Main kitchen' },
-      { id: 'GRILL-2', label: 'Grill 2', kind: 'burger', patties: 6, area: 'Main kitchen' },
     ],
     autoAssignStations: true,
     // Client-side gate on the kitchen/expo/admin screens. A convenience lock so
@@ -55,7 +57,9 @@ export const config = {
   },
 
   order: {
-    maxGuests: 8,
+    // The club seats a maximum of 12 to a table, so a ticket can never be for
+    // more. This is the number that becomes covers at close-out.
+    maxGuests: 12,
     maxToppingsPerBowl: 4,
     // Pizzas are all one size, so the only limit that matters is how much you
     // can pile on before the middle goes soggy.

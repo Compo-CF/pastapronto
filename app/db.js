@@ -45,11 +45,51 @@ export { isConfigured };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Offline-first: an IndexedDB cache means a guest on hotel wifi can still send
-// an order (it queues and syncs), and the kitchen rail survives a blip.
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-});
+/**
+ * Offline-first: an IndexedDB cache means a guest on club wifi can still send
+ * an order (it queues and syncs), and the kitchen rail survives a blip.
+ *
+ * The cache is chosen rather than assumed, because the strongest option is not
+ * available everywhere we run. Multi-tab coordination needs the Web Locks API,
+ * which Safari only got in 15.4, and any persistent cache needs IndexedDB,
+ * which Safari withholds in private browsing and can partition away in a Home
+ * Screen web app. A kitchen iPad is the single most likely device in the
+ * building to be old, locked down, or both.
+ *
+ * Getting this wrong used to be fatal in the worst way: initializeFirestore()
+ * throwing at module scope means db.js never finishes evaluating, so every
+ * screen that imports it never runs a line of its own code - including the
+ * error handler meant to explain the failure. The result was a black screen
+ * with nothing on it. Degrading to a weaker cache costs offline queueing and
+ * nothing else; it is always the better trade than not booting.
+ */
+function openFirestore() {
+  const canPersist = typeof indexedDB !== 'undefined' && indexedDB !== null;
+  const canShareTabs = typeof navigator !== 'undefined' && 'locks' in navigator;
+
+  let localCache = null;
+  if (canPersist && canShareTabs) {
+    localCache = persistentLocalCache({ tabManager: persistentMultipleTabManager() });
+  } else if (canPersist) {
+    localCache = persistentLocalCache();
+  }
+
+  try {
+    return initializeFirestore(app, localCache ? { localCache } : {});
+  } catch (err) {
+    // Feature detection said yes and the SDK still refused. Boot anyway on an
+    // in-memory cache: live service works, only offline survival is lost.
+    console.warn('[db] persistent cache unavailable, running in memory:', err && err.message);
+    cacheWarning = 'This device could not open offline storage, so orders will '
+      + 'not survive losing wifi. Live service is unaffected.';
+    return initializeFirestore(app, {});
+  }
+}
+
+/** Set when we had to fall back; screens can surface it. Null when all is well. */
+export let cacheWarning = null;
+
+const db = openFirestore();
 
 /**
  * Local development against `firebase emulators:start`.
@@ -73,15 +113,78 @@ const availabilityRef = doc(db, 'config', 'availability');
 const costsRef = doc(db, 'config', 'costs');
 const serviceRef = doc(db, 'config', 'service');
 
-/** Resolves once we have an anonymous identity, which the rules require. */
+/**
+ * How long to wait for an anonymous identity before calling it a failure.
+ *
+ * Generous, because a tablet waking on slow club wifi is normal and a cook
+ * re-tapping a dead screen is not. Anything past this is not slowness, it is
+ * something that will never arrive.
+ */
+const AUTH_TIMEOUT_MS = 12000;
+
+/**
+ * Resolves once we have an anonymous identity, which the rules require.
+ *
+ * Every staff screen awaits this before it renders anything, which makes the
+ * failure mode worth stating plainly: this promise must always settle. The
+ * original version could not. It resolved only from onAuthStateChanged, and
+ * rejected only if signInAnonymously() rejected - so a sign-in that quietly
+ * succeeded without the state listener ever firing left the promise pending
+ * for the life of the page. boot() awaited it, caught nothing, and the rail
+ * sat on "connecting" with three empty lanes and no way to tell why. That is
+ * precisely how this looks on an iPad whose IndexedDB is blocked, which is
+ * where Firebase Auth keeps the state that drives the listener.
+ *
+ * So: resolve from either source, reject on either source's error, and reject
+ * on a timer if neither speaks. A readable error beats a dead screen, and all
+ * three paths now produce one.
+ */
 let readyPromise = null;
 export function ready() {
-  if (!readyPromise) {
-    readyPromise = new Promise((resolve, reject) => {
-      onAuthStateChanged(auth, (user) => { if (user) resolve(user); });
-      signInAnonymously(auth).catch(reject);
-    });
-  }
+  if (readyPromise) return readyPromise;
+
+  readyPromise = new Promise((resolve, reject) => {
+    let off = null;
+    let settled = false;
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      // off() may not be assigned yet: Firebase can call the observer
+      // synchronously while onAuthStateChanged is still returning. The
+      // assignment below cleans up in that case.
+      if (off) { try { off(); } catch { /* already torn down */ } }
+      fn(value);
+    };
+
+    const timer = setTimeout(() => finish(reject, new Error(
+      'Could not sign in to the ordering service. Check this device is on the '
+      + 'club wifi and can reach the internet, then reload.',
+    )), AUTH_TIMEOUT_MS);
+
+    off = onAuthStateChanged(
+      auth,
+      (user) => { if (user) finish(resolve, user); },
+      (err) => finish(reject, err),
+    );
+    if (settled && off) { try { off(); } catch { /* already torn down */ } }
+
+    // The second, independent path to the same answer. On a device where auth
+    // state cannot be persisted the listener may never fire, but the call that
+    // created the session still hands back the user.
+    signInAnonymously(auth).then(
+      (cred) => { if (cred && cred.user) finish(resolve, cred.user); },
+      (err) => finish(reject, err),
+    );
+  });
+
+  // A tablet that lost wifi mid-boot must be able to try again without someone
+  // walking over to reload a screen mounted on a wall, so a failure clears the
+  // memo. The catch here only exists to keep the rejection handled; callers
+  // still receive it.
+  readyPromise.catch(() => { readyPromise = null; });
+
   return readyPromise;
 }
 

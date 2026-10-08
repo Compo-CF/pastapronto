@@ -158,6 +158,64 @@ export function toast(message, bad = false) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 3400);
 }
 
+// --------------------------------------------------------------- wake lock
+
+/**
+ * Keep a wall-mounted kitchen tablet awake.
+ *
+ * A rail that has dimmed to black is a rail nobody is reading, and the cook
+ * finds out by walking over to it. The Screen Wake Lock API holds the display
+ * on for as long as this page is the visible, foreground tab.
+ *
+ * Three things make this fiddlier than one call:
+ *
+ *  - The lock is released automatically whenever the page is hidden - the
+ *    tablet is locked by hand, another app comes forward, Safari backgrounds
+ *    the tab - and it is NOT restored when the page comes back. So it has to
+ *    be re-taken on every visibilitychange, forever, not just acquired once.
+ *  - Safari wants the first request to come from a user gesture, and a screen
+ *    that someone unlocked yesterday boots with no gesture at all. So we try
+ *    immediately and also arm a one-shot retry on the next touch.
+ *  - It needs a secure context and Safari 16.4 or newer. Older iPads simply
+ *    will not have it, which is why this resolves quietly either way and the
+ *    caller is told whether it took.
+ *
+ * Even where it works, it only holds while the page is in front. An iPad that
+ * must never sleep should also have Settings > Display & Brightness >
+ * Auto-Lock set to Never; this covers the case where nobody has done that.
+ *
+ * @returns {Promise<boolean>} whether the lock is being held
+ */
+let wakeLock = null;
+let wakeWanted = false;
+
+export async function keepScreenAwake() {
+  if (!('wakeLock' in navigator)) return false;
+  wakeWanted = true;
+
+  const take = async () => {
+    if (!wakeWanted || wakeLock || document.visibilityState !== 'visible') return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      // The browser drops the lock on its own terms; forget it so the next
+      // visibility change knows to ask again rather than trusting a dead handle.
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch {
+      // Denied (no gesture yet, low battery, policy). The retries below are
+      // the recovery; there is nothing useful to say here.
+      wakeLock = null;
+    }
+  };
+
+  document.addEventListener('visibilitychange', take);
+  // Every gesture is a chance to get a lock that was refused for want of one.
+  // Cheap to leave attached: take() returns immediately once we hold it.
+  document.addEventListener('pointerdown', take);
+
+  await take();
+  return wakeLock !== null;
+}
+
 // -------------------------------------------------------------- staff gate
 
 /**

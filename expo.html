@@ -46,6 +46,47 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<!-- Boot watchdog. A type="module" script that fails to load - a blocked CDN
+     on club wifi, a parse error on an older Safari, an import that throws at
+     module scope - executes none of its own error handling, so the screen is
+     simply blank and the only report anyone can make is "it doesn't work".
+     This is a classic script: it runs where modules do not, and says so. -->
+<div class="bootfail" id="bootFail" hidden>
+  <div class="bootfail-card">
+    <h1>This screen could not start</h1>
+    <p id="bootFailWhy">The app did not finish loading on this device.</p>
+    <ul>
+      <li>Check this iPad is on the club wifi and can open a web page.</li>
+      <li>Pull down to reload the page.</li>
+      <li>If it keeps happening, read the line below to whoever supports this.</li>
+    </ul>
+    <code id="bootFailDetail"></code>
+  </div>
+</div>
+<script>
+(function () {
+  var detail = '';
+  // Module load failures surface as an error event on the <script> element;
+  // parse and top-level errors come through window.onerror. Take either.
+  window.addEventListener('error', function (e) {
+    if (detail) return;
+    if (e && e.target && e.target.tagName === 'SCRIPT') {
+      detail = 'Could not load ' + (e.target.src || 'a script file');
+    } else if (e && e.message) {
+      detail = e.message;
+    }
+  }, true);
+
+  setTimeout(function () {
+    if (window.__ppBooted) return;
+    var box = document.getElementById('bootFail');
+    if (!box) return;
+    document.getElementById('bootFailDetail').textContent = detail || 'No error was reported.';
+    box.hidden = false;
+  }, 8000);
+})();
+</script>
+
 <script type="module" src="app/expo.js"></script>
 <script type="module" src="app/pwa.js"></script>
 </body>

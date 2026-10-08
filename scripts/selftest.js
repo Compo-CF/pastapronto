@@ -236,6 +236,31 @@ test('validation rejects a bad member number and guest count', () => {
   assert.ok(errors.some((e) => /Guest count/.test(e)));
 });
 
+test('a ticket may cover a full table, and not one more', () => {
+  const cap = config.order.maxGuests;
+
+  // The club seats 12, so a party of 12 on one ticket is the normal case and
+  // has to pass. Read from config so raising or lowering the cap moves the
+  // boundary this test checks, rather than leaving it behind.
+  const full = draft();
+  full.guestCount = cap;
+  assert.deepStrictEqual(
+    order.validateDraft(full, config).filter((e) => /Guest count/.test(e)), [],
+    'a party of ' + cap + ' is allowed',
+  );
+
+  const over = draft();
+  over.guestCount = cap + 1;
+  assert.ok(
+    order.validateDraft(over, config).some((e) => /Guest count/.test(e)),
+    'a party of ' + (cap + 1) + ' is refused',
+  );
+
+  const none = draft();
+  none.guestCount = 0;
+  assert.ok(order.validateDraft(none, config).some((e) => /Guest count/.test(e)));
+});
+
 test('happy path runs queued -> cooking -> ready -> delivered', () => {
   let o = make();
   assert.deepStrictEqual(order.allowedActions(o, sla).sort(), ['accept', 'hold', 'rush', 'void']);
@@ -525,12 +550,28 @@ test('the pizza topping cap counts what goes in the oven', () => {
 
 test('orders route to the station pool matching their kind', () => {
   const st = config.kitchen.stations;
-  assert.strictEqual(order.stationForTicket(1, st, true, 'pizza'), 'PIZZA-1');
-  assert.strictEqual(order.stationForTicket(2, st, true, 'pizza'), 'PIZZA-2');
-  for (let n = 1; n <= 40; n += 1) {
-    assert.ok(order.stationForTicket(n, st, true, 'pizza').startsWith('PIZZA'), 'pizza ticket ' + n);
-    assert.ok(order.stationForTicket(n, st, true, 'pasta').startsWith('PASTA'), 'pasta ticket ' + n);
-  }
+  const kinds = [...new Set(st.map((s) => s.kind))];
+  assert.ok(kinds.length > 1, 'more than one kind of station exists to confuse');
+
+  // Derived from config rather than written down, because the line changes:
+  // the club went from two pizza ovens to one, and a test that named PIZZA-2
+  // failed for the wrong reason - not because routing broke, but because it
+  // had memorised a piece of equipment. Assert the properties instead.
+  kinds.forEach((kind) => {
+    const pool = st.filter((s) => s.kind === kind).map((s) => s.id);
+    const perStation = 20;
+    const hits = {};
+
+    for (let n = 1; n <= pool.length * perStation; n += 1) {
+      const id = order.stationForTicket(n, st, true, kind);
+      assert.ok(pool.includes(id), kind + ' ticket ' + n + ' landed on ' + id);
+      hits[id] = (hits[id] || 0) + 1;
+    }
+
+    // An even share matters more than which station is first: a cook stood at
+    // a station that never receives a ticket is the failure worth catching.
+    pool.forEach((id) => assert.strictEqual(hits[id], perStation, id + ' share'));
+  });
 });
 
 test('the two-deck oven bakes two pies at a time', () => {

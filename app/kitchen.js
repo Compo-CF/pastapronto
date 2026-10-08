@@ -11,7 +11,7 @@
  *  - Timers tick without re-rendering, so a cook's finger never lands on a
  *    button that moved underneath it.
  */
-import { config } from './config.js';
+import { config, kindsForNight } from './config.js';
 import * as menu from './menu.js';
 import * as orderLib from './order.js';
 import * as db from './db.js';
@@ -21,13 +21,18 @@ import * as i18n from './i18n.js';
 import { glossNote } from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
-  remember, recall, chime, unlockAudio, toast, requireStaff,
+  remember, recall, chime, unlockAudio, toast, requireStaff, keepScreenAwake,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
 
 (function () {
   'use strict';
+
+  // Tells the plain-script watchdog in kitchen.html that the modules loaded.
+  // Set first, before any work that could throw: the point is "we got here",
+  // not "we succeeded".
+  window.__ppBooted = true;
 
   var state = {
     orders: [],
@@ -473,6 +478,43 @@ const CATALOG = menu.catalog();
 
   el.soundToggle.addEventListener('click', function () { setSound(!state.sound); });
 
+  /**
+   * Offer only the stations that are cooking tonight.
+   *
+   * Every station in the building lives in config, across every night, because
+   * routing needs the whole list. A cook does not: on a Neapolitan night the
+   * grill is cold, and an option for it in this dropdown is a way to filter the
+   * rail down to nothing and conclude the screen is broken.
+   *
+   * A station the current filter points at can vanish when the night changes,
+   * so the selection is re-applied after the rebuild and falls back to "All
+   * stations" if it is gone - otherwise the <select> would quietly show the
+   * first option while state.station still said something else, and the rail
+   * would filter by a station the cook cannot see selected.
+   */
+  function fillStations(night) {
+    var kinds = kindsForNight(night);
+    var tonight = config.kitchen.stations.filter(function (st) {
+      return kinds.indexOf(st.kind) !== -1;
+    });
+
+    while (el.stationFilter.options.length > 1) el.stationFilter.remove(1);
+
+    tonight.forEach(function (st) {
+      var opt = document.createElement('option');
+      opt.value = st.id;
+      opt.textContent = st.label;
+      el.stationFilter.appendChild(opt);
+    });
+
+    var stillThere = tonight.some(function (st) { return st.id === state.station; });
+    if (!stillThere && state.station) {
+      state.station = '';
+      remember('kds.station', '');
+    }
+    el.stationFilter.value = state.station;
+  }
+
   el.stationFilter.addEventListener('change', function () {
     state.station = el.stationFilter.value;
     remember('kds.station', state.station);
@@ -548,20 +590,27 @@ const CATALOG = menu.catalog();
       throw new Error('Staff passcode required.');
     }
 
-    config.kitchen.stations.forEach(function (st) {
-      var opt = document.createElement('option');
-      opt.value = st.id;
-      opt.textContent = st.label;
-      el.stationFilter.appendChild(opt);
-    });
-    el.stationFilter.value = state.station;
+    fillStations(config.defaultNight);
     setSound(state.sound);
+
+    // The rail is mounted on a wall and read from across the pass; it must not
+    // dim. Asked for after the passcode, so the unlock tap counts as the user
+    // gesture Safari wants.
+    keepScreenAwake();
 
     await db.ready();
     el.conn.className = 'conn is-live';
     el.conn.textContent = 'live';
+    if (db.cacheWarning) toast(db.cacheWarning, true);
 
     db.watchAvailability(render86);
+
+    // The manager can flip the night mid-setup; the rail has to follow without
+    // someone reloading a tablet that is mounted to a wall.
+    db.watchServiceNight(function (night) {
+      fillStations(night);
+      render();
+    });
 
     db.watchToday(onSnapshotOrders, {
       onError: function (err) {
