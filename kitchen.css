@@ -464,3 +464,36 @@
   text-transform: uppercase;
   color: var(--kwarn);
 }
+
+/* --------------------------------------------------- a dish as a list */
+
+/* Label on the left, contents on the right, one row per kind of thing. A cook
+   reading this at six feet needs the protein to be in the same place on every
+   chit - a sentence puts it wherever the grammar left it. The label column is
+   fixed so the values line up down the whole ticket. */
+.cline-rows { margin: 3px 0 0; display: grid; gap: 4px; }
+
+/* Label above value, not beside it.
+   A fixed label column looked tidier and could not survive the word
+   TOPPINGS: on a four-lane rail a chit is about 240px wide, and any column
+   narrow enough to leave room for the food was too narrow for the longest
+   label, which then ran into it. Stacking cannot overflow at any width, and
+   the label is small enough that the eye still reads the values as the list. */
+.cline-row dt {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--kmuted);
+  line-height: 1.1;
+}
+.cline-row dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+@media (max-width: 1100px) {
+  .cline-row dd { font-size: 15px; }
+}

@@ -429,6 +429,57 @@ export function nameOf(group, id, lang) {
  * what lets a Spanish guest's order arrive on an English kitchen rail, and
  * the reverse.
  */
+/**
+ * A line broken into labelled rows, for screens that read it rather than
+ * speak it.
+ *
+ * describe() produces one sentence, which is right for a close-out line or a
+ * guest's confirmation and wrong for a cook standing at a pass. "Spaghetti w/
+ * Marinara + Grilled Chicken, Broccoli, Cherry Tomatoes" is a sentence you
+ * have to parse; a cook needs to find the protein without reading the sauce.
+ *
+ * Rows come back in the order the station works in - base first, then what
+ * goes on it, then size - and a row with nothing in it is left out rather
+ * than printed empty. The two renderings share this one source so a chit and
+ * the expo screen can never describe the same bowl differently.
+ *
+ * @returns {{label: string, items: string[]}[]}
+ */
+export function ingredientList(line, lang) {
+  const kind = kindOf(line);
+  const g = GROUPS_FOR[kind] || GROUPS_FOR.pasta;
+  const name = (group) => (id) => nameOf(group, id, lang);
+  const es = lang === 'es';
+  const rows = [];
+  const add = (label, items) => {
+    const kept = (items || []).filter(Boolean);
+    if (kept.length) rows.push({ label, items: kept });
+  };
+
+  if (kind === 'pasta') {
+    add(es ? 'Pasta' : 'Pasta', [nameOf('pastas', line.pasta, lang)]);
+  } else if (kind === 'burger') {
+    add(es ? 'Pan' : 'Bun', [nameOf('burgerBuns', line.base, lang)]);
+  } else {
+    // Every pizza is the same crust, so naming it would be a row that always
+    // says the same thing - noise on a screen read at a glance.
+    add(es ? 'Masa' : 'Base', [es ? 'Pizza de 12"' : '12" pie']);
+  }
+
+  add(es ? 'Salsa' : 'Sauce', saucesOf(line).map(name(g.sauces)));
+  if (g.cheeses) add(es ? 'Queso' : 'Cheese', cheesesOf(line).map(name(g.cheeses)));
+  add(es ? (kind === 'burger' ? 'Carne' : 'Proteína') : (kind === 'burger' ? 'Patty' : 'Protein'),
+    proteinsOf(line).map(name(g.proteins)));
+  add(es ? 'Ingredientes' : 'Toppings', (line.toppings || []).map(name(g.toppings)));
+  add(es ? 'Acompañante' : 'Side', (line.sides || []).map(name(g.sides || 'sides')));
+
+  if (kind === 'pasta') {
+    add(es ? 'Tamaño' : 'Size', [nameOf('portions', line.portion, lang)]);
+  }
+
+  return rows;
+}
+
 export function describe(line, lang) {
   const g = GROUPS_FOR[kindOf(line)];
   const name = (group) => (id) => nameOf(group, id, lang);

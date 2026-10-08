@@ -73,3 +73,66 @@
   .expo-main { grid-template-columns: 1fr; }
   .expo-next { max-height: 30vh; }
 }
+
+/* ------------------------------------------- Coming Up, opened */
+
+/* The closed card is a button so it is reachable by keyboard and announces
+   its own state; the chrome is stripped back to the row it replaced. */
+.ncard { display: block; }
+.ncard-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+}
+.ncard-head:hover { background: rgba(255, 255, 255, 0.05); }
+.ncard.is-open { background: rgba(255, 255, 255, 0.05); border-radius: 12px; }
+
+/* A ticket that has not reached the oven has no countdown to show, so it says
+   where it has got to instead. Muted, because it is a state and not a number
+   anybody is racing. */
+.ncard-stage {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--kmuted, #9aa5b4);
+  white-space: nowrap;
+}
+
+.ncard-detail { padding: 2px 12px 12px; }
+.ncard-meta {
+  font-size: 13px;
+  color: var(--kmuted, #9aa5b4);
+  margin-bottom: 8px;
+}
+.ncard-line {
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ncard-who { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.ncard-who svg { width: 22px; height: 22px; }
+.ncard-note {
+  margin-top: 6px;
+  font-size: 14px;
+  font-style: italic;
+  color: #ffc542;
+}
+.ncard-alert {
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #5c1d16;
+  color: #ffd9d3;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}

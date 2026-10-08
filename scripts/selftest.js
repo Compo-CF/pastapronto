@@ -2067,6 +2067,116 @@ test('every stage a guest can be in has a step on their tracker', () => {
     });
 });
 
+// -------------------------------------------------- ticket layout
+
+test('a dish reads as rows, and every choice appears in one', () => {
+  const line = {
+    kind: 'pasta', pasta: 'penne', sauces: ['marinara'], proteins: ['chicken'],
+    toppings: ['parmesan', 'broccoli'], sides: ['garlic_bread'], portion: 'regular',
+  };
+  const rows = menu.ingredientList(line, 'en');
+  const labels = rows.map((r) => r.label);
+
+  assert.deepStrictEqual(labels, ['Pasta', 'Sauce', 'Protein', 'Toppings', 'Side', 'Size']);
+  assert.deepStrictEqual(rows.find((r) => r.label === 'Toppings').items, ['Parmesan', 'Broccoli']);
+
+  // Nothing a guest chose may go missing between the sentence and the rows -
+  // a cook reading the list has to be reading the whole dish.
+  const flat = rows.flatMap((r) => r.items).join(' | ');
+  ['Penne', 'Marinara', 'Grilled Chicken', 'Parmesan', 'Broccoli', 'Garlic Bread', 'Regular']
+    .forEach((n) => assert.ok(flat.includes(n), n + ' is missing from the rows'));
+});
+
+test('an empty choice is left out rather than printed blank', () => {
+  const plain = {
+    kind: 'pasta', pasta: 'penne', sauces: ['butter'], proteins: [],
+    toppings: [], sides: [], portion: 'kid',
+  };
+  const labels = menu.ingredientList(plain, 'en').map((r) => r.label);
+  assert.deepStrictEqual(labels, ['Pasta', 'Sauce', 'Size']);
+  assert.ok(!labels.includes('Protein'), 'a row with nothing in it is not a row');
+});
+
+test('every kind produces rows, and a pizza is never asked its size', () => {
+  const byKind = {
+    pasta: { kind: 'pasta', pasta: 'penne', sauces: ['marinara'], proteins: [], toppings: [], sides: [], portion: 'regular' },
+    pizza: { kind: 'pizza', sauces: ['pz_marinara'], cheeses: ['pz_shred_mozz'], proteins: [], toppings: [] },
+    burger: { kind: 'burger', base: 'bun_brioche', proteins: ['beef_single'], cheeses: [], toppings: [], sauces: [], sides: [] },
+  };
+  Object.entries(byKind).forEach(([kind, line]) => {
+    const rows = menu.ingredientList(line, 'en');
+    assert.ok(rows.length > 0, kind + ' produced no rows');
+    rows.forEach((r) => {
+      assert.ok(r.label && r.label.length, kind + ' has a row with no label');
+      assert.ok(r.items.length, kind + ' has an empty row');
+    });
+  });
+  const pizzaLabels = menu.ingredientList(byKind.pizza, 'en').map((r) => r.label);
+  assert.ok(!pizzaLabels.includes('Size'), 'every pizza is one size');
+  assert.ok(menu.ingredientList(byKind.burger, 'en').some((r) => r.label === 'Bun'));
+});
+
+test('the rows speak Spanish when the order was placed in Spanish', () => {
+  const line = {
+    kind: 'pasta', pasta: 'penne', sauces: ['marinara'], proteins: ['chicken'],
+    toppings: [], sides: [], portion: 'regular',
+  };
+  const es = menu.ingredientList(line, 'es');
+  assert.deepStrictEqual(es.map((r) => r.label), ['Pasta', 'Salsa', 'Proteína', 'Tamaño']);
+  assert.ok(es.find((r) => r.label === 'Proteína').items[0] !== 'Grilled Chicken',
+    'the values are translated, not just the labels');
+});
+
+// ----------------------------------------------------- the order of work
+
+/**
+ * The one promise the rail makes a cook: the ticket at the top is the one to
+ * work on next, and it stays there until somebody moves it on.
+ *
+ * This is a sort, so it is tested where it is decided rather than through the
+ * screen - order.workOrder(), which app/kitchen.js calls for every lane. An allergy ticket used to be promoted automatically, which broke
+ * the promise and bought nothing - it already arrives with a badge and a
+ * banner. Rush is the deliberate exception and stays.
+ */
+const laneSort = (orders) => order.workOrder(orders);
+
+test('the oldest ticket sits at the top, allergy or not', () => {
+  const at = (mins, over = {}) => ({
+    ticketNo: mins,
+    submittedAt: new Date(Date.UTC(2026, 9, 8, 18, mins)).toISOString(),
+    status: 'queued', priority: 'normal', ...over,
+  });
+
+  const lane = laneSort([at(30), at(10, { priority: 'allergy' }), at(20), at(5)]);
+  assert.deepStrictEqual(lane.map((o) => o.ticketNo), [5, 10, 20, 30],
+    'strictly oldest first - an allergy ticket does not jump the queue');
+});
+
+test('a rush ticket is the one thing that goes first', () => {
+  const at = (mins, over = {}) => ({
+    ticketNo: mins,
+    submittedAt: new Date(Date.UTC(2026, 9, 8, 18, mins)).toISOString(),
+    status: 'queued', priority: 'normal', ...over,
+  });
+
+  const lane = laneSort([at(5), at(10), at(40, { priority: 'rush' }), at(20)]);
+  assert.strictEqual(lane[0].ticketNo, 40, 'somebody decided this one comes first');
+  assert.deepStrictEqual(lane.slice(1).map((o) => o.ticketNo), [5, 10, 20],
+    'and everything behind it is still oldest first');
+});
+
+test('a held ticket drops to the foot of the lane without vanishing', () => {
+  const at = (mins, over = {}) => ({
+    ticketNo: mins,
+    submittedAt: new Date(Date.UTC(2026, 9, 8, 18, mins)).toISOString(),
+    status: 'queued', priority: 'normal', ...over,
+  });
+
+  const lane = laneSort([at(5, { status: 'held' }), at(20), at(10)]);
+  assert.deepStrictEqual(lane.map((o) => o.ticketNo), [10, 20, 5],
+    'parked, not lost - an invisible order is a lost order');
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');

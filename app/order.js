@@ -655,6 +655,39 @@ export function isEdited(order) {
     && order.status !== STATUS.VOIDED;
 }
 
+/**
+ * The order a lane is worked in: oldest first, and the top one stays there
+ * until somebody moves it on.
+ *
+ * That promise is the whole value of the list. A cook glances down, takes the
+ * top ticket, and does not have to check whether the thing they were part way
+ * through has been pushed down by something that arrived since.
+ *
+ * Two deliberate exceptions, in this order:
+ *
+ *  - A held ticket drops to the foot. Parking an order must not hide it; an
+ *    invisible order is a lost order.
+ *  - A rush ticket goes to the head, because rush is a person deciding this
+ *    one comes first. That is what the exception is for.
+ *
+ * An allergy ticket is NOT promoted. It used to be, which broke the promise
+ * above and bought nothing in return - it already arrives carrying a badge and
+ * a banner across the top of the chit. Jumping the queue is not the same thing
+ * as being careful with it.
+ *
+ * Pure and exported so the rail and the test agree by construction rather than
+ * by two copies of the same comparator staying in step.
+ */
+export function workOrder(orders) {
+  return orders.slice().sort((a, b) => {
+    const held = (x) => x.status === STATUS.HELD;
+    if (held(a) !== held(b)) return held(a) ? 1 : -1;
+    const rank = (x) => (x.priority === 'rush' ? 0 : 1);
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    return new Date(a.submittedAt) - new Date(b.submittedAt);
+  });
+}
+
 /** Short claim code shown to the guest so a server can find their ticket. */
 export function claimCode(random = Math.random) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

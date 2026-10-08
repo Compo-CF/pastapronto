@@ -198,15 +198,11 @@ const CATALOG = menu.catalog();
     // Held orders live at the foot of the New Orders lane. Parking a ticket
     // must not make it disappear - an invisible order is a lost order.
     var wanted = lane === 'queued' ? ['queued', 'held'] : [lane];
-    return visibleOrders()
-      .filter(function (o) { return wanted.indexOf(o.status) !== -1; })
-      .sort(function (a, b) {
-        if ((a.status === 'held') !== (b.status === 'held')) return a.status === 'held' ? 1 : -1;
-        // Rush and allergy chits ride to the front of their lane.
-        var rank = function (o) { return o.priority === 'rush' ? 0 : o.priority === 'allergy' ? 1 : 2; };
-        if (rank(a) !== rank(b)) return rank(a) - rank(b);
-        return new Date(a.submittedAt) - new Date(b.submittedAt);
-      });
+    // The comparator lives in order.js, so this rail and the tests that
+    // assert the promise are reading one definition.
+    return orderLib.workOrder(
+      visibleOrders().filter(function (o) { return wanted.indexOf(o.status) !== -1; }),
+    );
   }
 
   /** Bump-bar numbering runs across the whole rail, left lane first. */
@@ -248,16 +244,6 @@ const CATALOG = menu.catalog();
     return menu.kindOf(line) === 'pizza' ? 'pie' : pastaShape(line.pasta);
   }
 
-  /** Which catalog group a line's toppings live in. */
-  /** A line's groups, so a third kind does not fall into the pasta branch. */
-  function lineGroups(line) {
-    return menu.GROUPS_FOR[menu.kindOf(line)] || menu.GROUPS_FOR.pasta;
-  }
-
-  function toppingGroup(line) {
-    return lineGroups(line).toppings;
-  }
-
   /**
    * A guest note, pushed toward English when the order was placed in Spanish.
    *
@@ -285,39 +271,47 @@ const CATALOG = menu.catalog();
    * @param {Set<string>} changed  lineIds a manager edited since this ticket
    *                               was placed, empty when nothing was
    */
+  /**
+   * One dish on a chit, as a labelled list rather than a sentence.
+   *
+   * It used to read "Spaghetti w/ Marinara + Grilled Chicken" with the
+   * toppings on a second line in smaller type, which is a sentence a cook has
+   * to parse to find one thing in it. Rows mean the protein is always in the
+   * same place, and the eye goes straight to it. menu.ingredientList() decides
+   * what the rows are, so a chit and the expo screen cannot end up describing
+   * the same bowl differently.
+   */
   function renderLine(line, orderLang, changed) {
-    var isPizza = menu.kindOf(line) === 'pizza';
-    var adds = [];
-    if (line.toppings && line.toppings.length) {
-      adds.push(line.toppings.map(function (t) { return menuName(toppingGroup(line), t); }).join(', '));
-    }
-    if (!isPizza && line.sides && line.sides.length) {
-      adds.push(t('kitchen.side') + ': ' + line.sides.map(function (s) {
-        return menuName(lineGroups(line).sides || 'sides', s);
-      }).join(', '));
+    var rows = menu.ingredientList(line, t.lang);
+
+    // Allergens stay out of the rows and keep their own line: they are a
+    // warning about the dish, not a part of it.
+    var warn = line.allergens && line.allergens.length ? line.allergens.join(' / ') : '';
+    if (!isPizzaLine(line) && line.spice && line.spice !== 'mild') {
+      warn = (warn ? warn + ' \u00b7 ' : '') + line.spice.toUpperCase();
     }
 
-    var kindOfLine = menu.kindOf(line);
-    var flags = [];
-    if (isPizza) flags.push(t('kitchen.pie'));
-    else if (kindOfLine === 'burger') flags.push(menuName('burgerBuns', line.base));
-    else flags.push(menuName('portions', line.portion));
-    if (!isPizza && line.spice && line.spice !== 'mild') flags.push(line.spice.toUpperCase());
-    if (line.allergens && line.allergens.length) flags.push(line.allergens.join('/'));
-
-    // The cook is looking for what moved, not for the whole ticket again.
     var isChanged = changed && changed.has(line.lineId);
     return html`<li class="cline ${isChanged ? 'is-changed' : ''}">
       ${raw(isChanged ? '<span class="cline-changed">Changed</span>' : '')}
       <span class="cline-art">${raw(art(lineGlyph(line)))}</span>
       <div class="grow">
         <div class="cline-who">${line.guestLabel}</div>
-        <div class="cline-dish">${menu.describe(line, t.lang)}</div>
-        ${raw(adds.length ? '<div class="cline-add">' + escapeHtml(adds.join(' \u00b7 ')) + '</div>' : '')}
-        <div class="cline-portion">${flags.join(' \u00b7 ')}</div>
+        <dl class="cline-rows">
+          ${rows.map(function (r) {
+            return html`<div class="cline-row">
+              <dt>${r.label}</dt><dd>${r.items.join(', ')}</dd>
+            </div>`;
+          })}
+        </dl>
+        ${raw(warn ? '<div class="cline-portion">' + escapeHtml(warn) + '</div>' : '')}
         ${raw(noteHtml(line.notes, 'cline-note', orderLang))}
       </div>
     </li>`;
+  }
+
+  function isPizzaLine(line) {
+    return menu.kindOf(line) === 'pizza';
   }
 
   function renderChit(order) {

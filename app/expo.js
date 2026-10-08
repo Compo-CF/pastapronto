@@ -25,7 +25,12 @@ const CATALOG = menu.catalog();
   // Tells the plain-script watchdog in expo.html that the modules loaded.
   window.__ppBooted = true;
 
-  var state = { orders: [], sound: recall('expo.sound', false), firstLoadDone: false };
+  var state = {
+    orders: [], sound: recall('expo.sound', false), firstLoadDone: false,
+    // Which Coming Up ticket is open. One at a time: this column is narrow and
+    // two open tickets push the rest of the night off the bottom of it.
+    open: null,
+  };
 
   var el = {
     readyGrid: document.getElementById('readyGrid'),
@@ -69,24 +74,35 @@ const CATALOG = menu.catalog();
   }
 
   /**
-   * What is coming, which is not only what is in the oven.
+   * Everything that is on its way to being food, from the moment it arrives.
    *
-   * A pizza being assembled is already work in progress - the club's own words
-   * were that the builder transfers the ticket to the cook and expo together.
-   * Leaving it out meant a runner saw an empty "Coming Up" while four pizzas
-   * were being built, and then four arriving at once.
+   * This used to start at the oven, so expo learned a table had ordered only
+   * once a cook picked the ticket up. The club asked to see each order as soon
+   * as it arrives: a runner who knows four pizzas landed for the patio can
+   * clear a tray and warn the table, and that is the whole job.
    *
-   * Sorted by whichever stamp the ticket has reached, so a pizza still on the
-   * bench queues behind one already baking rather than jumping it on a null.
+   * Strictly oldest first, by when the guest pressed send - not by how far
+   * along it is. A list that reshuffles as tickets change stage is a list you
+   * have to re-read, and the one thing expo needs from it is that the top is
+   * the next thing to come out.
    */
+  var COMING_UP = ['queued', 'building', 'cooking'];
+
   function cookingOrders() {
     return state.orders
-      .filter(function (o) { return o.status === 'cooking' || o.status === 'building'; })
-      .sort(function (a, b) {
-        var at = new Date(a.acceptedAt || a.buildingAt || a.submittedAt);
-        var bt = new Date(b.acceptedAt || b.buildingAt || b.submittedAt);
-        return at - bt;
-      });
+      .filter(function (o) { return COMING_UP.indexOf(o.status) !== -1; })
+      .sort(function (a, b) { return new Date(a.submittedAt) - new Date(b.submittedAt); });
+  }
+
+  /** Where a ticket has got to, in words a runner can use. */
+  var STAGE_LABEL = { queued: 'Just in', building: 'Building', cooking: 'Cooking' };
+
+  /** "1 bowl", "2 pizzas" - a runner reads this card too often for it to
+   *  keep saying "1 bowls". */
+  function dishCount(order) {
+    var n = order.lines.length;
+    var one = order.kind === 'pizza' ? 'pizza' : order.kind === 'burger' ? 'burger' : 'bowl';
+    return n + ' ' + one + (n === 1 ? '' : 's');
   }
 
   function renderReadyCard(order) {
@@ -104,7 +120,7 @@ const CATALOG = menu.catalog();
         <div class="rcard-no">#${order.ticketNo}</div>
         <div>
           <div class="rcard-where">${order.tagLabel}</div>
-          <div class="rcard-sub">${(order.kind === 'pizza' ? 'PIZZA PASS' : 'PASTA PASS')} &middot; ${order.lines.length} ${order.kind === 'pizza' ? 'pizzas' : 'bowls'} &middot; ${order.guestCount} guests &middot; ${order.memberName || 'Member ' + order.memberNumber}</div>
+          <div class="rcard-sub">${(order.kind === 'pizza' ? 'PIZZA PASS' : 'PASTA PASS')} &middot; ${dishCount(order)} &middot; ${order.guestCount} guests &middot; ${order.memberName || 'Member ' + order.memberNumber}</div>
         </div>
         <div class="rcard-wait" data-timer="${order.id}">${mmss(wait)}</div>
       </div>
@@ -113,7 +129,14 @@ const CATALOG = menu.catalog();
         ${order.lines.map(function (line) {
           return html`<div class="rcard-item">
             ${raw(art(lineGlyph(line)))}
-            <span><b>${line.guestLabel}</b> ${menu.describe(line, t.lang)}</span>
+            <div class="grow">
+              <b>${line.guestLabel}</b>
+              <dl class="cline-rows">
+                ${menu.ingredientList(line, t.lang).map(function (r) {
+                  return html`<div class="cline-row"><dt>${r.label}</dt><dd>${r.items.join(', ')}</dd></div>`;
+                })}
+              </dl>
+            </div>
           </div>`;
         })}
       </div>
@@ -121,13 +144,61 @@ const CATALOG = menu.catalog();
     </article>`;
   }
 
+  /**
+   * A ticket on the Coming Up list, closed to a line and openable to the whole
+   * order.
+   *
+   * Closed by default because the value of this column is the shape of the
+   * next ten minutes, not the detail of any one ticket. Open on tap because a
+   * runner carrying a tray does need the detail - which bowl is whose, and
+   * what is in the one the table asked about.
+   */
   function renderNextCard(order) {
-    var cooking = secondsSince(order.acceptedAt);
-    var remaining = (order.cookEstimateSec || 0) - cooking;
-    return html`<div class="ncard">
-      <span class="ncard-no">#${order.ticketNo}</span>
-      <span class="ncard-where">${order.tagLabel}<br><small class="rcard-sub">${order.lines.length} ${order.kind === 'pizza' ? 'pizzas' : 'bowls'}</small></span>
-      <span class="ncard-eta ${remaining < 0 ? 'is-over' : ''}" data-eta="${order.id}">${remaining < 0 ? 'over ' + mmss(-remaining) : mmss(remaining)}</span>
+    var open = state.open === order.id;
+    // Only a ticket in the oven has a meaningful countdown; one that just
+    // arrived has not started cooking, and a number counting down from its
+    // full cook time would be a promise nobody made.
+    var started = order.status === 'cooking' && order.acceptedAt;
+    var remaining = (order.cookEstimateSec || 0) - secondsSince(order.acceptedAt);
+    var right = started
+      ? html`<span class="ncard-eta ${remaining < 0 ? 'is-over' : ''}" data-eta="${order.id}">${remaining < 0 ? 'over ' + mmss(remaining * -1) : mmss(remaining)}</span>`
+      : html`<span class="ncard-stage">${STAGE_LABEL[order.status] || order.status}</span>`;
+
+    var allergens = order.avoidAllergens && order.avoidAllergens.length
+      ? html`<div class="ncard-alert">ALLERGY - ${order.avoidAllergens.map(function (a) {
+          return menuName('allergens', a);
+        }).join(', ')}</div>`
+      : '';
+
+    var detail = open
+      ? html`<div class="ncard-detail">
+          ${raw(allergens)}
+          <div class="ncard-meta">${order.memberName || 'Member ' + order.memberNumber}
+            &middot; ${order.guestCount} guests
+            &middot; ${STAGE_LABEL[order.status] || order.status}</div>
+          ${order.lines.map(function (line) {
+            return html`<div class="ncard-line">
+              <div class="ncard-who">${raw(art(lineGlyph(line)))} <b>${line.guestLabel}</b></div>
+              <dl class="cline-rows">
+                ${menu.ingredientList(line, t.lang).map(function (r) {
+                  return html`<div class="cline-row"><dt>${r.label}</dt><dd>${r.items.join(', ')}</dd></div>`;
+                })}
+              </dl>
+              ${raw(line.notes ? '<div class="ncard-note">' + escapeHtml(line.notes) + '</div>' : '')}
+            </div>`;
+          })}
+          ${raw(order.notes ? '<div class="ncard-note">Ticket note: ' + escapeHtml(order.notes) + '</div>' : '')}
+        </div>`
+      : '';
+
+    return html`<div class="ncard ${open ? 'is-open' : ''}">
+      <button class="ncard-head" type="button" data-open="${order.id}"
+        aria-expanded="${open ? 'true' : 'false'}">
+        <span class="ncard-no">#${order.ticketNo}</span>
+        <span class="ncard-where">${order.tagLabel}<br><small class="rcard-sub">${dishCount(order)}</small></span>
+        ${raw(right)}
+      </button>
+      ${raw(detail)}
     </div>`;
   }
 
@@ -164,6 +235,16 @@ const CATALOG = menu.catalog();
   }
 
   document.addEventListener('click', async function (e) {
+    // Opening a ticket is a local view change, not a transition - it must not
+    // fall through to db.transition() below.
+    var opener = e.target.closest('[data-open]');
+    if (opener) {
+      e.preventDefault();
+      state.open = state.open === opener.dataset.open ? null : opener.dataset.open;
+      render();
+      return;
+    }
+
     var btn = e.target.closest('[data-act]');
     if (!btn) return;
     e.preventDefault();
