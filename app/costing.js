@@ -33,10 +33,8 @@ import { billableCovers } from './order.js';
  */
 export const AMOUNT_FACTOR = { light: 0.5, heavy: 1.5 };
 
-const BASE = menu.PIZZA_BASE;
-
-/** The pizza crust is costed like an ingredient, under its own group key. */
-export const BASE_GROUP = 'pizzaBase';
+/** Crusts are costed like any other ingredient, under their own group. */
+export const BASE_GROUP = 'pizzaCrusts';
 
 /**
  * Which menu groups can carry a price, in the order the manager screen shows
@@ -62,7 +60,7 @@ const LANES = [
     lane: 'pizza',
     label: 'Pizza station',
     groups: [
-      [BASE_GROUP, 'Base', 'one 12" dough ball'],
+      [BASE_GROUP, 'Crust', 'one base'],
       ['pizzaSauces', 'Sauces', 'one ladle'],
       ['pizzaCheeses', 'Cheeses', 'one handful'],
       ['pizzaProteins', 'Proteins', 'one portion'],
@@ -98,11 +96,13 @@ export function costRows() {
     lane: lane.lane,
     label: lane.label,
     groups: lane.groups.map(([key, label, unitHint]) => {
-      const items = key === BASE_GROUP
-        ? [{ id: BASE.id, name: BASE.name }]
-        : (c[key] || [])
-          .filter((i) => !i.exclusive && !i.amount)
-          .map((i) => ({ id: i.id, name: i.name }));
+      // Crusts used to be a hand-made one-item list because there was only
+      // one of them. They are a group now, so they price the same way the
+      // toppings do - and a gluten-free base, which costs more, gets its own
+      // line rather than hiding inside the classic one.
+      const items = (c[key] || [])
+        .filter((i) => !i.exclusive && !i.amount)
+        .map((i) => ({ id: i.id, name: i.name }));
       return { key, label, unitHint, items };
     }).filter((g) => g.items.length),
   }));
@@ -115,9 +115,8 @@ export function costableIds() {
   return out;
 }
 
-/** A display name for any priceable id, including the pizza base. */
+/** A display name for any priceable id. */
 export function nameOf(id) {
-  if (id === BASE.id) return BASE.name;
   const hit = menu.findAnywhere(id);
   return hit ? hit.name : id;
 }
@@ -211,7 +210,7 @@ export function lineCost(line, costs) {
     pick(groups.sauces, menu.saucesOf(line), 1);
     (line.sides || []).forEach((id) => add(id, 1));
   } else if (kind === 'pizza') {
-    add(BASE.id, 1);
+    add(menu.crustOf(line).id, 1);
     pick(groups.sauces, menu.saucesOf(line), 1);
     pick(groups.cheeses, menu.cheesesOf(line), 1);
     pick(groups.proteins, menu.proteinsOf(line), 1);

@@ -10,7 +10,7 @@
  *            a compact review, for adults and staff taking an order
  */
 import { config, tagById, isOpen, kindsForNight, nightById } from './config.js';
-import { catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine, GROUPS_FOR } from './menu.js';
+import { catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine, GROUPS_FOR, crustOf } from './menu.js';
 import * as i18n from './i18n.js';
 import * as cooktime from './cooktime.js';
 import * as order from './order.js';
@@ -45,6 +45,7 @@ import {
       { id: 'finish', labelKey: 'guest.tab.size', group: 'portions', titleKey: 'guest.step.size', subKey: '' },
     ],
     pizza: [
+      { id: 'base', labelKey: 'guest.tab.crust', group: 'pizzaCrusts', titleKey: 'guest.step.crust', subKey: 'guest.step.crust.sub' },
       { id: 'sauces', labelKey: 'guest.tab.sauce', group: 'pizzaSauces', titleKey: 'guest.step.pizzasauce', subKey: 'guest.step.amountsub', multi: true },
       { id: 'cheeses', labelKey: 'guest.tab.cheese', group: 'pizzaCheeses', titleKey: 'guest.step.cheese', subKey: 'guest.step.amountsub', multi: true },
       { id: 'proteins', labelKey: 'guest.tab.protein', group: 'pizzaProteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
@@ -220,7 +221,9 @@ import {
       toppings: [],
       notes: '',
     };
-    if (state.kind === 'pizza') return Object.assign(base, { cheeses: [] });
+    // Every pizza starts classic, so a guest who never thinks about the crust
+    // gets the one they would have got before it was a question.
+    if (state.kind === 'pizza') return Object.assign(base, { cheeses: [], base: 'classic' });
     // Every field a lane's steps will read has to exist from the start. A
     // burger reaching the cheese step with no `cheeses` array threw inside the
     // tile grid and froze the build on the step before it - which presents as
@@ -732,7 +735,8 @@ import {
         }).join(', '));
       }
       if (isPizza) {
-        extras.push('12" - one size');
+        // What the member picked, not what every pizza used to be.
+        extras.push(itemName('pizzaCrusts', bowl.base || 'classic'));
       } else if (isBurger) {
         var bun = item('burgerBuns', bowl.base);
         // The bun goes first - it is the one choice that can make the whole
@@ -787,7 +791,7 @@ import {
         .concat(b.toppings.map(function (t) { return item(isPizza ? 'pizzaToppings' : 'toppings', t); }));
 
       if (isPizza) {
-        addAll(state.boot.menu.pizzaBase.allergens);
+        addAll((crustOf(b) || {}).allergens || []);
         entries = entries
           .concat((b.cheeses || []).map(function (c) { return item('pizzaCheeses', c); }));
       } else {
@@ -1061,7 +1065,10 @@ import {
     if (!opts.keepScroll) window.scrollTo(0, 0);
   }
 
-  var GROUP_FIELD = { pastas: 'pasta', proteins: 'protein', portions: 'portion', burgerBuns: 'base' };
+  var GROUP_FIELD = {
+    pastas: 'pasta', proteins: 'protein', portions: 'portion',
+    burgerBuns: 'base', pizzaCrusts: 'base',
+  };
 
   /**
    * Steps that write ONE id into an array field.
@@ -1073,6 +1080,37 @@ import {
    * letting a guest build something the review screen will reject.
    */
   var SINGLE_INTO_ARRAY = { burgerPatties: 'proteins', burgerSides: 'sides' };
+
+  /**
+   * Swap in whatever the newly chosen base brings with it, and take out what
+   * the old one brought.
+   *
+   * Only ever touches ids the defaults themselves named, so a topping the
+   * guest added by hand survives a change of crust. Data-driven from the menu
+   * entry rather than a check for "is this the dessert one", so a second
+   * pre-filled base is a menu edit and not a code change.
+   */
+  function applyBaseDefaults(bowl, oldId, newId) {
+    if (oldId === newId) return;
+    var groupName = (GROUPS_FOR[bowl.kind] || {}).base;
+    if (!groupName) return;
+
+    var was = item(groupName, oldId);
+    if (was && was.defaults) {
+      Object.keys(was.defaults).forEach(function (field) {
+        bowl[field] = (bowl[field] || []).filter(function (id) {
+          return was.defaults[field].indexOf(id) === -1;
+        });
+      });
+    }
+
+    var now = item(groupName, newId);
+    if (now && now.defaults) {
+      Object.keys(now.defaults).forEach(function (field) {
+        bowl[field] = now.defaults[field].slice();
+      });
+    }
+  }
 
   /** Move forward through steps, then bowls, then to review. */
   function advance() {
@@ -1170,7 +1208,14 @@ import {
     pick: function (el) {
       var field = GROUP_FIELD[el.dataset.group];
       if (!field) return;
-      currentBowl()[field] = el.dataset.id;
+      var bowl = currentBowl();
+      // A crust can come with a recipe. Dessert Pizza arrives with Nutella,
+      // strawberries and powdered sugar already on it, and no savoury sauce
+      // or cheese - every one of which the guest can turn off again. Changing
+      // crust clears what the last one filled in, so switching back to
+      // classic does not leave Nutella on a pepperoni pizza.
+      if (field === 'base') applyBaseDefaults(bowl, bowl[field], el.dataset.id);
+      bowl[field] = el.dataset.id;
       // Tapping a choice moves you on - fewer buttons for a child to hunt for.
       // Except on the finish step, where the name and the note sit below the
       // tiles: advancing from there carried the guest straight out of a screen

@@ -95,20 +95,49 @@ const SPICE_LEVELS = [
 
 // ------------------------------------------------------------------- pizza
 //
-// Pizzas are all one size, so there is no portion step and no crust choice -
-// one 12" classic base, whose gluten and dairy every pizza inherits. Adding a
-// gluten-free crust later means promoting this constant to a group and adding
-// a step for it.
+// Pizzas are all one size, so there is no portion step. The crust IS a choice
+// now - the club added a gluten-free base and a dessert pizza, and the note in
+// this spot used to say that doing so meant promoting the old constant to a
+// group. This is that group.
+//
+// Gluten lives on the crust that was actually chosen, so a gluten-free pie is
+// genuinely gluten free. Dairy does not live here at all: cheese is chosen and
+// "No Cheese" is a real answer, so claiming dairy on the crust would wrongly
+// grey out the whole lane for someone avoiding it.
+export const PIZZA_CRUSTS = [
+  {
+    id: 'classic',
+    name: '12" Classic', es: 'Clásica de 12"',
+    icon: 'pie', allergens: ['gluten'], bakeSec: 420, kid: true,
+  },
+  {
+    id: 'pz_gf_crust',
+    name: 'Gluten Free Crust', es: 'Masa Sin Gluten',
+    // Longer in the oven: a gluten-free base needs the extra time to set.
+    icon: 'crust_gf', allergens: [], bakeSec: 480, kid: true, glutenFree: true,
+  },
+  {
+    id: 'pz_dessert',
+    name: 'Dessert Pizza', es: 'Pizza de Postre',
+    icon: 'pizza_dessert', allergens: ['gluten'], bakeSec: 360, kid: true,
+    // What picking this crust fills in for you. The guest can turn any of it
+    // off again - it is a starting point, not a fixed recipe. Savoury sauce
+    // and cheese are set to their "no" answers rather than left blank, so a
+    // dessert pie does not arrive at the pass with marinara on it because
+    // nobody thought to say otherwise.
+    defaults: {
+      toppings: ['pz_nutella', 'pz_strawberry', 'pz_powdered_sugar'],
+      sauces: ['pz_no_sauce'],
+      cheeses: ['pz_no_cheese'],
+    },
+  },
+];
 
-export const PIZZA_BASE = {
-  id: 'classic',
-  name: '12" Classic',
-  // Gluten only. Dairy used to live here because every pie came with cheese;
-  // cheese is now chosen and "No Cheese" is a real answer, so claiming dairy
-  // on the crust would wrongly grey out the whole lane for someone avoiding it.
-  allergens: ['gluten'],
-  bakeSec: 420,
-};
+/** The crust a line was built on, falling back for orders taken before the
+ *  crust was a choice - they were all classic. */
+export function crustOf(line) {
+  return PIZZA_CRUSTS.find((c) => c.id === line.base) || PIZZA_CRUSTS[0];
+}
 
 /*
  * Sauce and cheese carry their amount in the same list the guest is already
@@ -174,6 +203,11 @@ const PIZZA_TOPPINGS = [
   { id: 'red_onion',    name: 'Onions', es: 'Cebolla',                   icon: 'onion',     addSec: 10, allergens: [], kid: false },
   { id: 'pz_tomatoes',  name: 'Sliced Heirloom Tomatoes', es: 'Tomates Heirloom en Rodajas', icon: 'tomato',    addSec: 10, allergens: [], kid: true },
   { id: 'jalapeno',     name: 'Fresh Jalapenos', es: 'Jalapeños Frescos',          icon: 'jalapeno',     addSec: 5,  allergens: [], spicy: true, kid: false },
+  // Dessert toppings. All three go on after the bake, so they add no oven
+  // time - the same reason the herbs below do not.
+  { id: 'pz_nutella',   name: 'Nutella', es: 'Nutella',                  icon: 'nutella',   addSec: 0,  allergens: ['dairy', 'tree_nuts'], kid: true, postBake: true },
+  { id: 'pz_strawberry', name: 'Strawberries', es: 'Fresas',             icon: 'strawberry', addSec: 0, allergens: [], kid: true, postBake: true },
+  { id: 'pz_powdered_sugar', name: 'Powdered Sugar', es: 'Azúcar Glas',  icon: 'sugar',     addSec: 0,  allergens: [], kid: true, postBake: true },
   { id: 'pz_basil',     name: 'Basil', es: 'Albahaca',                    icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
   { id: 'pz_arugula',   name: 'Arugula', es: 'Arúgula',                  icon: 'spinach',   addSec: 0,  allergens: [], kid: false, postBake: true },
   { id: 'pz_chili',     name: 'Red Pepper Flakes', es: 'Hojuelas de Chile',        icon: 'flakes',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
@@ -245,6 +279,7 @@ const BURGER_SIDES = [
 const GROUPS = {
   pastas: PASTAS, sauces: SAUCES, proteins: PROTEINS,
   toppings: TOPPINGS, sides: SIDES, portions: PORTIONS,
+  pizzaCrusts: PIZZA_CRUSTS,
   pizzaSauces: PIZZA_SAUCES, pizzaCheeses: PIZZA_CHEESES,
   pizzaProteins: PIZZA_PROTEINS,
   pizzaToppings: PIZZA_TOPPINGS,
@@ -266,6 +301,7 @@ export function kindOf(line) {
 export const GROUPS_FOR = {
   pasta: { sauces: 'sauces', proteins: 'proteins', toppings: 'toppings' },
   pizza: {
+    base: 'pizzaCrusts',
     sauces: 'pizzaSauces', cheeses: 'pizzaCheeses',
     proteins: 'pizzaProteins', toppings: 'pizzaToppings',
   },
@@ -385,9 +421,9 @@ export function allergensFor(line) {
   const g = GROUPS_FOR[kindOf(line)];
 
   if (kindOf(line) === 'pizza') {
-    // Every pizza inherits the crust. Dairy now comes from the cheese that was
-    // actually chosen, so a no-cheese pie is genuinely dairy free.
-    PIZZA_BASE.allergens.forEach((a) => out.add(a));
+    // The crust is chosen now, which is the whole point of putting a
+    // gluten-free base on the menu: a pie is only gluten free if its crust is.
+    add(crustOf(line));
     cheesesOf(line).forEach((id) => add(find('pizzaCheeses', id)));
   } else if (kindOf(line) === 'burger') {
     // The bun is chosen, not assumed - which is the whole reason the lettuce
@@ -461,9 +497,11 @@ export function ingredientList(line, lang) {
   } else if (kind === 'burger') {
     add(es ? 'Pan' : 'Bun', [nameOf('burgerBuns', line.base, lang)]);
   } else {
-    // Every pizza is the same crust, so naming it would be a row that always
-    // says the same thing - noise on a screen read at a glance.
-    add(es ? 'Masa' : 'Base', [es ? 'Pizza de 12"' : '12" pie']);
+    // The crust is a choice, and it is the one a cook has to get right: a
+    // gluten-free base that reads as "12 inch pie" on the ticket is a pizza
+    // made on the wrong dough for someone who asked carefully.
+    const crust = crustOf(line);
+    add(es ? 'Masa' : 'Crust', [es && crust.es ? crust.es : crust.name]);
   }
 
   add(es ? 'Salsa' : 'Sauce', saucesOf(line).map(name(g.sauces)));
@@ -513,6 +551,12 @@ export function describe(line, lang) {
 
     const toppings = (line.toppings || []).map(name('pizzaToppings')).filter(Boolean);
     const on = proteins.concat(toppings);
+    // Only when it is not the house dough: saying "12 inch Classic" on every
+    // ticket is noise, saying nothing on a gluten-free one is a mistake.
+    const crust = crustOf(line);
+    const crustNote = crust.id === PIZZA_CRUSTS[0].id
+      ? ''
+      : ' [' + (es && crust.es ? crust.es : crust.name) + ']';
 
     // Word order, not word substitution. English puts the sauce in front of
     // the noun ("BBQ Pizza"); Spanish puts it after ("Pizza con salsa BBQ"),
@@ -524,12 +568,12 @@ export function describe(line, lang) {
       if (cheeseRule.exclusive) parts.push('- ' + cheeseLabel.toLowerCase());
       else if (cheeseLabel) parts.push('+ ' + cheeseLabel);
       if (on.length) parts.push('+ ' + on.join(', '));
-      return parts.join(' ');
+      return parts.join(' ') + crustNote;
     }
     const parts = [sauceLabel ? sauceLabel + ' Pizza' : 'Pizza'];
     if (cheeseLabel) parts.push('w/ ' + cheeseLabel);
     if (on.length) parts.push((cheeseLabel ? '+ ' : 'w/ ') + on.join(', '));
-    return parts.join(' ');
+    return parts.join(' ') + crustNote;
   }
 
   if (kindOf(line) === 'burger') {
@@ -670,7 +714,7 @@ export function catalog() {
     pizzaSauces: PIZZA_SAUCES, pizzaCheeses: PIZZA_CHEESES,
     pizzaProteins: PIZZA_PROTEINS,
     pizzaToppings: PIZZA_TOPPINGS,
-    pizzaBase: PIZZA_BASE,
+    pizzaCrusts: PIZZA_CRUSTS,
     burgerBuns: BURGER_BUNS, burgerPatties: BURGER_PATTIES,
     burgerCheeses: BURGER_CHEESES, burgerToppings: BURGER_TOPPINGS,
     burgerSauces: BURGER_SAUCES, burgerSides: BURGER_SIDES,

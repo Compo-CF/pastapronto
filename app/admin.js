@@ -269,9 +269,13 @@ const CATALOG = menu.catalog();
       '<h3 class="menu-station">Pasta station</h3>' +
       '<div class="mtable-wrap">' + pastaTables + '</div>' +
       '<h3 class="menu-station">Pizza station' +
-      '<span class="menu-station-sub">every pizza is a 12" ' +
-      escapeHtml(m.pizzaBase.name.replace('12" ', '')) + ' base &middot; ' +
-      'carries ' + m.pizzaBase.allergens.join(', ') +
+      // The crust is a choice now, so the heading lists them rather than
+      // stating one. A gluten-free base changes what the pie carries, which
+      // is the first thing a manager fielding an allergy question needs.
+      '<span class="menu-station-sub">' +
+      escapeHtml(m.pizzaCrusts.map(function (c) {
+        return c.name + (c.allergens.length ? ' (' + c.allergens.join(', ') + ')' : ' (no allergens)');
+      }).join(' \u00b7 ')) +
       '</span></h3>' +
       '<div class="mtable-wrap">' + pizzaTables + '</div>' +
       '<p class="muted" style="font-size:14px;margin:14px 0 0">' +
@@ -729,6 +733,7 @@ const CATALOG = menu.catalog();
       { field: 'portion', group: 'portions', label: 'Size', single: true },
     ],
     pizza: [
+      { field: 'base', group: 'pizzaCrusts', label: 'Crust', single: true },
       { field: 'sauces', group: 'pizzaSauces', label: 'Sauce' },
       { field: 'cheeses', group: 'pizzaCheeses', label: 'Cheese' },
       { field: 'proteins', group: 'pizzaProteins', label: 'Protein' },
@@ -756,6 +761,33 @@ const CATALOG = menu.catalog();
   }
 
   /** A blank line of the given kind, with the single choices pre-filled. */
+  /**
+   * Swap in what a newly chosen base brings with it, and take out what the
+   * last one brought. Same rule as the guest app, for the same reason: a
+   * manager taking a dessert pizza by phone should get Nutella, strawberries
+   * and powdered sugar already on it, and switching back to a classic crust
+   * should take them off again rather than leave them on a pepperoni pie.
+   */
+  function applyBaseDefaults(line, groupName, oldId, newId) {
+    if (oldId === newId || !groupName) return;
+
+    var was = (CATALOG[groupName] || []).find(function (x) { return x.id === oldId; });
+    if (was && was.defaults) {
+      Object.keys(was.defaults).forEach(function (field) {
+        line[field] = (line[field] || []).filter(function (id) {
+          return was.defaults[field].indexOf(id) === -1;
+        });
+      });
+    }
+
+    var now = (CATALOG[groupName] || []).find(function (x) { return x.id === newId; });
+    if (now && now.defaults) {
+      Object.keys(now.defaults).forEach(function (field) {
+        line[field] = now.defaults[field].slice();
+      });
+    }
+  }
+
   function blankLine(kind, i) {
     var line = {
       guestLabel: 'Guest ' + (i + 1),
@@ -765,6 +797,9 @@ const CATALOG = menu.catalog();
       if (!spec.single) return;
       var first = groupItems(spec.group)[0];
       line[spec.field] = first ? first.id : null;
+      // The first crust is the classic one and brings nothing with it, but
+      // that is a fact about today's menu rather than a rule - so ask.
+      if (spec.field === 'base') applyBaseDefaults(line, spec.group, null, line[spec.field]);
     });
     return line;
   }
@@ -1159,6 +1194,16 @@ const CATALOG = menu.catalog();
     if (!t || t.tagName !== 'SELECT') return;
     var obj = targetFor(t.dataset.edit);
     if (!obj) return;
+    // A base can come with a recipe attached, and the swap has to happen
+    // before the new value lands so the old one can be undone.
+    if (t.dataset.field === 'base') {
+      var forKind = /^cline:/.test(t.dataset.edit)
+        ? state.compose.kind
+        : (state.orders.find(function (o) { return o.id === state.editing; }) || {}).kind;
+      var spec = (COMPOSE[forKind] || []).find(function (x) { return x.field === 'base'; });
+      if (spec) applyBaseDefaults(obj, spec.group, obj.base, t.value);
+    }
+
     obj[t.dataset.field] = t.value;
     // Switching kind invalidates every choice already made - a pizza has no
     // shape and a bowl has no bun.

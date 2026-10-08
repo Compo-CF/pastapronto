@@ -294,6 +294,51 @@ var ICONS = {
     '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><g fill="#f4d97e" stroke="#e0bc51" stroke-width="1"><rect x="23" y="26" width="11" height="4" rx="2" transform="rotate(-18 28 28)"/><rect x="33" y="33" width="10" height="4" rx="2" transform="rotate(24 38 35)"/><rect x="24" y="38" width="9" height="4" rx="2" transform="rotate(8 28 40)"/></g>',
   cheese_heavy:
     '<circle cx="32" cy="32" r="22" fill="#e8c893"/><circle cx="32" cy="32" r="17" fill="#f7ecd5"/><circle cx="32" cy="32" r="17" fill="#f4d97e"/><g fill="none" stroke="#e0bc51" stroke-width="2.6" stroke-linecap="round"><path d="M22 27h9M34 24h8M26 34h11M39 33h5M21 40h8M32 41h9"/></g>',
+  // A crust with no wheat in it. The letters do the work - there is no shape
+  // that reads as "gluten free" on its own, and a cook scanning a tile needs
+  // to be sure rather than nearly sure.
+  crust_gf:
+    '<circle cx="32" cy="32" r="22" fill="#e9d6b4"/>' +
+    '<circle cx="32" cy="32" r="15" fill="#f6ecd8"/>' +
+    '<text x="32" y="38" font-family="system-ui,sans-serif" font-size="15" font-weight="800" ' +
+    'text-anchor="middle" fill="#9a7b45">GF</text>',
+
+  // Dessert pizza: a slice under a chocolate drizzle with a berry on it.
+  // Built on the same slice outline as the savoury one, so it reads as pizza
+  // first and dessert second. A fresh triangle looked like a hazard sign at
+  // tile size, which is not what you want on a menu.
+  pizza_dessert:
+    '<path d="M32 6 56 50a4 4 0 0 1-4 6H12a4 4 0 0 1-4-6z" fill="#e8c98f"/>' +
+    '<path d="M32 14 50 48H14z" fill="#f3e3c0"/>' +
+    '<g fill="none" stroke="#6b4423" stroke-width="3.2" stroke-linecap="round">' +
+    '<path d="M24 44c4-4 5-9 3-13M34 46c4-5 5-11 2-15M43 46c2-4 2-8 1-11"/></g>' +
+    '<circle cx="32" cy="31" r="5.5" fill="#e0413c"/>' +
+    '<path d="M28.5 26.5h7l-3.5 3.5z" fill="#4e8a3c"/>',
+
+  // Chocolate hazelnut spread: the jar, because a brown swirl alone reads as
+  // sauce and this list already has four of those.
+  nutella:
+    '<path d="M19 22h26v28a6 6 0 0 1-6 6H25a6 6 0 0 1-6-6z" fill="#f3efe7" stroke="#d8d0c4" stroke-width="2"/>' +
+    '<path d="M24 31h16v17H24z" fill="#5b3a21"/>' +
+    '<path d="M27 38c3-3 7 3 10 0" fill="none" stroke="#8a5a33" stroke-width="2.6" stroke-linecap="round"/>' +
+    '<rect x="17" y="13" width="30" height="10" rx="3" fill="#b9ae9f"/>',
+
+  strawberry:
+    '<path d="M32 56c-11 0-18-9-18-19 0-7 8-11 18-11s18 4 18 11c0 10-7 19-18 19z" fill="#e0413c"/>' +
+    '<g fill="#b32f2b"><circle cx="26" cy="34" r="1.9"/><circle cx="38" cy="34" r="1.9"/>' +
+    '<circle cx="32" cy="42" r="1.9"/><circle cx="23" cy="44" r="1.9"/><circle cx="41" cy="44" r="1.9"/></g>' +
+    '<path d="M22 24c4-3 7-3 10-1 3-2 6-2 10 1-4 3-7 3-10 2-3 1-6 1-10-2z" fill="#4e8a3c"/>' +
+    '<path d="M31 18h2v7h-2z" fill="#4e8a3c"/>',
+
+  // Powdered sugar: a sieve letting it fall. Dots alone looked like salt,
+  // which is already on this menu and goes somewhere very different.
+  sugar:
+    '<path d="M18 20h28l-4 10H22z" fill="#c9bfb2"/>' +
+    '<rect x="16" y="13" width="32" height="8" rx="3" fill="#9b9084"/>' +
+    '<g fill="#ded6c8"><circle cx="24" cy="39" r="2.8"/><circle cx="33" cy="44" r="2.8"/>' +
+    '<circle cx="41" cy="38" r="2.8"/><circle cx="28" cy="51" r="2.5"/><circle cx="38" cy="52" r="2.5"/>' +
+    '<circle cx="32" cy="34" r="2.3"/></g>',
+
   none:
     '<circle cx="32" cy="32" r="19" fill="none" stroke="#b8ada1" stroke-width="5"/>' +
     '<path d="M19 45 45 19" stroke="#b8ada1" stroke-width="5" stroke-linecap="round"/>',

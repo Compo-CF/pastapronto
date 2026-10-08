@@ -82,7 +82,9 @@ export function lineCookSec(line) {
       // per-item handling. Heavy cheese is wetter and genuinely bakes longer.
       + cheese.reduce((a, c) => a + (c.addSec || 0), 0);
     // Sauce is spread before the bake, so it does not extend the oven clock.
-    return menu.PIZZA_BASE.bakeSec + load;
+    // The crust decides the bake, not a constant: a gluten-free base needs
+    // longer to set, and a dessert pie comes out sooner.
+    return menu.crustOf(line).bakeSec + load;
   }
 
   if (kind === 'burger') {
