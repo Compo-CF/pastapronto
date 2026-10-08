@@ -60,11 +60,14 @@ export const config = {
     // The club seats a maximum of 12 to a table, so a ticket can never be for
     // more. This is the number that becomes covers at close-out.
     maxGuests: 12,
-    maxToppingsPerBowl: 4,
-    // Pizzas are all one size, so the only limit that matters is how much you
-    // can pile on before the middle goes soggy.
+    // Toppings have no hard cap. The club was explicit about this: a member who
+    // wants everything on it should get everything on it, and being refused by
+    // a screen is a worse experience than a crowded bowl. What is left is a
+    // number the kitchen thinks is sensible, shown as advice and never
+    // enforced - menu.validateLine() deliberately does not check it, so the
+    // screen and the validator cannot disagree about what is allowed.
+    toppingAdvice: 10,
     maxCheesesPerPizza: 3,
-    maxToppingsPerPizza: 5,
     // A bowl can be half-and-half, or a three-way. More than this and the
     // pan stops tasting like anything.
     maxSaucesPerBowl: 3,
@@ -72,9 +75,7 @@ export const config = {
     // bacon. Past three the pan or the pie stops working.
     maxProteinsPerItem: 3,
     maxSidesPerBowl: 2,
-    // A burger takes one patty, one cheese, one basket. The caps that suit a
-    // bowl are wrong for a bun.
-    maxToppingsPerBurger: 6,
+    // A burger takes one patty, one cheese, one basket.
     maxSidesPerBurger: 1,
     allowUnverifiedMembers: true,
     // Member numbers run from 1 to 4 digits. Guests type them however they

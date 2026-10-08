@@ -76,9 +76,14 @@ const SIDES = [
 ];
 
 const PORTIONS = [
-  { id: 'kid',     name: 'Kid Size', es: 'Porción Niño', factor: 0.6, extraSec: 0,  kid: true },
-  { id: 'regular', name: 'Regular', es: 'Regular',  factor: 1.0, extraSec: 0, kid: true },
-  { id: 'large',   name: 'Large', es: 'Grande',    factor: 1.4, extraSec: 45, kid: false },
+  { id: 'kid',     name: 'Kid Size', es: 'Porción Niño', factor: 0.6, extraSec: 0,  kid: true, icon: 'bowl_kid' },
+  { id: 'regular', name: 'Regular', es: 'Regular',  factor: 1.0, extraSec: 0, kid: true, icon: 'bowl_regular' },
+  // Retired at the club's request: pasta is regular or kid size only. It stays
+  // in the catalog rather than being deleted because orders already taken name
+  // it, and a close-out report for last Thursday still has to print "Large"
+  // instead of dropping the word. `retired` keeps it out of what a guest is
+  // offered; nothing else needs to know.
+  { id: 'large',   name: 'Large', es: 'Grande',    factor: 1.4, extraSec: 45, kid: false, retired: true, icon: 'bowl_large' },
 ];
 
 const SPICE_LEVELS = [
@@ -555,10 +560,10 @@ export function validateLine(line, limits) {
       errors.push('Up to ' + limits.maxCheesesPerPizza + ' cheeses per pizza.');
     }
 
-    const baked = toppings.filter((id) => !(find('pizzaToppings', id) || {}).postBake);
-    if (baked.length > limits.maxToppingsPerPizza) {
-      errors.push('Up to ' + limits.maxToppingsPerPizza + ' toppings per pizza.');
-    }
+    // No topping cap, by the club's instruction. The guest screen offers
+    // advice at config.order.toppingAdvice and nothing here contradicts it: a
+    // validator stricter than the screen refuses an order the guest was
+    // invited to build, which is the one failure worth never having.
     return errors;
   }
 
@@ -578,9 +583,6 @@ export function validateLine(line, limits) {
     }
     if (cheeseRule.bases.length > 1) errors.push('One cheese per burger.');
 
-    if (toppings.length > limits.maxToppingsPerBurger) {
-      errors.push('Up to ' + limits.maxToppingsPerBurger + ' toppings per burger.');
-    }
     const bSides = line.sides || [];
     if (bSides.some((x) => !find('burgerSides', x))) errors.push('Unknown side.');
     // One basket. The fryer runs one at a time at this volume.
@@ -592,9 +594,6 @@ export function validateLine(line, limits) {
 
   if (!find('pastas', line.pasta)) errors.push('Pick a pasta shape.');
   if (!find('portions', line.portion)) errors.push('Pick a portion size.');
-  if (toppings.length > limits.maxToppingsPerBowl) {
-    errors.push('Up to ' + limits.maxToppingsPerBowl + ' toppings per bowl.');
-  }
   const sides = line.sides || [];
   if (sides.some((x) => !find('sides', x))) errors.push('Unknown side.');
   if (sides.length > limits.maxSidesPerBowl) {

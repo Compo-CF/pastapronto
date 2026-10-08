@@ -27,8 +27,14 @@ import {
   'use strict';
 
   /**
-   * The build wizard, per kind. Pizza has one step fewer because every pizza is
-   * the same size, so there is nothing to ask about portions.
+   * The build wizard, per kind.
+   *
+   * Every kind ends on a `finish` step, which is where the order gets a name.
+   * Pasta asks the size there too; a pizza is one size and a burger is one
+   * burger, so for them the step is the name and the note alone. It used to
+   * exist only for pasta, which left a pizza with no way to be labelled at
+   * all - and at a table of eight that is eight anonymous pizzas arriving
+   * together.
    */
   var STEPS = {
     pasta: [
@@ -43,6 +49,7 @@ import {
       { id: 'cheeses', labelKey: 'guest.tab.cheese', group: 'pizzaCheeses', titleKey: 'guest.step.cheese', subKey: 'guest.step.amountsub', multi: true },
       { id: 'proteins', labelKey: 'guest.tab.protein', group: 'pizzaProteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
       { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'pizzaToppings', titleKey: 'guest.step.toppings', subKey: '' },
+      { id: 'finish', labelKey: 'guest.tab.who', group: null, titleKey: 'guest.step.who', subKey: 'guest.step.who.sub' },
     ],
     burger: [
       { id: 'proteins', labelKey: 'guest.tab.patty', group: 'burgerPatties', titleKey: 'guest.step.patty', subKey: 'guest.step.patty.sub', multi: true },
@@ -51,6 +58,7 @@ import {
       { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'burgerToppings', titleKey: 'guest.step.toppings', subKey: '' },
       { id: 'sauces', labelKey: 'guest.tab.sauce', group: 'burgerSauces', titleKey: 'guest.step.burgersauce', subKey: '', multi: true },
       { id: 'sides', labelKey: 'guest.tab.side', group: 'burgerSides', titleKey: 'guest.step.side', subKey: 'guest.step.side.sub' },
+      { id: 'finish', labelKey: 'guest.tab.who', group: null, titleKey: 'guest.step.who', subKey: 'guest.step.who.sub' },
     ],
   };
 
@@ -162,7 +170,6 @@ import {
     bowls: [],
     activeBowl: 0,
     buildStep: 0,
-    showAll: false,
     avoid: [],
     unavailable: [],
     orderNotes: '',
@@ -283,15 +290,17 @@ import {
     return true;
   }
 
+  /**
+   * Everything on the menu, every time.
+   *
+   * This used to show a short list in simple mode and put the rest behind a
+   * "show all" button. The club asked for it to stop: a member looking for
+   * mushrooms should see mushrooms, not a button that might lead to them. The
+   * only thing filtered now is an item retired from service, which is not a
+   * choice being hidden - it is a choice that no longer exists.
+   */
   function choicesFor(group) {
-    var all = menu(group);
-    if (state.mode === 'pro' || state.showAll) return all;
-    var kid = all.filter(function (x) { return x.kid; });
-    return kid.length >= 3 ? kid : all;
-  }
-
-  function hasHiddenChoices(group) {
-    return state.mode === 'simple' && !state.showAll && choicesFor(group).length < menu(group).length;
+    return menu(group).filter(function (x) { return !x.retired; });
   }
 
   /** Allergens the guest asked us to avoid that this item contains. */
@@ -363,11 +372,7 @@ import {
         ruledOut: (opts.blocked || {})[entry.id] || '',
       });
     });
-    var more = hasHiddenChoices(group)
-      ? html`<div class="moretoggle"><button class="btn btn-ghost" type="button" data-act="showAll">
-          ${t('guest.label.showall', { n: menu(group).length })}</button></div>`
-      : '';
-    return html`<div class="tiles ${opts.small ? 'tiles-sm' : ''}">${markup}</div>${raw(more)}`;
+    return html`<div class="tiles ${opts.small ? 'tiles-sm' : ''}">${markup}</div>`;
   }
 
   // --------------------------------------------------------------- screens
@@ -581,9 +586,7 @@ import {
 
     var sub = step.subKey ? t(step.subKey) : '';
     if (step.id === 'toppings') {
-      sub = state.kind === 'pizza'
-        ? t('guest.step.toppings.subPizza', { n: toppingCap() })
-        : t('guest.step.toppings.sub', { n: toppingCap() });
+      sub = t('guest.step.toppings.sub', { n: toppingAdvice() });
     }
     if (step.id === 'proteins') {
       sub = bowl.proteins.length
@@ -617,12 +620,16 @@ import {
       ${raw(body)}`;
   }
 
-  /** Toppings cap differs by kind: a pizza takes more than a bowl. */
-  function toppingCap() {
-    var lim = state.boot.limits;
-    if (state.kind === 'pizza') return lim.maxToppingsPerPizza;
-    if (state.kind === 'burger') return lim.maxToppingsPerBurger;
-    return lim.maxToppingsPerBowl;
+  /**
+   * What the kitchen suggests, which is not what the kitchen allows.
+   *
+   * There is no cap. This number is shown as advice and never enforced, here
+   * or in menu.validateLine() - the two agreeing matters more than either
+   * number, because a screen that lets a guest build something the validator
+   * then rejects is the worst outcome available.
+   */
+  function toppingAdvice() {
+    return state.boot.limits.toppingAdvice;
   }
 
   /** True for a pizza topping that goes on after the oven, so costs no slot. */
@@ -642,64 +649,49 @@ import {
     var group = (GROUPS_FOR[state.kind] || {}).toppings || 'toppings';
     var grid = tileGrid(group, { act: 'toggleTopping', value: bowl.toppings, multi: true, small: true });
 
-    // Sides are a pasta-station thing; a pizza order does not offer them.
-    // Burgers get their own side step, so the inline prompt is for the pasta
-    // lane only - a pizza has no sides at all.
-    var sides = state.kind === 'pasta' && (state.mode === 'pro' || bowl.sides.length > 0)
-      ? html`<div class="stack" style="margin-top:22px">
-          <strong>Add a side?</strong>
-          ${raw(tileGrid('sides', { act: 'toggleSide', value: bowl.sides, multi: true, small: true }))}
-        </div>`
+    // A running count only, with no ceiling to run into. The advice lives in
+    // the step subtitle; repeating it here as "7 of 10" would read like a
+    // limit, which is the one thing it must not read like.
+    var chosen = bowl.toppings.length
+      ? html`<p class="muted" style="margin-top:12px">${t('guest.toppings.chosen', { n: bowl.toppings.length })}</p>`
       : '';
 
-    return html`${raw(grid)}
-      <p class="muted" style="margin-top:12px">${bowl.toppings.length} of ${toppingCap()} chosen</p>
-      ${raw(sides)}`;
+    return html`${raw(grid)}${raw(chosen)}`;
   }
 
   /**
-   * The pro-mode detail panel: who it is for, and anything the kitchen needs to
-   * know. Shared by both lanes - it used to live inside the pasta-only size
-   * step, which left a pizza guest with no way to leave a note at all.
+   * Who the dish is for, and anything the kitchen needs to know.
    *
-   * Spice level is pasta-only; on a pizza the heat comes from a topping or a
-   * finisher, so asking twice would be noise.
+   * On screen always, for every kind. It used to be folded behind an "Add a
+   * note" chip in simple mode, which meant the usual path through the app
+   * produced a ticket labelled "Guest 3" - and a runner carrying four plates
+   * to a table of eight cannot do anything with that.
+   *
+   * The note box has no placeholder on purpose. It used to suggest birthdays,
+   * seat numbers and timing, and the club does not want those reaching the
+   * kitchen at all - that is a conversation with a server, not a line on a
+   * chit the expo reads at a glance.
    */
   function detailPanel(bowl) {
-    if (state.mode !== 'pro') {
-      return html`<div class="chips" style="margin-top:18px">
-        <button class="chip" type="button" data-act="mode" data-id="pro">Add a note${bowl.kind === 'pizza' ? '' : ' or spice level'}</button>
-      </div>`;
-    }
-
-    var spice = bowl.kind === 'pizza' ? '' : html`<div class="field">
-        <label>Spice level</label>
-        <div class="chips">
-          ${state.boot.menu.spice.map(function (x) {
-            return html`<button class="chip" type="button" data-act="setSpice" data-id="${x.id}"
-              aria-pressed="${bowl.spice === x.id ? 'true' : 'false'}">${x.name}</button>`;
-          })}
-        </div>
-      </div>`;
-
     return html`<div class="card stack" style="margin-top:22px">
       <div class="field">
-        <label for="whoName">Who is this ${lane().one} for?</label>
+        <label for="whoName">${t('guest.who.label', { unit: lane().one })}</label>
         <input class="input" id="whoName" type="text" maxlength="24" value="${bowl.guestLabel}"
-          data-act="setName" placeholder="Name or seat">
+          data-act="setName" placeholder="${t('guest.who.name')}">
       </div>
-      ${raw(spice)}
       <div class="field">
-        <label for="bowlNotes">Notes for the kitchen</label>
-        <textarea class="textarea" id="bowlNotes" maxlength="140" data-act="setNotes"
-          placeholder="${bowl.kind === 'pizza' ? t('guest.note.pizza') : t('guest.note.pasta')}">${bowl.notes}</textarea>
+        <label for="bowlNotes">${t('guest.who.notes')}</label>
+        <textarea class="textarea" id="bowlNotes" maxlength="140" data-act="setNotes">${bowl.notes}</textarea>
       </div>
     </div>`;
   }
 
   function buildFinish(bowl) {
-    // Pasta only - a pizza has one size, so it never reaches this step.
-    var portions = tileGrid('portions', { act: 'pick', value: bowl.portion, multi: false });
+    // Pasta is the only kind with a size to pick. A pizza is one size and a
+    // burger is one burger, so for them this step is the name and note alone.
+    var portions = bowl.kind === 'pasta'
+      ? tileGrid('portions', { act: 'pick', value: bowl.portion, multi: false })
+      : '';
     return html`${raw(portions)}${raw(detailPanel(bowl))}`;
   }
 
@@ -740,10 +732,6 @@ import {
           extras.push('side of ' + bowl.sides.map(function (x) {
             return (item('sides', x) || {}).name || x;
           }).join(', '));
-        }
-        if (bowl.spice !== 'mild') {
-          var spice = item('spice', bowl.spice);
-          if (spice) extras.push(spice.name + ' spice');
         }
         var portion = item('portions', bowl.portion);
         if (portion) extras.push(portion.name);
@@ -804,8 +792,8 @@ import {
     var notesField = state.mode === 'pro'
       ? html`<div class="field">
           <label for="orderNotes">Anything else for the kitchen?</label>
-          <textarea class="textarea" id="orderNotes" maxlength="240" data-act="setOrderNotes"
-            placeholder="Celebrating a birthday, seat numbers, timing...">${state.orderNotes}</textarea>
+          <textarea class="textarea" id="orderNotes" maxlength="240"
+            data-act="setOrderNotes">${state.orderNotes}</textarea>
         </div>`
       : '';
 
@@ -991,8 +979,9 @@ import {
     } else if (s === 'build') {
       var bowl = currentBowl();
       var step = steps()[state.buildStep];
+      // The finish step only gates on a size, and only pasta has one.
       var chosen = step.id === 'toppings' || step.id === 'proteins' ? true
-        : step.id === 'finish' ? Boolean(bowl.portion)
+        : step.id === 'finish' ? (bowl.kind !== 'pasta' || Boolean(bowl.portion))
         : step.id === 'sauces' ? bowl.sauces.length > 0
         : step.id === 'cheeses' ? bowl.cheeses.length > 0
         : Boolean(bowl[step.id]);
@@ -1010,8 +999,14 @@ import {
           ${raw(state.busy || !allBowlsComplete() ? 'disabled' : '')}>
           ${state.busy ? t('guest.review.sending') : t('guest.review.send')}</button>`;
     } else if (s === 'sent') {
-      parts = html`<button class="btn btn-ghost btn-block" type="button" data-act="restart">
-        ${t('guest.sent.again')}</button>`;
+      // Two ways on, and the common one is weighted: another of what they just
+      // had. "Something different" throws the build away, so it is the quieter
+      // of the two.
+      parts = html`
+        <button class="btn btn-ghost grow" type="button" data-act="restart">
+          ${t('guest.sent.new')}</button>
+        <button class="btn btn-primary btn-lg grow" type="button" data-act="again">
+          ${t('guest.sent.same')}</button>`;
     }
 
     footbarInner.innerHTML = parts;
@@ -1066,13 +1061,11 @@ import {
   function advance() {
     if (state.buildStep < steps().length - 1) {
       state.buildStep += 1;
-      state.showAll = false;
       return render();
     }
     if (state.activeBowl < state.bowls.length - 1) {
       state.activeBowl += 1;
       state.buildStep = 0;
-      state.showAll = false;
       return render();
     }
     state.screen = 'review';
@@ -1097,18 +1090,12 @@ import {
 
     go: function (el) {
       state.screen = el.dataset.id;
-      state.showAll = false;
       render();
     },
 
     mode: function (el) {
       state.mode = el.dataset.id;
       remember('mode', state.mode);
-      render({ keepScroll: true });
-    },
-
-    showAll: function () {
-      state.showAll = true;
       render({ keepScroll: true });
     },
 
@@ -1160,7 +1147,6 @@ import {
       state.activeBowl = 0;
       state.buildStep = 0;
       state.screen = 'build';
-      state.showAll = false;
       render();
     },
 
@@ -1168,8 +1154,14 @@ import {
       var field = GROUP_FIELD[el.dataset.group];
       if (!field) return;
       currentBowl()[field] = el.dataset.id;
-      state.showAll = false;
       // Tapping a choice moves you on - fewer buttons for a child to hunt for.
+      // Except on the finish step, where the name and the note sit below the
+      // tiles: advancing from there carried the guest straight out of a screen
+      // they had not filled in, which is how pasta arrived with nobody's name
+      // on it.
+      if (steps()[state.buildStep].id === 'finish') {
+        return render({ keepScroll: true });
+      }
       advance();
     },
 
@@ -1177,7 +1169,6 @@ import {
       var field = SINGLE_INTO_ARRAY[el.dataset.group];
       if (!field) return;
       currentBowl()[field] = [el.dataset.id];
-      state.showAll = false;
       advance();
     },
 
@@ -1193,7 +1184,6 @@ import {
       } else {
         bowl.proteins.push(id);
       }
-      state.showAll = false;
       render({ keepScroll: true });
     },
 
@@ -1207,7 +1197,6 @@ import {
       var group = state.kind === 'pizza' ? 'pizzaSauces' : 'sauces';
       if (!toggleRuled(bowl, 'sauces', group, el.dataset.id, cap,
         'Up to ' + cap + ' sauces. Tap one to swap it.')) return;
-      state.showAll = false;
       render({ keepScroll: true });
     },
 
@@ -1216,7 +1205,6 @@ import {
       var cap = state.boot.limits.maxCheesesPerPizza;
       if (!toggleRuled(bowl, 'cheeses', 'pizzaCheeses', el.dataset.id, cap,
         'Up to ' + cap + ' cheeses. Tap one to swap it.')) return;
-      state.showAll = false;
       render({ keepScroll: true });
     },
 
@@ -1225,39 +1213,18 @@ import {
       var id = el.dataset.id;
       var i = bowl.toppings.indexOf(id);
       if (i !== -1) bowl.toppings.splice(i, 1);
-      // The cap is about oven space, and a garnish scattered on afterwards
-      // takes none - so salt, oregano, basil, arugula and the flakes are free.
-      // validateLine() counts it the same way; the two must not disagree or a
-      // guest gets refused for an order the screen let them build.
-      else if (bakedToppings(bowl).length >= toppingCap() && !isPostBake(id)) {
-        toast('That is ' + toppingCap() + ' toppings - plenty! Tap one to swap it.');
-        return;
-      } else bowl.toppings.push(id);
-      render({ keepScroll: true });
-    },
-
-    toggleSide: function (el) {
-      var bowl = currentBowl();
-      var id = el.dataset.id;
-      var i = bowl.sides.indexOf(id);
-      if (i !== -1) bowl.sides.splice(i, 1);
-      else if (bowl.sides.length >= state.boot.limits.maxSidesPerBowl) {
-        toast('Up to ' + state.boot.limits.maxSidesPerBowl + ' sides per bowl.');
-        return;
-      } else bowl.sides.push(id);
+      else bowl.toppings.push(id);
       render({ keepScroll: true });
     },
 
     gotoBowl: function (el) {
       state.activeBowl = Number(el.dataset.id);
       state.buildStep = 0;
-      state.showAll = false;
       render();
     },
 
     gotoStep: function (el) {
       state.buildStep = Number(el.dataset.id);
-      state.showAll = false;
       render();
     },
 
@@ -1267,7 +1234,6 @@ import {
         state.activeBowl -= 1;
         state.buildStep = steps().length - 1;
       } else state.screen = 'guests';
-      state.showAll = false;
       render();
     },
 
@@ -1277,16 +1243,11 @@ import {
       state.activeBowl = Number(el.dataset.id);
       state.buildStep = 0;
       state.screen = 'build';
-      state.showAll = false;
       render();
     },
 
     setName: function (el) {
       currentBowl().guestLabel = el.value.trim() || 'Guest ' + (state.activeBowl + 1);
-    },
-    setSpice: function (el) {
-      currentBowl().spice = el.dataset.id;
-      render({ keepScroll: true });
     },
     setNotes: function (el) { currentBowl().notes = el.value; },
     setOrderNotes: function (el) { state.orderNotes = el.value; },
@@ -1322,6 +1283,28 @@ import {
         render({ keepScroll: true });
         toast(err.errors && err.errors.length ? err.errors[0] : err.message, true);
       }
+    },
+
+    /**
+     * Send the same thing again without rebuilding it.
+     *
+     * This is the all-you-can-eat case, and it was the obvious missing step: a
+     * member who wants a second identical bowl had to walk the whole wizard
+     * again to describe something the app already knew. The bowls are still in
+     * state - submitting does not consume them - so the only work is to drop
+     * the finished ticket and go back to review, where they can change a
+     * topping or simply send it.
+     */
+    again: function () {
+      if (state.stopStream) state.stopStream();
+      state.order = null;
+      state.activeBowl = 0;
+      state.buildStep = 0;
+      state.screen = 'review';
+      render();
+      return refreshEstimate().then(function () {
+        if (state.screen === 'review') render({ keepScroll: true });
+      });
     },
 
     restart: function () {
@@ -1452,12 +1435,10 @@ import {
         maxGuests: config.order.maxGuests,
         maxSaucesPerBowl: config.order.maxSaucesPerBowl,
         maxProteinsPerItem: config.order.maxProteinsPerItem,
-        maxToppingsPerBowl: config.order.maxToppingsPerBowl,
         maxSidesPerBowl: config.order.maxSidesPerBowl,
-        maxToppingsPerPizza: config.order.maxToppingsPerPizza,
         maxCheesesPerPizza: config.order.maxCheesesPerPizza,
-        maxToppingsPerBurger: config.order.maxToppingsPerBurger,
         maxSidesPerBurger: config.order.maxSidesPerBurger,
+        toppingAdvice: config.order.toppingAdvice,
       },
       sla: config.sla,
       open: isOpen(),

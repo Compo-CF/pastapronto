@@ -6,6 +6,9 @@
  * Firebase-free, so this runs with no emulator, no network and no credentials.
  */
 import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { STRINGS } from '../app/i18n.js';
 import { config, kindsForNight, nightById } from '../app/config.js';
 import * as order from '../app/order.js';
 import * as cooktime from '../app/cooktime.js';
@@ -74,6 +77,25 @@ const make = (d = draft(), ctx = {}) => ({
 });
 
 console.log('\nPastaPresto self-test\n');
+
+test('building an order leaves the draft it was given untouched', () => {
+  // The guest screen keeps its bowls after sending and offers "Same again",
+  // which re-submits the very same objects. That only works while buildOrder
+  // treats the draft as read-only - if it ever started stamping line ids or
+  // normalising in place, the second send would be built from an already-built
+  // order and the member would get something they did not ask for.
+  const d = draft();
+  const untouched = JSON.parse(JSON.stringify(d));
+
+  make(d);
+  assert.deepStrictEqual(d, untouched, 'the draft after one build');
+
+  // And a second build of the same draft must produce the same order, which is
+  // what pressing "Same again" actually does.
+  const first = order.buildOrder(d, { ticketNo: 7, claimCode: 'AAAA', station: 'PASTA-1', queueDepth: 0, tag: null, serviceDate: '2026-10-08', now: new Date(0) });
+  const second = order.buildOrder(d, { ticketNo: 7, claimCode: 'AAAA', station: 'PASTA-1', queueDepth: 0, tag: null, serviceDate: '2026-10-08', now: new Date(0) });
+  assert.deepStrictEqual(second, first, 'ordering the same thing twice builds the same order');
+});
 
 test('draft validation accepts a good order', () => {
   assert.deepStrictEqual(order.validateDraft(draft(), config), []);
@@ -221,10 +243,25 @@ test('parcooked boil times are half the from-dry figures', () => {
   });
 });
 
-test('validation rejects too many toppings', () => {
-  const bad = draft();
-  bad.lines[0].toppings = ['parmesan', 'broccoli', 'olives', 'basil', 'spinach'];
-  assert.ok(order.validateDraft(bad, config).some((e) => /toppings/i.test(e)));
+test('a bowl may be piled as high as the member likes', () => {
+  // The club removed the cap deliberately: a member who wants everything on it
+  // should get everything on it. The guest screen offers advice at
+  // config.order.toppingAdvice and the validator agrees by staying silent - if
+  // the two ever disagree, a member is refused an order the app invited them
+  // to build, which is the one failure worth never having.
+  const loaded = draft();
+  loaded.lines[0].toppings = ['parmesan', 'broccoli', 'olives', 'basil', 'spinach'];
+  assert.deepStrictEqual(order.validateDraft(loaded, config), []);
+
+  const absurd = draft();
+  absurd.lines[0].toppings = menu.catalog().toppings.map((x) => x.id);
+  // There are only ten pasta toppings, which is the advice exactly - so this
+  // cannot show a bowl going past the advice, only that nothing stops a member
+  // taking the lot. The pizza list is longer, and proves the rest.
+  assert.ok(absurd.lines[0].toppings.length > 5,
+    'the topping list is longer than the old cap, or this proves nothing');
+  assert.deepStrictEqual(order.validateDraft(absurd, config), [],
+    'every topping on the menu at once is still a valid order');
 });
 
 test('validation rejects a bad member number and guest count', () => {
@@ -530,22 +567,25 @@ test('pizza sauces and pasta sauces are not interchangeable', () => {
   assert.ok(order.validateDraft(alsoWrong, config).some((e) => /not on the menu/.test(e)));
 });
 
-test('the pizza topping cap counts what goes in the oven', () => {
+test('a pizza may be piled as high as the member likes', () => {
   const many = pizzaDraft();
   many.lines[0].toppings = ['pz_olives', 'pz_artichoke', 'pz_mushroom', 'pineapple', 'jalapeno'];
-  assert.deepStrictEqual(order.validateDraft(many, config), [], 'five is fine on a pizza');
-  many.lines[0].toppings.push('red_onion');
-  assert.ok(order.validateDraft(many, config).some((e) => /5 toppings per pizza/.test(e)));
+  assert.deepStrictEqual(order.validateDraft(many, config), []);
 
-  const fin = pizzaDraft();
-  // Garnish is free: five baked toppings plus three post-bake is fine.
-  fin.lines[0].toppings = ['pz_olives', 'pz_artichoke', 'pz_mushroom', 'pineapple', 'jalapeno',
-    'pz_basil', 'fin_salt', 'fin_oregano'];
-  assert.deepStrictEqual(order.validateDraft(fin, config), []);
-  assert.deepStrictEqual(order.validateDraft(fin, config), []);
-  // A sixth baked topping is not.
-  fin.lines[0].toppings.push('pz_pepper');
-  assert.ok(order.validateDraft(fin, config).some((e) => /toppings per pizza/.test(e)));
+  // What used to be the sixth baked topping, one past the old cap of five.
+  many.lines[0].toppings.push('red_onion');
+  assert.deepStrictEqual(order.validateDraft(many, config), [],
+    'a sixth baked topping was the old cap, and is now simply a topping');
+
+  // The pizza list is the longer of the two, so this is where the advice can
+  // actually be exceeded - and must still be accepted. If the advice ever
+  // grows past the menu, this stops proving anything and says so.
+  const everything = pizzaDraft();
+  everything.lines[0].toppings = menu.catalog().pizzaToppings.map((x) => x.id);
+  assert.ok(everything.lines[0].toppings.length > config.order.toppingAdvice,
+    'the pizza topping list must be longer than the advice for this to mean anything');
+  assert.deepStrictEqual(order.validateDraft(everything, config), [],
+    'more toppings than the chef advises is still a valid order');
 });
 
 test('orders route to the station pool matching their kind', () => {
@@ -927,10 +967,20 @@ test('every menu item resolves to a real glyph', () => {
   // never art.js. Importing it here means a syntax error fails the run, and
   // walking the menu means a typo'd icon key does too.
   const c = menu.catalog();
-  const groups = [
-    'pastas', 'sauces', 'proteins', 'toppings', 'sides',
-    'pizzaSauces', 'pizzaCheeses', 'pizzaProteins', 'pizzaToppings',
-  ];
+
+  // Groups that are never drawn as tiles, and so need no artwork. Everything
+  // else in the catalog is checked, whether or not it existed when this test
+  // was written - the previous version named nine groups by hand, which meant
+  // `portions` went years with no art at all (both sizes wore the crossed-out
+  // "none" glyph) and all six burger groups arrived unchecked. A list of what
+  // to skip stays right as the menu grows; a list of what to check does not.
+  const NOT_TILED = ['allergens', 'spice'];
+  NOT_TILED.forEach((g) => assert.ok(Array.isArray(c[g]), g + ' is still a group'));
+
+  const groups = Object.keys(c)
+    .filter((g) => Array.isArray(c[g]) && NOT_TILED.indexOf(g) === -1);
+  assert.ok(groups.length >= 15, 'only ' + groups.length + ' groups found - the scan is broken');
+
   const broken = [];
   groups.forEach((g) => {
     assert.ok(Array.isArray(c[g]), g + ' is a group');
@@ -1627,6 +1677,100 @@ test('every seating area has tents, and every tent has an area', () => {
 
   const ids = config.tags.map((t) => t.id);
   assert.strictEqual(ids.length, new Set(ids).size, 'every tent id is unique');
+});
+
+// ------------------------------------------------------------------- i18n
+
+/**
+ * The guest app is bilingual, and a missing Spanish key does not throw - it
+ * falls through to the English, so a half-translated screen looks right to
+ * whoever wrote it and wrong to the member reading it. Nothing else in this
+ * suite would notice.
+ */
+test('every guest string exists in both languages', () => {
+  const en = Object.keys(STRINGS.en).filter((k) => k.startsWith('guest.'));
+  const es = Object.keys(STRINGS.es).filter((k) => k.startsWith('guest.'));
+
+  assert.deepStrictEqual(
+    en.filter((k) => !(k in STRINGS.es)), [], 'guest keys with no Spanish',
+  );
+  assert.deepStrictEqual(
+    es.filter((k) => !(k in STRINGS.en)), [], 'Spanish keys with no English',
+  );
+});
+
+/**
+ * Keys are looked up by string at render time, so one deleted from under a
+ * caller surfaces as a blank line on a member's phone rather than as an error
+ * anywhere a developer would see it. Read the source and check every literal.
+ *
+ * Only literal t('...') calls can be checked; a computed key is skipped rather
+ * than guessed at. The step and lane tables pass their keys as data, so those
+ * are collected too.
+ */
+function guestSource() {
+  return readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+}
+
+test('every string the guest screen asks for is defined', () => {
+  const src = guestSource();
+  const used = new Set();
+  for (const m of src.matchAll(/\bt\(\s*'([a-z][\w.]*)'/g)) used.add(m[1]);
+  for (const m of src.matchAll(/(?:labelKey|titleKey|subKey|blurbKey):\s*'([a-z][\w.]*)'/g)) {
+    used.add(m[1]);
+  }
+
+  assert.ok(used.size > 40, 'found only ' + used.size + ' keys - the scan is broken, not the app');
+  assert.deepStrictEqual(
+    [...used].filter((k) => !(k in STRINGS.en)).sort(), [],
+    'keys guest.js asks for that have no English string',
+  );
+});
+
+/**
+ * The other direction. An unused string is not a bug, but it is how wording
+ * that no longer matches the screen survives - "pick up to 5 toppings"
+ * outlived the cap it described.
+ */
+/**
+ * Nine strings guest.js stopped asking for before this test existed. Each is a
+ * place where the English was written straight into the markup while the
+ * translation stayed here - so the Spanish ticket screen still reads "Ticket"
+ * and "Show this code if a server asks" in English. Worth fixing, but not as
+ * part of this change; an allowlist keeps the test sharp for the next string
+ * that falls out of use instead of leaving it red forever.
+ *
+ * Shrinking this list is the point. Nothing should ever be added to it.
+ */
+const KNOWN_UNUSED = [
+  'guest.guests.build',
+  'guest.label.has',
+  'guest.member.clear',
+  'guest.member.delete',
+  'guest.review.contains',
+  'guest.review.nextItem',
+  'guest.review.with',
+  'guest.sent.code',
+  'guest.sent.ticket',
+];
+
+test('no guest string is left behind unused', () => {
+  const src = guestSource();
+  const orphans = Object.keys(STRINGS.en)
+    .filter((k) => k.startsWith('guest.'))
+    .filter((k) => !src.includes("'" + k + "'"))
+    .sort();
+
+  assert.deepStrictEqual(
+    orphans.filter((k) => KNOWN_UNUSED.indexOf(k) === -1), [],
+    'guest strings defined but never used',
+  );
+  // The allowlist must not rot either: a string that is back in use should be
+  // taken off the list, not left there to excuse the next one.
+  assert.deepStrictEqual(
+    KNOWN_UNUSED.filter((k) => orphans.indexOf(k) === -1), [],
+    'allowlisted strings that are used again - remove them from KNOWN_UNUSED',
+  );
 });
 
 test('money renders a missing figure as a dash, never as zero', () => {

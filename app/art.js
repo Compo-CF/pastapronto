@@ -309,6 +309,28 @@ var EXTRAS = {
     '<path d="M6 30h52c0 3-1 6-2 8H8c-1-2-2-5-2-8z" fill="#e6ddc9"/>' +
     '<g fill="none" stroke="#e3ad45" stroke-width="4" stroke-linecap="round">' +
     '<path d="M16 28c4-8 10-10 16-6M30 28c4-9 12-10 18-4"/></g>',
+
+  // The portion sizes, which had no artwork at all and so fell through to the
+  // "none" glyph - two tiles reading "Kid Size" and "Regular" under a crossed
+  // circle, which looks exactly like being told neither is available. The same
+  // bowl at three sizes, so the picture carries the meaning the label does.
+  bowl_kid:
+    '<g transform="translate(32 34) scale(0.6) translate(-32 -34)">' +
+    '<path d="M6 30h52c0 14-11 25-26 25S6 44 6 30z" fill="#f4efe4"/>' +
+    '<path d="M6 30h52c0 3-1 6-2 8H8c-1-2-2-5-2-8z" fill="#e6ddc9"/>' +
+    '<g fill="none" stroke="#e3ad45" stroke-width="6" stroke-linecap="round">' +
+    '<path d="M16 28c4-8 10-10 16-6M30 28c4-9 12-10 18-4"/></g></g>',
+  bowl_regular:
+    '<g transform="translate(32 33) scale(0.84) translate(-32 -33)">' +
+    '<path d="M6 30h52c0 14-11 25-26 25S6 44 6 30z" fill="#f4efe4"/>' +
+    '<path d="M6 30h52c0 3-1 6-2 8H8c-1-2-2-5-2-8z" fill="#e6ddc9"/>' +
+    '<g fill="none" stroke="#e3ad45" stroke-width="4.6" stroke-linecap="round">' +
+    '<path d="M16 28c4-8 10-10 16-6M30 28c4-9 12-10 18-4"/></g></g>',
+  bowl_large:
+    '<path d="M3 28h58c0 16-12 28-29 28S3 44 3 28z" fill="#f4efe4"/>' +
+    '<path d="M3 28h58c0 3-1 7-2 9H5c-1-2-2-6-2-9z" fill="#e6ddc9"/>' +
+    '<g fill="none" stroke="#e3ad45" stroke-width="4" stroke-linecap="round">' +
+    '<path d="M14 26c4-9 11-11 18-7M30 26c5-10 13-11 20-4"/></g>',
   pot:
     '<g class="steam" fill="none" stroke="#c9bfb2" stroke-width="4" stroke-linecap="round">' +
     '<path d="M24 20c-3-4 3-7 0-11"/></g>' +
