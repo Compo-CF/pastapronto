@@ -2177,6 +2177,123 @@ test('a held ticket drops to the foot of the lane without vanishing', () => {
     'parked, not lost - an invisible order is a lost order');
 });
 
+// ------------------------------------------------- claiming a ticket
+
+const STATIONS = config.kitchen.stations;
+
+test('a pasta ticket arrives belonging to nobody', () => {
+  // Two pasta ranges, so there is a choice to make and the cooks make it.
+  assert.strictEqual(order.stationsFor(STATIONS, 'pasta').length, 2,
+    'this test only means something while pasta has more than one station');
+
+  assert.strictEqual(order.initialStation(1, STATIONS, true, 'pasta'), null);
+  assert.strictEqual(order.initialStation(2, STATIONS, true, 'pasta'), null);
+
+  // A venue that pinned everything to one station still gets that. The flag
+  // means 'do not spread these around', and leaving them unclaimed would be
+  // the opposite of what it asks for.
+  assert.strictEqual(order.initialStation(1, STATIONS, false, 'pasta'), 'PASTA-1');
+  assert.strictEqual(order.initialStation(2, STATIONS, false, 'pasta'), 'PASTA-1');
+});
+
+test('a kind with one station is stamped with it at once', () => {
+  // Nothing to decide and nobody to decide between, so asking a cook to claim
+  // it would be a tap that could only ever have one answer.
+  assert.strictEqual(order.stationsFor(STATIONS, 'pizza').length, 1);
+  assert.strictEqual(order.initialStation(1, STATIONS, true, 'pizza'), 'PIZZA-1');
+  assert.strictEqual(order.initialStation(9, STATIONS, true, 'burger'), 'GRILL-1');
+});
+
+test('the cook who starts a bowl takes it', () => {
+  const unclaimed = { ...make(), station: null };
+  assert.strictEqual(unclaimed.station, null);
+
+  const patch = order.transitionPatch(unclaimed, 'accept', {
+    sla, station: 'PASTA-2', stations: STATIONS,
+  });
+  assert.strictEqual(patch.station, 'PASTA-2', 'it goes to whoever pressed the button');
+  assert.strictEqual(patch.status, 'cooking', 'and the same tap starts the cooking');
+});
+
+test('a cook who has not said where they are still gets a working ticket', () => {
+  // The fallback is the alternating assignment this used to do at creation,
+  // so a screen left on "All stations" degrades to the old behaviour instead
+  // of leaving the ticket belonging to nobody.
+  const odd = { ...make(), ticketNo: 1, station: null };
+  const even = { ...make(), ticketNo: 2, station: null };
+
+  const a = order.transitionPatch(odd, 'accept', { sla, stations: STATIONS });
+  const b = order.transitionPatch(even, 'accept', { sla, stations: STATIONS });
+
+  assert.strictEqual(a.station, 'PASTA-1');
+  assert.strictEqual(b.station, 'PASTA-2');
+  assert.notStrictEqual(a.station, b.station, 'consecutive tickets still alternate');
+});
+
+test('starting a ticket twice does not move it to another station', () => {
+  // A cook un-starts a ticket by mistake and the other cook restarts it: the
+  // ticket is already somebody's, and the second tap must not quietly hand it
+  // over. Only a ticket with no station at all is up for grabs.
+  const claimed = { ...make(), station: 'PASTA-1', status: 'queued' };
+  const patch = order.transitionPatch(claimed, 'accept', {
+    sla, station: 'PASTA-2', stations: STATIONS,
+  });
+  assert.strictEqual(patch.station, undefined, 'the assignment is left exactly as found');
+});
+
+test('moving a ticket onward never re-assigns it', () => {
+  // Only the tap out of Sent claims. Everything after it is the same cook
+  // carrying on, and a station that changed at the pass would be a ticket
+  // that moved kitchens halfway through being cooked.
+  const claimed = { ...make(), station: 'PASTA-1', status: 'cooking', acceptedAt: new Date().toISOString() };
+  assert.strictEqual(
+    order.transitionPatch(claimed, 'ready', { sla, station: 'PASTA-2', stations: STATIONS }).station,
+    undefined,
+  );
+
+  // And with no station at all, so the assertion rests on which action it is
+  // rather than on the ticket already being spoken for. Testing only the
+  // claimed case passed whether or not 'ready' was treated as a claim.
+  const nobodys = { ...make(), station: null, status: 'cooking', acceptedAt: new Date().toISOString() };
+  assert.strictEqual(
+    order.transitionPatch(nobodys, 'ready', { sla, station: 'PASTA-2', stations: STATIONS }).station,
+    undefined,
+    'finishing a dish is not how a ticket gets a station',
+  );
+});
+
+test('a pizza is claimed by the builder who starts building it', () => {
+  // Pizza has one station today, so this is about the mechanism rather than
+  // the choice: the tap out of Sent is 'build' there, and it claims the same
+  // way 'accept' does on a bowl.
+  const pie = { ...make(pizzaDraft(), { station: null }), kind: 'pizza', station: null };
+  const patch = order.transitionPatch(pie, 'build', { sla, station: 'PIZZA-1', stations: STATIONS });
+  assert.strictEqual(patch.station, 'PIZZA-1');
+  assert.strictEqual(patch.status, 'building');
+});
+
+/**
+ * What a screen filtered to one station shows - order.visibleAtStation(),
+ * which app/kitchen.js calls for every render. The club's request in one
+ * line: new orders at both ranges, and once a cook takes one it is only on
+ * their screen.
+ */
+const visibleAt = (stationId, orders) => order.visibleAtStation(orders, stationId, STATIONS);
+
+test('an unclaimed bowl is on both pasta screens, and a claimed one is on neither but its own', () => {
+  const open = { ...make(), ticketNo: 1, station: null, kind: 'pasta' };
+  const mine = { ...make(), ticketNo: 2, station: 'PASTA-1', kind: 'pasta' };
+  const pie = { ...make(pizzaDraft()), ticketNo: 3, station: null, kind: 'pizza' };
+  const all = [open, mine, pie];
+
+  assert.deepStrictEqual(visibleAt('PASTA-1', all).map((o) => o.ticketNo), [1, 2],
+    'the open bowl and its own');
+  assert.deepStrictEqual(visibleAt('PASTA-2', all).map((o) => o.ticketNo), [1],
+    'the open bowl only - ticket 2 belongs to the other range now');
+  assert.deepStrictEqual(visibleAt('PIZZA-1', all).map((o) => o.ticketNo), [3],
+    'an unclaimed pizza does not appear on a pasta range, or the other way round');
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');

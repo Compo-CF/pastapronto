@@ -497,3 +497,11 @@
 @media (max-width: 1100px) {
   .cline-row dd { font-size: 15px; }
 }
+
+/* A ticket nobody has started. Outlined rather than filled, so it reads as a
+   state the chit is in rather than as the name of a station. */
+.badge-open {
+  background: transparent;
+  border: 1px dashed var(--kmuted);
+  color: var(--kmuted);
+}

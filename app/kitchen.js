@@ -190,8 +190,9 @@ const CATALOG = menu.catalog();
     if (state.role === 'builder' && nightBuilds()) {
       list = list.filter(function (o) { return orderLib.isBuilt(o.kind); });
     }
-    if (!state.station) return list;
-    return list.filter(function (o) { return o.station === state.station; });
+    // The rule lives in order.js, so this rail and the tests that assert it
+    // are reading one definition.
+    return orderLib.visibleAtStation(list, state.station, config.kitchen.stations);
   }
 
   function laneOrders(lane) {
@@ -330,7 +331,12 @@ const CATALOG = menu.catalog();
     if (order.priority === 'allergy') badges.push('<span class="badge badge-allergy">Allergy</span>');
     var kind = order.kind || 'pasta';
     badges.push('<span class="badge badge-kind is-' + kind + '">' + KIND_LABEL[kind] + '</span>');
-    badges.push('<span class="badge badge-station">' + escapeHtml(order.station) + '</span>');
+    // An unclaimed ticket says so rather than showing an empty chip. On a
+    // two-station rail this is the word that tells a cook it is theirs to
+    // take; once somebody starts it, the chip becomes their station.
+    badges.push(order.station
+      ? '<span class="badge badge-station">' + escapeHtml(order.station) + '</span>'
+      : '<span class="badge badge-open">Unclaimed</span>');
     badges.push('<span class="badge badge-guests">' + order.guestCount + ' guests</span>');
     if (order.memberStatus === 'unverified') badges.push('<span class="badge badge-unverified">Member unverified</span>');
     if (order.status === 'held') badges.push('<span class="badge badge-held">On hold</span>');
@@ -472,7 +478,12 @@ const CATALOG = menu.catalog();
 
   async function act(orderId, action) {
     try {
-      await db.transition(orderId, action, { actor: 'kitchen' });
+      await db.transition(orderId, action, {
+        actor: 'kitchen',
+        // Which station this screen is standing at. Null when the cook has
+        // not set one, and order.transitionPatch() falls back from there.
+        station: state.station || null,
+      });
       // No local patching needed: the Firestore listener delivers the new
       // state to this screen and every other one within a few hundred ms.
     } catch (err) {

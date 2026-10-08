@@ -470,7 +470,9 @@ export async function submitOrder(draft, { tagId, queueDepth = 0 } = {}) {
     const built = order.buildOrder(draft, {
       ticketNo,
       claimCode: order.claimCode(),
-      station: order.stationForTicket(
+      // Null where the kind has more than one station: the cook who starts it
+      // claims it. See order.initialStation().
+      station: order.initialStation(
         ticketNo, config.kitchen.stations, config.kitchen.autoAssignStations, kind,
       ),
       queueDepth,
@@ -498,7 +500,9 @@ export async function submitOrder(draft, { tagId, queueDepth = 0 } = {}) {
  * already moved this order, this throws ILLEGAL_TRANSITION instead of
  * clobbering their work. This is the Firestore equivalent of the old 409.
  */
-export async function transition(orderId, action, { actor = 'kitchen', note = '' } = {}) {
+export async function transition(orderId, action, {
+  actor = 'kitchen', note = '', station = null,
+} = {}) {
   await ready();
   const ref = doc(db, 'orders', orderId);
 
@@ -508,7 +512,11 @@ export async function transition(orderId, action, { actor = 'kitchen', note = ''
       throw Object.assign(new Error('Order not found'), { code: 'NOT_FOUND' });
     }
     const current = { id: snap.id, ...snap.data() };
-    const patch = order.transitionPatch(current, action, { actor, note, sla: config.sla });
+    const patch = order.transitionPatch(current, action, {
+      actor, note, sla: config.sla,
+      // Who is taking it, and the list to fall back on if they have not said.
+      station, stations: config.kitchen.stations,
+    });
     tx.update(ref, patch);
     return { ...current, ...patch };
   });

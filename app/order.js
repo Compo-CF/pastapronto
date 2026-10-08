@@ -323,7 +323,13 @@ export function buildOrder(draft, ctx) {
  * machine forbids it. Returns a patch to merge, never a mutated input - the
  * caller decides whether that becomes a Firestore update or a local edit.
  */
-export function transitionPatch(order, action, { actor = 'kitchen', note = '', sla, now = new Date() } = {}) {
+export function transitionPatch(order, action, {
+  actor = 'kitchen', note = '', sla, now = new Date(),
+  // Where the screen taking this action is standing, and the whole station
+  // list for the fallback. Both optional: a screen that does not know either
+  // leaves the assignment exactly as it found it.
+  station = null, stations = null,
+} = {}) {
   const spec = TRANSITIONS[action];
   if (!spec) {
     throw Object.assign(new Error(`Unknown action: ${action}`), { code: 'BAD_ACTION' });
@@ -342,6 +348,22 @@ export function transitionPatch(order, action, { actor = 'kitchen', note = '', s
   if (spec.clears) spec.clears.forEach((field) => { patch[field] = null; });
   if (spec.stamp) patch[spec.stamp] = nowIso;
   if (spec.to) patch.status = spec.to;
+
+  // Whoever starts it, owns it. Only on the way out of Sent, and only if
+  // nobody has it yet - re-opening a ticket and starting it again must not
+  // move it to whichever screen happened to press the button.
+  if (CLAIMING_ACTIONS.includes(action) && !order.station) {
+    if (station) {
+      patch.station = station;
+    } else if (stations) {
+      // A cook who has not told the rail where they are standing still gets a
+      // working ticket; it falls back to the alternating assignment this used
+      // to do at creation.
+      patch.station = stationForTicket(
+        order.ticketNo, stations, true, order.kind || 'pasta',
+      );
+    }
+  }
 
   if (action === 'rush') patch.priority = 'rush';
   if (action === 'accept') patch.acceptedBy = actor;
@@ -532,12 +554,47 @@ export function metrics(orders, sla) {
  * be computed inside the transaction that allocates the number, and with a
  * monotonic sequence it is exact round-robin anyway.
  */
+export function stationsFor(stations, kind) {
+  return stations.filter((s) => (s.kind || 'pasta') === kind);
+}
+
 export function stationForTicket(ticketNo, stations, autoAssign = true, kind = 'pasta') {
-  const eligible = stations.filter((s) => (s.kind || 'pasta') === kind);
+  const eligible = stationsFor(stations, kind);
   if (!eligible.length) return null;
   if (!autoAssign) return eligible[0].id;
   return eligible[(Math.max(1, ticketNo) - 1) % eligible.length].id;
 }
+
+/**
+ * The station a ticket is born at, which for pasta is nowhere yet.
+ *
+ * Where a kind has one station there is nothing to decide, so the ticket is
+ * stamped with it immediately. Where it has two - the club's pasta range -
+ * the ticket arrives unassigned and shows at both, and the cook who starts it
+ * takes it. That is how a kitchen with two cooks and one queue actually works:
+ * whoever has a free pan reaches for the next ticket.
+ *
+ * Deciding it up front by round-robin looked like load balancing and was not.
+ * It handed every other ticket to a cook who might be buried, while the one
+ * standing idle watched it sit in a column they could see and could not take.
+ */
+export function initialStation(ticketNo, stations, autoAssign = true, kind = 'pasta') {
+  const eligible = stationsFor(stations, kind);
+  if (!eligible.length) return null;
+  // A venue that turned auto-assignment off wants everything pinned to one
+  // station, and that is still what it gets - leaving those tickets for a cook
+  // to claim would be the opposite of what the flag asks for.
+  if (!autoAssign) return eligible[0].id;
+  if (eligible.length === 1) return eligible[0].id;
+  return null;
+}
+
+/**
+ * Actions that claim an unassigned ticket: the first one that moves it out of
+ * Sent. There is no separate "take it" tap, by the club's instruction - the
+ * tap that starts the work is the tap that says whose work it is.
+ */
+const CLAIMING_ACTIONS = ['accept', 'build'];
 
 /**
  * Change an order that already exists, and record what changed.
@@ -685,6 +742,27 @@ export function workOrder(orders) {
     const rank = (x) => (x.priority === 'rush' ? 0 : 1);
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
     return new Date(a.submittedAt) - new Date(b.submittedAt);
+  });
+}
+
+/**
+ * Which tickets belong on a screen filtered to one station.
+ *
+ * The club's whole request in one rule: a ticket nobody has started belongs to
+ * every station that could cook it, so both pasta cooks see it and either can
+ * take it; a ticket somebody has started belongs to them alone, and leaves the
+ * other screen the moment they take it.
+ *
+ * Pure and exported so the rail and the test are reading one rule rather than
+ * two copies of it that have to be kept in step.
+ */
+export function visibleAtStation(orders, stationId, stations) {
+  if (!stationId) return orders.slice();
+  const station = stations.find((s) => s.id === stationId);
+  const cooks = station ? (station.kind || 'pasta') : null;
+  return orders.filter((o) => {
+    if (!o.station) return cooks !== null && cooks === (o.kind || 'pasta');
+    return o.station === stationId;
   });
 }
 
