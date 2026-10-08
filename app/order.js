@@ -236,7 +236,13 @@ export function buildLine(line, i, kind) {
   if (kind === 'pizza') {
     // No portion (every pizza is the same size), no protein or sides - meats
     // are just toppings on a pizza - and no spice level.
-    return { ...common, cheeses: menu.cheesesOf(line) };
+    //
+    // The crust IS carried, and this line is the reason to say so: it was
+    // written when there was only one, so when the gluten-free and dessert
+    // bases arrived the choice was made on the phone, shown on the review
+    // screen, and then dropped on the way to the kitchen. The chit said
+    // '12" Classic' for a pie somebody ordered gluten free.
+    return { ...common, base: line.base || 'classic', cheeses: menu.cheesesOf(line) };
   }
 
   return {

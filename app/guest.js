@@ -10,7 +10,10 @@
  *            a compact review, for adults and staff taking an order
  */
 import { config, tagById, isOpen, kindsForNight, nightById } from './config.js';
-import { catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine, GROUPS_FOR, crustOf } from './menu.js';
+import {
+  catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine,
+  GROUPS_FOR, crustOf, crustBlocks, crustSkips,
+} from './menu.js';
 import * as i18n from './i18n.js';
 import * as cooktime from './cooktime.js';
 import * as order from './order.js';
@@ -101,6 +104,16 @@ import {
     },
   };
 
+  /** What to call a bowl nobody has named yet. */
+  function defaultLabel(i) {
+    return 'Guest ' + (i + 1);
+  }
+
+  /** The name to show for a bowl: what they typed, or the suggestion. */
+  function labelOf(bowl, i) {
+    return (bowl && bowl.guestLabel) || defaultLabel(i);
+  }
+
   function lane() {
     return LANES[state.kind] || LANES.pasta;
   }
@@ -147,8 +160,29 @@ import {
     return 'lane';
   }
 
+  /**
+   * The steps this particular item needs.
+   *
+   * A dessert pizza is never asked about cheese or meat, because there is no
+   * answer to either that anyone would want - showing the question with one
+   * greyed-out answer would be worse than not asking. The list is therefore
+   * per-item rather than per-kind, and anything that indexes into it has to
+   * cope with it getting shorter underneath them.
+   */
   function steps() {
-    return STEPS[state.kind] || STEPS.pasta;
+    var list = STEPS[state.kind] || STEPS.pasta;
+    var bowl = state.bowls[state.activeBowl];
+    if (!bowl) return list;
+    var skip = crustSkips(bowl);
+    if (!skip.length) return list;
+    return list.filter(function (st) { return skip.indexOf(st.id) === -1; });
+  }
+
+  /** Keep the step pointer inside the list after it changes length. */
+  function clampStep() {
+    var last = steps().length - 1;
+    if (state.buildStep > last) state.buildStep = last;
+    if (state.buildStep < 0) state.buildStep = 0;
   }
 
   /**
@@ -214,7 +248,11 @@ import {
 
   function newBowl(index) {
     var base = {
-      guestLabel: 'Guest ' + (index + 1),
+      // Empty, not "Guest 1". The box shows that as a placeholder instead, so
+      // a member tapping into it finds it empty rather than having to select
+      // and delete a word the app put there. Anything still blank at send
+      // becomes "Guest N" again in order.buildLine().
+      guestLabel: '',
       kind: state.kind,
       sauces: [],
       proteins: [],
@@ -566,7 +604,7 @@ import {
     var tabs = state.bowls.map(function (b, i) {
       return html`<button class="bowltab ${bowlComplete(b) ? 'is-done' : ''}" type="button"
         data-act="gotoBowl" data-id="${i}" aria-current="${i === state.activeBowl ? 'true' : 'false'}">
-        ${b.guestLabel}
+        ${labelOf(b, i)}
         <small>${bowlComplete(b) ? t('guest.tabs.ready') : t('guest.tabs.building')}</small>
       </button>`;
     });
@@ -583,12 +621,20 @@ import {
     else if (step.id === 'sauces') {
       body = tileGrid(step.group, {
         act: 'toggleSauce', value: bowl.sauces, multi: true,
-        blocked: groupRules(step.group, bowl.sauces).blocked,
+        // Two sets of rules land on the same tiles: what the group itself
+        // forbids ("Heavy" needs a sauce under it) and what the crust forbids
+        // (a dessert pizza takes Nutella and nothing else). Merged rather
+        // than chosen between, because both are true at once.
+        blocked: Object.assign(
+          {}, groupRules(step.group, bowl.sauces).blocked, crustBlocks(step.group, bowl),
+        ),
       });
     } else if (step.id === 'cheeses') {
       body = tileGrid(step.group, {
         act: 'toggleCheese', value: bowl.cheeses, multi: true,
-        blocked: groupRules(step.group, bowl.cheeses).blocked,
+        blocked: Object.assign(
+          {}, groupRules(step.group, bowl.cheeses).blocked, crustBlocks(step.group, bowl),
+        ),
       });
     } else if (SINGLE_INTO_ARRAY[step.group]) {
       var field = SINGLE_INTO_ARRAY[step.group];
@@ -631,12 +677,16 @@ import {
       <div class="bowltabs">${tabs}</div>
       ${raw(hero)}
       <div class="step-head">
-        <p class="step-kicker">${lane().one[0].toUpperCase() + lane().one.slice(1)} ${state.activeBowl + 1} of ${state.bowls.length} &middot; ${bowl.guestLabel}</p>
+        <p class="step-kicker">${lane().one[0].toUpperCase() + lane().one.slice(1)} ${state.activeBowl + 1} of ${state.bowls.length} &middot; ${labelOf(bowl, state.activeBowl)}</p>
         <h1 class="step-title">${t(step.titleKey)}</h1>
         <p class="step-sub">${sub}</p>
       </div>
       <div class="buildsteps">${stepTabs}</div>
       ${raw(body)}`;
+  }
+
+  function toppingGroupOf(bowl) {
+    return (GROUPS_FOR[bowl.kind] || {}).toppings || 'toppings';
   }
 
   /**
@@ -666,7 +716,10 @@ import {
     // pizza-or-not check was fine while there were two lanes and put pasta
     // toppings on a burger the moment there were three.
     var group = (GROUPS_FOR[state.kind] || {}).toppings || 'toppings';
-    var grid = tileGrid(group, { act: 'toggleTopping', value: bowl.toppings, multi: true, small: true });
+    var grid = tileGrid(group, {
+      act: 'toggleTopping', value: bowl.toppings, multi: true, small: true,
+      blocked: crustBlocks(group, bowl),
+    });
 
     // A running count only, with no ceiling to run into. The advice lives in
     // the step subtitle; repeating it here as "7 of 10" would read like a
@@ -696,7 +749,7 @@ import {
       <div class="field">
         <label for="whoName">${t('guest.who.label', { unit: lane().one })}</label>
         <input class="input" id="whoName" type="text" maxlength="24" value="${bowl.guestLabel}"
-          data-act="setName" placeholder="${t('guest.who.name')}">
+          data-act="setName" placeholder="${defaultLabel(state.activeBowl)}">
       </div>
       <div class="field">
         <label for="bowlNotes">${t('guest.who.notes')}</label>
@@ -729,7 +782,10 @@ import {
       var toppingGroup = bowlGroups.toppings;
 
       var extras = [];
-      if (bowl.toppings.length) {
+      // A pizza's dish line already names its toppings, so repeating them
+      // here printed them twice - easy to miss on a pie with one topping and
+      // impossible to miss on a dessert pizza with three.
+      if (bowl.toppings.length && !isPizza) {
         extras.push('with ' + bowl.toppings.map(function (t) {
           return (item(toppingGroup, t) || {}).name || t;
         }).join(', '));
@@ -767,7 +823,7 @@ import {
       return html`<div class="bowl">
         ${raw(artCell)}
         <div class="grow">
-          <div class="bowl-who">${bowl.guestLabel}</div>
+          <div class="bowl-who">${labelOf(bowl, i)}</div>
           <div class="bowl-dish">${dishText(bowl)}</div>
           <div class="bowl-extras">${extras.filter(Boolean).join(' · ')}</div>
         </div>
@@ -1216,6 +1272,9 @@ import {
       // classic does not leave Nutella on a pepperoni pizza.
       if (field === 'base') applyBaseDefaults(bowl, bowl[field], el.dataset.id);
       bowl[field] = el.dataset.id;
+      // A dessert crust removes the cheese and meat steps, so the pointer can
+      // be left past the end of a list that just got shorter.
+      if (field === 'base') clampStep();
       // Tapping a choice moves you on - fewer buttons for a child to hunt for.
       // Except on the finish step, where the name and the note sit below the
       // tiles: advancing from there carried the guest straight out of a screen
@@ -1275,11 +1334,17 @@ import {
       var id = el.dataset.id;
       var i = bowl.toppings.indexOf(id);
       if (i !== -1) bowl.toppings.splice(i, 1);
-      else bowl.toppings.push(id);
+      // The tile is disabled in the markup, but the handler checks too: a
+      // screen and a rule that disagree is how a guest builds something the
+      // kitchen will refuse.
+      else if (!crustBlocks(toppingGroupOf(bowl), bowl)[id]) bowl.toppings.push(id);
       render({ keepScroll: true });
     },
 
     gotoBowl: function (el) {
+      // Back to the first step, which is safe whatever the new bowl's step
+      // list looks like - one may be a dessert pizza with two fewer steps
+      // than the one being left.
       state.activeBowl = Number(el.dataset.id);
       state.buildStep = 0;
       render();
@@ -1309,7 +1374,10 @@ import {
     },
 
     setName: function (el) {
-      currentBowl().guestLabel = el.value.trim() || 'Guest ' + (state.activeBowl + 1);
+      // Left blank on purpose stays blank here; the fallback happens once, at
+      // the point the ticket is built, so the box never refills itself under
+      // someone who has just cleared it.
+      currentBowl().guestLabel = el.value.trim();
     },
     setNotes: function (el) { currentBowl().notes = el.value; },
     setOrderNotes: function (el) { state.orderNotes = el.value; },

@@ -116,22 +116,73 @@ export const PIZZA_CRUSTS = [
     // Longer in the oven: a gluten-free base needs the extra time to set.
     icon: 'crust_gf', allergens: [], bakeSec: 480, kid: true, glutenFree: true,
   },
+  // The two dessert bases. `dessert: true` is what the rest of the file reads:
+  // it decides which sauces and toppings are offered, and which steps a guest
+  // is asked at all. A dessert pizza is not a normal pizza with sweet things
+  // on it - there is no cheese question and no meat question, because there is
+  // no answer to either that anyone would want.
   {
     id: 'pz_dessert',
     name: 'Dessert Pizza', es: 'Pizza de Postre',
     icon: 'pizza_dessert', allergens: ['gluten'], bakeSec: 360, kid: true,
-    // What picking this crust fills in for you. The guest can turn any of it
-    // off again - it is a starting point, not a fixed recipe. Savoury sauce
-    // and cheese are set to their "no" answers rather than left blank, so a
-    // dessert pie does not arrive at the pass with marinara on it because
-    // nobody thought to say otherwise.
+    dessert: true,
+    // Nutella is the sauce and it is the only one, so it is set here and the
+    // rules below leave nothing else selectable. Strawberries and powdered
+    // sugar come ticked; the guest can take either off, and add pineapple.
     defaults: {
-      toppings: ['pz_nutella', 'pz_strawberry', 'pz_powdered_sugar'],
-      sauces: ['pz_no_sauce'],
+      sauces: ['pz_nutella'],
       cheeses: ['pz_no_cheese'],
+      toppings: ['pz_strawberry', 'pz_powdered_sugar'],
+    },
+  },
+  {
+    id: 'pz_gf_dessert',
+    name: 'Gluten Free Dessert Pizza', es: 'Pizza de Postre Sin Gluten',
+    icon: 'crust_gf_dessert', allergens: [], bakeSec: 420, kid: true,
+    dessert: true, glutenFree: true,
+    defaults: {
+      sauces: ['pz_nutella'],
+      cheeses: ['pz_no_cheese'],
+      toppings: ['pz_strawberry', 'pz_powdered_sugar'],
     },
   },
 ];
+
+/**
+ * What a crust rules out, as {id: reason} - the same shape the guest tiles
+ * already use to grey something out.
+ *
+ * Two rules, one sentence each:
+ *   - a dessert pizza offers only what belongs on a dessert pizza
+ *   - a savoury pizza offers nothing that belongs only on a dessert one
+ *
+ * `dessert: true` on an item means dessert-only. `dessertOk: true` means it
+ * works on either, which today is pineapple and nothing else. Both the screen
+ * and validateLine() read this, so what is greyed out and what the database
+ * refuses cannot drift apart.
+ */
+export function crustBlocks(group, line) {
+  const onDessert = Boolean(crustOf(line).dessert);
+  const out = {};
+  (GROUPS[group] || []).forEach((x) => {
+    const dessertOnly = Boolean(x.dessert);
+    const allowedOnDessert = dessertOnly || Boolean(x.dessertOk);
+    if (onDessert && !allowedOnDessert) out[x.id] = 'not on a dessert pizza';
+    if (!onDessert && dessertOnly) out[x.id] = 'dessert pizza only';
+  });
+  return out;
+}
+
+/**
+ * Steps a crust makes pointless.
+ *
+ * A dessert pizza has no cheese worth asking about and no meat at all, so the
+ * guest is never shown either question rather than being shown one with a
+ * single greyed-out answer.
+ */
+export function crustSkips(line) {
+  return crustOf(line).dessert ? ['cheeses', 'proteins'] : [];
+}
 
 /** The crust a line was built on, falling back for orders taken before the
  *  crust was a choice - they were all classic. */
@@ -163,6 +214,9 @@ const PIZZA_SAUCES = [
   { id: 'pz_alfredo',     name: 'Alfredo Sauce', es: 'Salsa Alfredo',       icon: 'cream',  allergens: ['dairy'], kid: true },
   { id: 'pz_pesto',       name: 'Basil Pesto', es: 'Pesto de Albahaca',         icon: 'herb',   allergens: ['dairy', 'tree_nuts'], kid: false },
   { id: 'pz_bbq',         name: 'BBQ Sauce', es: 'Salsa BBQ',           icon: 'bbq',    allergens: [], kid: true },
+  // The dessert sauce. It is the only one a dessert pizza offers, and it is
+  // offered on nothing else.
+  { id: 'pz_nutella',     name: 'Nutella', es: 'Nutella',               icon: 'nutella', allergens: ['dairy', 'tree_nuts'], kid: true, dessert: true },
   { id: 'pz_no_sauce',    name: 'No Sauce', es: 'Sin Salsa',            icon: 'sauce_none',   allergens: [], kid: true, exclusive: true },
   { id: 'pz_sauce_light', name: 'Light Sauce', es: 'Poca Salsa',         icon: 'sauce_light',   allergens: [], kid: true, amount: 'light' },
   { id: 'pz_sauce_heavy', name: 'Heavy Sauce', es: 'Extra Salsa',         icon: 'sauce_heavy',   allergens: [], kid: true, amount: 'heavy' },
@@ -195,7 +249,8 @@ const PIZZA_PROTEINS = [
 // basil and arugula would wilt to nothing and the flakes would scorch - so
 // they cost no oven time, exactly the way a finisher does.
 const PIZZA_TOPPINGS = [
-  { id: 'pineapple',    name: 'Pineapple', es: 'Piña',                icon: 'pineapple', addSec: 10, allergens: [], kid: true },
+  // The one thing on this list that belongs on either kind of pizza.
+  { id: 'pineapple',    name: 'Pineapple', es: 'Piña',                icon: 'pineapple', addSec: 10, allergens: [], kid: true, dessertOk: true },
   { id: 'pz_olives',    name: 'Olives', es: 'Aceitunas',                   icon: 'olive',     addSec: 5,  allergens: [], kid: false },
   { id: 'pz_mushroom',  name: 'Mushrooms', es: 'Champiñones',                icon: 'mushroom',  addSec: 15, allergens: [], kid: false },
   { id: 'pz_pepper',    name: 'Bell Peppers', es: 'Pimientos',             icon: 'pepper',    addSec: 10, allergens: [], kid: false },
@@ -205,9 +260,8 @@ const PIZZA_TOPPINGS = [
   { id: 'jalapeno',     name: 'Fresh Jalapenos', es: 'Jalapeños Frescos',          icon: 'jalapeno',     addSec: 5,  allergens: [], spicy: true, kid: false },
   // Dessert toppings. All three go on after the bake, so they add no oven
   // time - the same reason the herbs below do not.
-  { id: 'pz_nutella',   name: 'Nutella', es: 'Nutella',                  icon: 'nutella',   addSec: 0,  allergens: ['dairy', 'tree_nuts'], kid: true, postBake: true },
-  { id: 'pz_strawberry', name: 'Strawberries', es: 'Fresas',             icon: 'strawberry', addSec: 0, allergens: [], kid: true, postBake: true },
-  { id: 'pz_powdered_sugar', name: 'Powdered Sugar', es: 'Azúcar Glas',  icon: 'sugar',     addSec: 0,  allergens: [], kid: true, postBake: true },
+  { id: 'pz_strawberry', name: 'Strawberries', es: 'Fresas',             icon: 'strawberry', addSec: 0, allergens: [], kid: true, postBake: true, dessert: true },
+  { id: 'pz_powdered_sugar', name: 'Powdered Sugar', es: 'Azúcar Glas',  icon: 'sugar',     addSec: 0,  allergens: [], kid: true, postBake: true, dessert: true },
   { id: 'pz_basil',     name: 'Basil', es: 'Albahaca',                    icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
   { id: 'pz_arugula',   name: 'Arugula', es: 'Arúgula',                  icon: 'spinach',   addSec: 0,  allergens: [], kid: false, postBake: true },
   { id: 'pz_chili',     name: 'Red Pepper Flakes', es: 'Hojuelas de Chile',        icon: 'flakes',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
@@ -654,6 +708,23 @@ export function validateLine(line, limits) {
     if (limits.maxCheesesPerPizza && cheeseRule.bases.length > limits.maxCheesesPerPizza) {
       errors.push('Up to ' + limits.maxCheesesPerPizza + ' cheeses per pizza.');
     }
+
+    if (!find('pizzaCrusts', line.base || 'classic')) errors.push('Pick a crust.');
+
+    // What the crust rules out, checked here as well as greyed out on the
+    // screen. Both read crustBlocks(), so a dessert pizza carrying marinara
+    // is refused for the same reason the tile would not let you pick it -
+    // and a screen and a validator that disagree is how a guest builds
+    // something the kitchen then rejects.
+    [['pizzaSauces', saucesOf(line)], ['pizzaToppings', line.toppings || []]]
+      .forEach(([group, chosen]) => {
+        const blocked = crustBlocks(group, line);
+        if (chosen.some((id) => blocked[id])) {
+          errors.push(crustOf(line).dessert
+            ? 'That does not go on a dessert pizza.'
+            : 'That is for a dessert pizza only.');
+        }
+      });
 
     // No topping cap, by the club's instruction. The guest screen offers
     // advice at config.order.toppingAdvice and nothing here contradicts it: a

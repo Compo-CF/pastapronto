@@ -81,6 +81,62 @@ const make = (d = draft(), ctx = {}) => ({
 
 console.log('\nPastaPresto self-test\n');
 
+/**
+ * Every choice a guest makes has to reach the kitchen.
+ *
+ * The crust was dropped here once. buildLine() was written when a pizza had
+ * exactly one crust, so when the gluten-free and dessert bases arrived the
+ * choice was offered on the phone, confirmed on the review screen, and then
+ * quietly replaced with the classic one on the way to the pass - a pie
+ * somebody ordered gluten free printed as 12" Classic. Every crust test
+ * passed throughout, because every one of them built its line by hand with
+ * the base already set, and so never went through the function that lost it.
+ *
+ * This walks each kind's own groups rather than naming fields, so the next
+ * field added to a line is covered the day it is added.
+ */
+test('every choice a guest makes survives into the ticket', () => {
+  const cases = {
+    pizza: {
+      kind: 'pizza', base: 'pz_gf_dessert', sauces: ['pz_nutella'],
+      cheeses: ['pz_no_cheese'], proteins: [], toppings: ['pz_strawberry'],
+    },
+    pasta: {
+      kind: 'pasta', pasta: 'shells', sauces: ['marinara'], proteins: ['chicken'],
+      toppings: ['parmesan'], sides: ['garlic_bread'], portion: 'kid', spice: 'mild',
+    },
+    burger: {
+      kind: 'burger', base: 'bun_gf', proteins: ['beef_single'], cheeses: ['bc_cheddar'],
+      toppings: [], sauces: [], sides: [],
+    },
+  };
+
+  Object.entries(cases).forEach(([kind, chosen]) => {
+    const built = order.buildLine({ ...chosen, guestLabel: 'Ada', notes: '' }, 0, kind);
+
+    // The slots this kind actually uses, from the menu's own map.
+    Object.keys(menu.GROUPS_FOR[kind]).forEach((slot) => {
+      if (!(slot in chosen)) return;
+      assert.deepStrictEqual(built[slot], chosen[slot],
+        kind + ' lost its ' + slot + ' on the way to the kitchen');
+    });
+
+    // And the scalars that are not groups.
+    ['pasta', 'portion'].forEach((field) => {
+      if (field in chosen) assert.strictEqual(built[field], chosen[field], kind + '.' + field);
+    });
+  });
+
+  // The case that made this matter: a gluten free order must not reach a cook
+  // described as the house dough.
+  const pie = order.buildLine(cases.pizza, 0, 'pizza');
+  assert.strictEqual(menu.crustOf(pie).id, 'pz_gf_dessert');
+  assert.ok(!menu.allergensFor(pie).includes('gluten'),
+    'the built line is still gluten free');
+  assert.ok(/Gluten Free Dessert Pizza/.test(pie.dish),
+    'and the chit says so: ' + pie.dish);
+});
+
 test('building an order leaves the draft it was given untouched', () => {
   // The guest screen keeps its bowls after sending and offers "Same again",
   // which re-submits the very same objects. That only works while buildOrder
@@ -584,7 +640,12 @@ test('a pizza may be piled as high as the member likes', () => {
   // actually be exceeded - and must still be accepted. If the advice ever
   // grows past the menu, this stops proving anything and says so.
   const everything = pizzaDraft();
-  everything.lines[0].toppings = menu.catalog().pizzaToppings.map((x) => x.id);
+  // Everything this crust offers - strawberries and powdered sugar belong to
+  // a dessert pizza and are refused on a savoury one, which is a different
+  // rule and has its own test.
+  const allowed = menu.crustBlocks('pizzaToppings', everything.lines[0]);
+  everything.lines[0].toppings = menu.catalog().pizzaToppings
+    .filter((x) => !allowed[x.id]).map((x) => x.id);
   assert.ok(everything.lines[0].toppings.length > config.order.toppingAdvice,
     'the pizza topping list must be longer than the advice for this to mean anything');
   assert.deepStrictEqual(order.validateDraft(everything, config), [],
@@ -1198,8 +1259,12 @@ test('menu catalog exposes every group the screens render', () => {
   ['allergens', 'pastas', 'sauces', 'proteins', 'toppings', 'sides', 'portions', 'spice',
     'pizzaSauces', 'pizzaCheeses', 'pizzaToppings', 'pizzaCrusts']
     .forEach((k) => assert.ok(Array.isArray(c[k]) && c[k].length, k + ' present'));
-  assert.strictEqual(c.pizzaSauces.length, 7, 'four sauces, no-sauce, light, heavy');
-  assert.strictEqual(c.pizzaCheeses.length, 6, 'three cheeses, no-cheese, light, heavy');
+  // Counted by what they are rather than written down: a sauce list that grew
+  // by one (Nutella) should not fail a test about the shape of the list.
+  const modifiers = (g) => c[g].filter((x) => x.exclusive || x.amount).length;
+  assert.strictEqual(modifiers('pizzaSauces'), 3, 'no-sauce, light, heavy');
+  assert.strictEqual(modifiers('pizzaCheeses'), 3, 'no-cheese, light, heavy');
+  assert.ok(c.pizzaSauces.length - modifiers('pizzaSauces') >= 4, 'at least four real sauces');
   // The crust is a choice now - classic, gluten free, dessert - and every
   // one of them has to name a bake time, because that is what the oven clock
   // is built from.
@@ -1348,6 +1413,7 @@ test('food cost percentage needs a charge, and refuses to invent one', () => {
 });
 
 test('nothing on the cost sheet can be priced twice', () => {
+  const c2 = menu.catalog();
   const rows = costing.costRows();
   const ids = costing.costableIds();
   assert.strictEqual(ids.length, new Set(ids).size, 'every row is its own ingredient');
@@ -1356,8 +1422,12 @@ test('nothing on the cost sheet can be priced twice', () => {
 
   // "No Sauce" buys nothing and "Heavy Sauce" is a multiplier on a sauce that
   // already has a row, so neither gets a price box.
-  assert.strictEqual(group('pizzaSauces').items.length, 4, 'four real sauces out of seven tiles');
-  assert.strictEqual(group('pizzaCheeses').items.length, 3, 'three real cheeses out of six tiles');
+  // Every tile that is a thing you buy, and none of the tiles that are not.
+  const real = (g) => c2[g].filter((x) => !x.exclusive && !x.amount).length;
+  assert.strictEqual(group('pizzaSauces').items.length, real('pizzaSauces'));
+  assert.strictEqual(group('pizzaCheeses').items.length, real('pizzaCheeses'));
+  assert.ok(group('pizzaSauces').items.some((i) => i.id === 'pz_nutella'),
+    'the dessert sauce is bought by the case like any other');
   assert.ok(!ids.includes('pz_no_sauce') && !ids.includes('pz_cheese_heavy'));
 
   // The crust is bought by the case like anything else, so it must be priceable
@@ -2349,30 +2419,105 @@ test('the crust decides how long the pie is in the oven', () => {
   assert.ok(of('pz_dessert') < of('classic'), 'a dessert pie is quicker');
 });
 
-test('a dessert pizza arrives already built, and can be taken apart', () => {
-  const dessert = menu.PIZZA_CRUSTS.find((c) => c.id === 'pz_dessert');
-  assert.ok(dessert.defaults, 'picking it has to fill something in');
+test('both dessert crusts arrive already built, the same way', () => {
+  const dessertCrusts = menu.PIZZA_CRUSTS.filter((c) => c.dessert);
+  assert.strictEqual(dessertCrusts.length, 2, 'dessert, and gluten free dessert');
 
-  // Exactly what the club asked for, and nothing else.
-  assert.deepStrictEqual(dessert.defaults.toppings,
-    ['pz_nutella', 'pz_strawberry', 'pz_powdered_sugar']);
-  // Savoury answers are set, not left blank, so a dessert pie cannot reach
-  // the pass with marinara on it because nobody said otherwise.
-  assert.deepStrictEqual(dessert.defaults.sauces, ['pz_no_sauce']);
-  assert.deepStrictEqual(dessert.defaults.cheeses, ['pz_no_cheese']);
+  dessertCrusts.forEach((crust) => {
+    assert.ok(crust.defaults, crust.name + ' has to fill something in');
+    // Nutella is the sauce and the only one. Strawberries and powdered sugar
+    // come ticked; pineapple is offered but not assumed.
+    assert.deepStrictEqual(crust.defaults.sauces, ['pz_nutella'], crust.name);
+    assert.deepStrictEqual(crust.defaults.toppings,
+      ['pz_strawberry', 'pz_powdered_sugar'], crust.name);
+    assert.deepStrictEqual(crust.defaults.cheeses, ['pz_no_cheese'], crust.name);
 
-  // Every id it names must be real, or the screen pre-selects nothing and
-  // says nothing about it.
-  dessert.defaults.toppings.forEach((id) => assert.ok(menu.find('pizzaToppings', id), id));
-  dessert.defaults.sauces.forEach((id) => assert.ok(menu.find('pizzaSauces', id), id));
-  dessert.defaults.cheeses.forEach((id) => assert.ok(menu.find('pizzaCheeses', id), id));
+    // Every id it names must be real, or the screen pre-selects nothing and
+    // says nothing about it.
+    crust.defaults.sauces.forEach((id) => assert.ok(menu.find('pizzaSauces', id), id));
+    crust.defaults.toppings.forEach((id) => assert.ok(menu.find('pizzaToppings', id), id));
+    crust.defaults.cheeses.forEach((id) => assert.ok(menu.find('pizzaCheeses', id), id));
+  });
 
-  // And a guest can turn the lot off: a bare dessert crust is a valid order.
-  const stripped = {
-    kind: 'pizza', base: 'pz_dessert', sauces: ['pz_no_sauce'],
-    cheeses: ['pz_no_cheese'], proteins: [], toppings: [],
+  // One of the two is gluten free, which is the whole reason there are two.
+  assert.ok(dessertCrusts.some((c) => c.allergens.length === 0));
+  assert.ok(dessertCrusts.some((c) => c.allergens.includes('gluten')));
+});
+
+test('a dessert pizza offers only what belongs on one', () => {
+  const dessert = { kind: 'pizza', base: 'pz_dessert' };
+  const open = (group, line) => menu.catalog()[group]
+    .filter((x) => !menu.crustBlocks(group, line)[x.id])
+    .map((x) => x.id);
+
+  // Nutella, and nothing else at all - not even "No Sauce".
+  assert.deepStrictEqual(open('pizzaSauces', dessert), ['pz_nutella']);
+
+  // Strawberries, powdered sugar and pineapple. Pineapple because it is the
+  // one thing on the savoury list that belongs on either.
+  assert.deepStrictEqual(open('pizzaToppings', dessert).sort(),
+    ['pineapple', 'pz_powdered_sugar', 'pz_strawberry']);
+
+  // And the two questions a dessert pizza has no answer to are never asked.
+  assert.deepStrictEqual(menu.crustSkips(dessert), ['cheeses', 'proteins']);
+});
+
+test('the validator refuses what the screen greys out', () => {
+  // The screen and the validator read one rule. If they ever disagreed, a
+  // guest would build something the tiles allowed and then be refused at
+  // send with no way to see why.
+  const dessert = (over = {}) => ({
+    kind: 'pizza', base: 'pz_dessert', sauces: ['pz_nutella'],
+    cheeses: ['pz_no_cheese'], proteins: [], toppings: [], ...over,
+  });
+
+  assert.deepStrictEqual(menu.validateLine(dessert(), config.order), [],
+    'the default dessert pizza is a valid order');
+  assert.deepStrictEqual(
+    menu.validateLine(dessert({ toppings: ['pz_strawberry', 'pz_powdered_sugar', 'pineapple'] }), config.order),
+    [], 'and so is one with all three of the things it may have');
+
+  // Marinara on a dessert pizza, and mushrooms on one.
+  assert.ok(menu.validateLine(dessert({ sauces: ['pz_marinara'] }), config.order)
+    .some((e) => /dessert pizza/.test(e)));
+  assert.ok(menu.validateLine(dessert({ toppings: ['pz_mushroom'] }), config.order)
+    .some((e) => /dessert pizza/.test(e)));
+
+  // And the other way: dessert things on a savoury pie.
+  const savoury = (over = {}) => ({
+    kind: 'pizza', base: 'classic', sauces: ['pz_marinara'],
+    cheeses: ['pz_no_cheese'], proteins: [], toppings: [], ...over,
+  });
+  assert.deepStrictEqual(menu.validateLine(savoury(), config.order), []);
+  assert.ok(menu.validateLine(savoury({ sauces: ['pz_nutella'] }), config.order).length);
+  assert.ok(menu.validateLine(savoury({ toppings: ['pz_strawberry'] }), config.order).length);
+  assert.deepStrictEqual(menu.validateLine(savoury({ toppings: ['pineapple'] }), config.order), [],
+    'pineapple is the one thing allowed on both');
+});
+
+test('a gluten free dessert pizza is both things at once', () => {
+  const line = {
+    kind: 'pizza', base: 'pz_gf_dessert', sauces: ['pz_nutella'],
+    cheeses: ['pz_no_cheese'], proteins: [], toppings: ['pz_strawberry'],
   };
-  assert.deepStrictEqual(menu.validateLine(stripped, config.order), []);
+  assert.deepStrictEqual(menu.validateLine(line, config.order), []);
+  assert.ok(!menu.allergensFor(line).includes('gluten'), 'the crust is gluten free');
+  assert.ok(menu.allergensFor(line).includes('tree_nuts'), 'the Nutella still is not');
+  assert.deepStrictEqual(menu.crustSkips(line), ['cheeses', 'proteins']);
+  assert.ok(/Gluten Free Dessert Pizza/.test(menu.describe(line, 'en')));
+});
+
+test('a savoury pizza offers nothing that belongs only on a dessert', () => {
+  const classic = { kind: 'pizza', base: 'classic' };
+  const blocked = (group) => Object.keys(menu.crustBlocks(group, classic)).sort();
+
+  assert.deepStrictEqual(blocked('pizzaSauces'), ['pz_nutella'],
+    'Nutella is not a pizza sauce on a savoury pie');
+  assert.deepStrictEqual(blocked('pizzaToppings'), ['pz_powdered_sugar', 'pz_strawberry']);
+
+  // Pineapple stays available on both, which is the point of marking it.
+  assert.ok(!menu.crustBlocks('pizzaToppings', classic).pineapple);
+  assert.deepStrictEqual(menu.crustSkips(classic), [], 'a savoury pie is asked everything');
 });
 
 test('the dessert toppings cost no oven time', () => {
@@ -2384,9 +2529,12 @@ test('the dessert toppings cost no oven time', () => {
 });
 
 test('nutella carries its allergens onto the pie', () => {
+  // It is the sauce now, not a topping - and it still has to reach the
+  // allergen line, because hazelnut spread on a nut allergy is the case this
+  // whole mechanism exists for.
   const pie = {
-    kind: 'pizza', base: 'pz_dessert', sauces: ['pz_no_sauce'],
-    cheeses: ['pz_no_cheese'], proteins: [], toppings: ['pz_nutella'],
+    kind: 'pizza', base: 'pz_dessert', sauces: ['pz_nutella'],
+    cheeses: ['pz_no_cheese'], proteins: [], toppings: [],
   };
   const flags = menu.allergensFor(pie);
   assert.ok(flags.includes('tree_nuts'), 'hazelnut spread on a nut allergy is the case that matters');

@@ -315,6 +315,18 @@ var ICONS = {
     '<circle cx="32" cy="31" r="5.5" fill="#e0413c"/>' +
     '<path d="M28.5 26.5h7l-3.5 3.5z" fill="#4e8a3c"/>',
 
+  // The dessert slice again, with the letters that say which dough it is on.
+  // Two dessert bases sit side by side on the crust step, so they have to be
+  // tellable apart at a glance and not only by reading the label under them.
+  crust_gf_dessert:
+    '<path d="M32 6 56 50a4 4 0 0 1-4 6H12a4 4 0 0 1-4-6z" fill="#e8c98f"/>' +
+    '<path d="M32 14 50 48H14z" fill="#f3e3c0"/>' +
+    '<g fill="none" stroke="#6b4423" stroke-width="3" stroke-linecap="round">' +
+    '<path d="M24 45c3-3 4-7 2-10M41 46c2-3 2-6 1-9"/></g>' +
+    '<circle cx="32" cy="41" r="11" fill="#f6efdc"/>' +
+    '<text x="32" y="46" font-family="system-ui,sans-serif" font-size="13" ' +
+    'font-weight="800" text-anchor="middle" fill="#9a7b45">GF</text>',
+
   // Chocolate hazelnut spread: the jar, because a brown swirl alone reads as
   // sauce and this list already has four of those.
   nutella:
