@@ -23,6 +23,11 @@ import * as cooktime from './cooktime.js';
 
 export const STATUS = {
   QUEUED: 'queued',
+  // Pizza only. A pizza is assembled by one person and baked by another, so
+  // between arriving and cooking it sits with the builder - and the rail has
+  // to be able to say which of the two is holding it. Pasta and burgers go
+  // straight from queued to cooking, because one cook owns the whole dish.
+  BUILDING: 'building',
   COOKING: 'cooking',
   READY: 'ready',
   DELIVERED: 'delivered',
@@ -30,31 +35,72 @@ export const STATUS = {
   VOIDED: 'voided',
 };
 
-export const LIVE_STATUSES = [STATUS.QUEUED, STATUS.COOKING, STATUS.READY, STATUS.HELD];
+export const LIVE_STATUSES = [
+  STATUS.QUEUED, STATUS.BUILDING, STATUS.COOKING, STATUS.READY, STATUS.HELD,
+];
 
-/** action -> { from: [...], to, stamp, clears, window } */
+/**
+ * Which kinds take a build stage.
+ *
+ * One list, read by the state machine and by every screen that draws lanes, so
+ * a night that adds another assembled dish is one entry here rather than a
+ * condition in four files.
+ */
+export const BUILT_KINDS = ['pizza'];
+
+export function isBuilt(kind) {
+  return BUILT_KINDS.indexOf(kind || 'pasta') !== -1;
+}
+
+/**
+ * action -> { from: [...], to, stamp, clears, window, kinds, notKinds }
+ *
+ * `kinds`/`notKinds` are how one table serves two shapes of service without
+ * either screen branching on the dish. A pizza is pushed forward by whoever
+ * finishes their part - the builder hands it to the oven - so it never offers
+ * `accept`; a bowl has one cook from start to finish, so it never offers
+ * `build`. Nothing asks "is this a pizza" outside this table.
+ *
+ * There is deliberately no acceptance step on either path. A ticket arriving
+ * at a station with one dedicated cook is already theirs, so a tap that only
+ * said "yes, mine" was screen space spent on ceremony. Every action here is
+ * someone finishing a piece of work and handing it on.
+ */
 export const TRANSITIONS = {
-  accept:    { from: [STATUS.QUEUED],    to: STATUS.COOKING,   stamp: 'acceptedAt' },
+  accept:    { from: [STATUS.QUEUED],    to: STATUS.COOKING,   stamp: 'acceptedAt', notKinds: BUILT_KINDS },
+  build:     { from: [STATUS.QUEUED],    to: STATUS.BUILDING,  stamp: 'buildingAt', kinds: BUILT_KINDS },
+  // The oven is where a pizza's cook clock starts, so it carries the same
+  // stamp `accept` does on a bowl. Cook times and SLA colour read one field
+  // and never learn which path got there.
+  oven:      { from: [STATUS.BUILDING],  to: STATUS.COOKING,   stamp: 'acceptedAt', kinds: BUILT_KINDS },
   ready:     { from: [STATUS.COOKING],   to: STATUS.READY,     stamp: 'readyAt' },
   deliver:   { from: [STATUS.READY],     to: STATUS.DELIVERED, stamp: 'deliveredAt' },
-  hold:      { from: [STATUS.QUEUED],    to: STATUS.HELD,      stamp: 'heldAt' },
+  hold:      { from: [STATUS.QUEUED, STATUS.BUILDING], to: STATUS.HELD, stamp: 'heldAt' },
   release:   { from: [STATUS.HELD],      to: STATUS.QUEUED,    stamp: 'releasedAt' },
   rush:      { from: LIVE_STATUSES,      to: null,             stamp: 'rushedAt' },
   void:      { from: LIVE_STATUSES,      to: STATUS.VOIDED,    stamp: 'voidedAt' },
   // Undo paths are first-class transitions, not mutations, so a mis-tap during
   // a rush is recoverable and still shows up in the audit trail.
-  unaccept:  { from: [STATUS.COOKING],   to: STATUS.QUEUED,    stamp: null, clears: ['acceptedAt'] },
+  unaccept:  { from: [STATUS.COOKING],   to: STATUS.QUEUED,    stamp: null, clears: ['acceptedAt'], notKinds: BUILT_KINDS },
+  unbuild:   { from: [STATUS.BUILDING],  to: STATUS.QUEUED,    stamp: null, clears: ['buildingAt'], kinds: BUILT_KINDS },
+  unoven:    { from: [STATUS.COOKING],   to: STATUS.BUILDING,  stamp: null, clears: ['acceptedAt'], kinds: BUILT_KINDS },
   unready:   { from: [STATUS.READY],     to: STATUS.COOKING,   stamp: null, clears: ['readyAt'] },
   undeliver: { from: [STATUS.DELIVERED], to: STATUS.READY,     stamp: null, clears: ['deliveredAt'], window: 'undoWindowSec' },
 };
 
-const UNDO_TARGET = { unaccept: 'accept', unready: 'ready', undeliver: 'deliver' };
+const UNDO_TARGET = {
+  unaccept: 'accept', unbuild: 'build', unoven: 'oven',
+  unready: 'ready', undeliver: 'deliver',
+};
 
 /** Which buttons a screen should offer for this order right now. */
 export function allowedActions(order, sla, now = Date.now()) {
   return Object.entries(TRANSITIONS)
     .filter(([action, spec]) => {
       if (!spec.from.includes(order.status)) return false;
+      const kind = order.kind || 'pasta';
+      if (spec.kinds && !spec.kinds.includes(kind)) return false;
+      if (spec.notKinds && spec.notKinds.includes(kind)) return false;
       if (action === 'rush' && order.priority === 'rush') return false;
       if (spec.window) {
         const stampedAt = order[TRANSITIONS[UNDO_TARGET[action]].stamp];

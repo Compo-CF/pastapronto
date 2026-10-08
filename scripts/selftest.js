@@ -1936,6 +1936,137 @@ test('a location id is derived from what a manager types', () => {
   assert.strictEqual(cfgTags.isValidTag({ id: '', label: 'x', kind: 'table', area: 'a' }), false);
 });
 
+// ------------------------------------------------------ the pizza path
+
+const pizzaOrder = (over = {}) => ({
+  ...make(pizzaDraft(), { station: 'PIZZA-1' }),
+  kind: 'pizza',
+  ...over,
+});
+
+/**
+ * Every status the state machine can produce has to be a status the rules
+ * will accept, or the write is refused at the moment a cook taps the button -
+ * which is the worst possible time to find out.
+ */
+test('the rules accept every status the state machine can reach', () => {
+  const rules = rulesSource();
+  const listed = /function statuses\(\)[\s\S]*?return \[([^\]]*)\]/.exec(rules);
+  assert.ok(listed, 'statuses() not found in firestore.rules');
+
+  const allowed = listed[1].split(',').map((x) => x.trim().replace(/'/g, '')).filter(Boolean);
+  Object.values(order.STATUS).forEach((st) => {
+    assert.ok(allowed.includes(st), st + ' is reachable but firestore.rules refuses it');
+  });
+});
+
+test('a pizza is built before it is baked, and never accepted', () => {
+  const pie = pizzaOrder();
+  const first = order.allowedActions(pie, sla);
+
+  assert.ok(first.includes('build'), 'a pizza starts by being built');
+  assert.ok(!first.includes('accept'), 'the acceptance step is gone');
+
+  // Sent -> Building
+  const built = { ...pie, ...order.transitionPatch(pie, 'build', { sla, actor: 'builder' }) };
+  assert.strictEqual(built.status, 'building');
+  assert.ok(built.buildingAt, 'the builder picking it up is stamped');
+  assert.strictEqual(built.acceptedAt, null, 'nothing is cooking yet');
+
+  // Building -> Cooking. The builder hands it to the oven; the cook does not
+  // have to claim it first.
+  const inOven = { ...built, ...order.transitionPatch(built, 'oven', { sla, actor: 'builder' }) };
+  assert.strictEqual(inOven.status, 'cooking');
+  assert.ok(inOven.acceptedAt, 'the cook clock starts at the oven');
+
+  // Cooking -> On its way -> delivered
+  const out = { ...inOven, ...order.transitionPatch(inOven, 'ready', { sla, actor: 'cook' }) };
+  assert.strictEqual(out.status, 'ready');
+  const done = { ...out, ...order.transitionPatch(out, 'deliver', { sla, actor: 'runner' }) };
+  assert.strictEqual(done.status, 'delivered');
+
+  assert.deepStrictEqual(
+    done.events.map((e) => e.action),
+    ['submit', 'build', 'oven', 'ready', 'deliver'],
+    'the audit trail reads as the four stages',
+  );
+});
+
+test('a bowl goes straight to the pan, and is never built', () => {
+  const bowlOrder = make();
+  const first = order.allowedActions(bowlOrder, sla);
+  assert.ok(first.includes('accept'), 'one cook owns a bowl end to end');
+  assert.ok(!first.includes('build'), 'there is nobody assembling a bowl');
+
+  assert.throws(
+    () => order.transitionPatch(bowlOrder, 'build', { sla }),
+    /Cannot build/,
+    'the state machine refuses, not just the screen',
+  );
+});
+
+test('a pizza cannot skip the builder', () => {
+  const pie = pizzaOrder();
+  assert.throws(() => order.transitionPatch(pie, 'accept', { sla }), /Cannot accept/);
+});
+
+test('a mis-tap on the pizza path walks back one stage at a time', () => {
+  const pie = pizzaOrder();
+  const built = { ...pie, ...order.transitionPatch(pie, 'build', { sla }) };
+  const inOven = { ...built, ...order.transitionPatch(built, 'oven', { sla }) };
+
+  // Out of the oven by mistake: back to the builder, not back to the queue.
+  const backToBuild = { ...inOven, ...order.transitionPatch(inOven, 'unoven', { sla }) };
+  assert.strictEqual(backToBuild.status, 'building');
+  assert.strictEqual(backToBuild.acceptedAt, null, 'the cook clock is cleared with it');
+
+  // Picked up by mistake: back to the queue.
+  const backToSent = { ...backToBuild, ...order.transitionPatch(backToBuild, 'unbuild', { sla }) };
+  assert.strictEqual(backToSent.status, 'queued');
+  assert.strictEqual(backToSent.buildingAt, null);
+});
+
+test('a pizza can be held while it is being built', () => {
+  const pie = pizzaOrder();
+  const built = { ...pie, ...order.transitionPatch(pie, 'build', { sla }) };
+  assert.ok(order.allowedActions(built, sla).includes('hold'),
+    'a party that walks out mid-build is exactly when hold is wanted');
+  const held = { ...built, ...order.transitionPatch(built, 'hold', { sla }) };
+  assert.strictEqual(held.status, 'held');
+});
+
+test('an order being built still counts as live work', () => {
+  const pie = pizzaOrder();
+  const built = { ...pie, ...order.transitionPatch(pie, 'build', { sla }) };
+  assert.ok(order.LIVE_STATUSES.includes('building'),
+    'a pizza on the build bench is not finished, and must be rushable and voidable');
+  assert.ok(order.allowedActions(built, sla).includes('void'));
+  assert.ok(order.allowedActions(built, sla).includes('rush'));
+});
+
+/**
+ * The guest's progress bar is a list of statuses written out by hand, and a
+ * status missing from it does not throw - findIndex returns -1 and the bar
+ * silently falls back to the first step. A member watching a pizza being
+ * assembled saw "Sent" for the whole of it, and nothing anywhere said why.
+ */
+test('every stage a guest can be in has a step on their tracker', () => {
+  const src = guestSource();
+  const block = /var TRACK_ALL = \[([\s\S]*?)\];/.exec(src);
+  assert.ok(block, 'TRACK_ALL not found in guest.js');
+
+  const tracked = [...block[1].matchAll(/status: '([a-z]+)'/g)].map((m) => m[1]);
+
+  // held and voided are not stages on the way to food - a guest whose ticket
+  // is parked or cancelled is told in words, not moved along a bar.
+  const offBar = [order.STATUS.HELD, order.STATUS.VOIDED];
+  Object.values(order.STATUS)
+    .filter((st) => !offBar.includes(st))
+    .forEach((st) => {
+      assert.ok(tracked.includes(st), st + ' can happen but has no step on the guest tracker');
+    });
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');

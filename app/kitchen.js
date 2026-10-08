@@ -37,21 +37,79 @@ const CATALOG = menu.catalog();
   var state = {
     orders: [],
     station: recall('kds.station', ''),
+    role: recall('kds.role', 'all'),
+    night: config.defaultNight,
     sound: recall('kds.sound', false),
     selected: null,
     seen: {},
     firstLoadDone: false,
   };
 
-  var LANES = ['queued', 'cooking', 'ready'];
+  // Every lane the rail knows, in service order. Which of them a given screen
+  // draws is decided by visibleLanes().
+  var LANES = ['queued', 'building', 'cooking', 'ready'];
 
-  var PRIMARY = {
-    queued: { action: 'accept', labelKey: 'kitchen.act.accept', cls: 'kact-primary' },
-    cooking: { action: 'ready', labelKey: 'kitchen.act.ready', cls: 'kact-primary' },
-    ready: { action: 'deliver', labelKey: 'kitchen.act.deliver', cls: 'kact-deliver' },
+  /**
+   * Who is standing at this screen, and therefore what they need to see.
+   *
+   * The build bench does not get a runner window - that was the club's first
+   * note about this screen, and it is the whole point of the control: someone
+   * assembling pizzas has no use for a column of food already on its way out,
+   * and on a tablet that column is a third of the glass.
+   *
+   * The cook line is the mirror of it. On a pizza night a cook's work starts
+   * at the oven, so Sent belongs to the builder and is left off; on a night
+   * with no build stage the cook is the first pair of hands and needs it.
+   */
+  var ROLE_LANES = {
+    builder: { built: ['queued', 'building'], plain: ['queued', 'cooking'] },
+    cook: { built: ['building', 'cooking', 'ready'], plain: ['queued', 'cooking', 'ready'] },
+    all: { built: ['queued', 'building', 'cooking', 'ready'], plain: ['queued', 'cooking', 'ready'] },
   };
 
-  var UNDO = { cooking: 'unaccept', ready: 'unready', queued: null };
+  function nightBuilds() {
+    return kindsForNight(state.night).some(orderLib.isBuilt);
+  }
+
+  function visibleLanes() {
+    var spec = ROLE_LANES[state.role] || ROLE_LANES.all;
+    return nightBuilds() ? spec.built : spec.plain;
+  }
+
+  /**
+   * The one button that moves a chit forward, which depends on the dish as
+   * well as the lane: a pizza leaves Sent for the build bench, a bowl leaves
+   * it for the pan. Asking the state machine would be circular - it offers
+   * several actions - so this names the forward one and allowedActions()
+   * still decides whether it may be offered.
+   */
+  function primaryFor(order) {
+    var built = orderLib.isBuilt(order.kind);
+    if (order.status === 'queued') {
+      return built
+        ? { action: 'build', labelKey: 'kitchen.act.build', cls: 'kact-primary' }
+        : { action: 'accept', labelKey: 'kitchen.act.accept', cls: 'kact-primary' };
+    }
+    if (order.status === 'building') {
+      return { action: 'oven', labelKey: 'kitchen.act.oven', cls: 'kact-primary' };
+    }
+    if (order.status === 'cooking') {
+      return { action: 'ready', labelKey: 'kitchen.act.ready', cls: 'kact-primary' };
+    }
+    if (order.status === 'ready') {
+      return { action: 'deliver', labelKey: 'kitchen.act.deliver', cls: 'kact-deliver' };
+    }
+    return null;
+  }
+
+  /** One stage back, which is the stage this chit actually came from. */
+  function undoFor(order) {
+    var built = orderLib.isBuilt(order.kind);
+    if (order.status === 'building') return 'unbuild';
+    if (order.status === 'cooking') return built ? 'unoven' : 'unaccept';
+    if (order.status === 'ready') return 'unready';
+    return null;
+  }
 
   var el = {
     lanes: {},
@@ -59,6 +117,7 @@ const CATALOG = menu.catalog();
     clock: document.getElementById('clock'),
     conn: document.getElementById('conn'),
     stationFilter: document.getElementById('stationFilter'),
+    roleFilter: document.getElementById('roleFilter'),
     soundToggle: document.getElementById('soundToggle'),
     soundIcon: document.getElementById('soundIcon'),
     heldNote: document.getElementById('heldNote'),
@@ -122,8 +181,17 @@ const CATALOG = menu.catalog();
    * and the dropdown became decorative - it has to be applied here now.
    */
   function visibleOrders() {
-    if (!state.station) return state.orders;
-    return state.orders.filter(function (o) { return o.station === state.station; });
+    var list = state.orders;
+    // A build bench is for things that get built. On a night that has them, a
+    // bowl of pasta on this screen is a ticket the builder cannot act on and
+    // has to read past - which is the clutter the whole role exists to remove.
+    // On a night with no build stage the filter would empty the screen, so it
+    // does not apply.
+    if (state.role === 'builder' && nightBuilds()) {
+      list = list.filter(function (o) { return orderLib.isBuilt(o.kind); });
+    }
+    if (!state.station) return list;
+    return list.filter(function (o) { return o.station === state.station; });
   }
 
   function laneOrders(lane) {
@@ -283,13 +351,13 @@ const CATALOG = menu.catalog();
         }).join(', ') })}</div>`
       : '';
 
-    var primary = PRIMARY[order.status];
+    var primary = primaryFor(order);
     var buttons = [];
     if (primary && allowed.indexOf(primary.action) !== -1) {
       buttons.push(html`<button class="kact ${primary.cls}" data-act="${primary.action}" data-id="${order.id}">
         ${t(primary.labelKey)}</button>`);
     }
-    var undo = UNDO[order.status];
+    var undo = undoFor(order);
     if (undo && allowed.indexOf(undo) !== -1) {
       buttons.push(html`<button class="kact kact-icon" data-act="${undo}" data-id="${order.id}"
         title="Undo" aria-label="Undo">&#8630;</button>`);
@@ -338,7 +406,15 @@ const CATALOG = menu.catalog();
     // Recompute here rather than only on snapshot, so switching station
     // updates the header instead of leaving the whole room's numbers up.
     renderCounts(orderLib.metrics(visibleOrders(), config.sla).counts);
+    var shown = visibleLanes();
+    document.getElementById('lanes').style.setProperty('--lane-count', shown.length);
+
     LANES.forEach(function (lane) {
+      var section = document.querySelector('.lane[data-lane="' + lane + '"]');
+      var on = shown.indexOf(lane) !== -1;
+      if (section) section.hidden = !on;
+      if (!on) return;
+
       var orders = laneOrders(lane);
       document.getElementById('count-' + lane).textContent = orders.length;
       el.lanes[lane].innerHTML = orders.length
@@ -358,6 +434,7 @@ const CATALOG = menu.catalog();
   function emptyText(lane) {
     var here = state.station ? ' for ' + stationLabel(state.station) : '';
     if (lane === 'queued') return 'No new orders' + here;
+    if (lane === 'building') return 'Nothing being built' + here;
     if (lane === 'cooking') return 'Nothing cooking' + here;
     return 'Nothing waiting on a runner' + here;
   }
@@ -534,6 +611,12 @@ const CATALOG = menu.catalog();
     el.stationFilter.value = state.station;
   }
 
+  el.roleFilter.addEventListener('change', function () {
+    state.role = el.roleFilter.value;
+    remember('kds.role', state.role);
+    render();
+  });
+
   el.stationFilter.addEventListener('change', function () {
     state.station = el.stationFilter.value;
     remember('kds.station', state.station);
@@ -605,8 +688,8 @@ const CATALOG = menu.catalog();
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     // The lane headings live in the HTML so the rail paints before JS runs.
-    [['queued', 'kitchen.lane.queued'], ['cooking', 'kitchen.lane.cooking'],
-      ['ready', 'kitchen.lane.ready']].forEach(function (pair) {
+    [['queued', 'kitchen.lane.queued'], ['building', 'kitchen.lane.building'],
+      ['cooking', 'kitchen.lane.cooking'], ['ready', 'kitchen.lane.ready']].forEach(function (pair) {
       var node = document.getElementById('lane-title-' + pair[0]);
       if (node) node.textContent = t(pair[1]);
     });
@@ -620,6 +703,7 @@ const CATALOG = menu.catalog();
     }
 
     fillStations(config.defaultNight);
+    el.roleFilter.value = state.role;
     setSound(state.sound);
 
     // The rail is mounted on a wall and read from across the pass; it must not
@@ -637,6 +721,7 @@ const CATALOG = menu.catalog();
     // The manager can flip the night mid-setup; the rail has to follow without
     // someone reloading a tablet that is mounted to a wall.
     db.watchServiceNight(function (night) {
+      state.night = night;
       fillStations(night);
       render();
     });

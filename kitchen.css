@@ -92,11 +92,16 @@
 .lanes {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* How many columns depends on who is standing here: a build bench shows two,
+     the whole rail shows four on a pizza night. Set from kitchen.js rather
+     than fixed, so a hidden lane gives its width back instead of leaving a
+     gap where the runner window used to be. */
+  grid-template-columns: repeat(var(--lane-count, 3), 1fr);
   gap: 12px;
   padding: 12px 14px;
   min-height: 0;
 }
+.lane[hidden] { display: none; }
 .lane { display: flex; flex-direction: column; min-height: 0; }
 .lane-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -359,7 +364,7 @@
 }
 
 @media (max-width: 900px) {
-  .lanes { grid-template-columns: 1fr 1fr; }
+  .lanes { grid-template-columns: repeat(2, 1fr); }
   .lane[data-lane="ready"] { grid-column: span 2; }
 }
 @media (max-width: 720px) {

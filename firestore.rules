@@ -93,7 +93,9 @@ service cloud.firestore {
     match /orders/{orderId} {
 
       function statuses() {
-        return ['queued', 'cooking', 'ready', 'delivered', 'held', 'voided'];
+        // 'building' is the pizza-only stage between arriving and the oven.
+        // Kept in step with order.js STATUS by a test that reads both.
+        return ['queued', 'building', 'cooking', 'ready', 'delivered', 'held', 'voided'];
       }
 
       // A new order must look like a new order.

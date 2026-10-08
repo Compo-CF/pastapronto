@@ -150,12 +150,28 @@ import {
     return STEPS[state.kind] || STEPS.pasta;
   }
 
-  var TRACK = [
+  /**
+   * The progress bar on a guest's ticket.
+   *
+   * 'building' is a pizza-only stage, and a bowl never passes through it - so
+   * the bar is built per order rather than fixed, and a pasta guest is not
+   * shown a step their food will never reach. Without this a member watching
+   * a pizza being assembled saw the bar stuck on "Sent", because findIndex
+   * returned -1 for a status this list had never heard of.
+   */
+  var TRACK_ALL = [
     { status: 'queued', key: 'guest.track.sent' },
+    { status: 'building', key: 'guest.track.building', kinds: ['pizza'] },
     { status: 'cooking', key: 'guest.track.cooking' },
     { status: 'ready', key: 'guest.track.ready' },
     { status: 'delivered', key: 'guest.track.enjoy' },
   ];
+
+  function trackFor(kind) {
+    return TRACK_ALL.filter(function (seg) {
+      return !seg.kinds || seg.kinds.indexOf(kind) !== -1;
+    });
+  }
 
   var state = {
     screen: 'welcome',
@@ -878,6 +894,7 @@ import {
   function screenSent() {
     var ticket = state.order;
     var tr = t;
+    var TRACK = trackFor(ticket.kind);
     var stepIndex = TRACK.findIndex(function (seg) { return seg.status === ticket.status; });
     if (stepIndex < 0) stepIndex = 0;
 

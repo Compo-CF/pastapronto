@@ -30,6 +30,15 @@
   <div class="grow"></div>
 
   <label class="kselect">
+    <span class="sr-only">Which screen is this</span>
+    <select id="roleFilter" class="select">
+      <option value="all">Whole rail</option>
+      <option value="builder">Build bench</option>
+      <option value="cook">Cook line</option>
+    </select>
+  </label>
+
+  <label class="kselect">
     <span class="sr-only">Station</span>
     <select id="stationFilter" class="select">
       <option value="">All stations</option>
@@ -49,6 +58,10 @@
   <section class="lane" data-lane="queued">
     <h2 class="lane-head"><span id="lane-title-queued">New Orders</span><span class="lane-count" id="count-queued">0</span></h2>
     <div class="lane-body" id="lane-queued"></div>
+  </section>
+  <section class="lane" data-lane="building" hidden>
+    <h2 class="lane-head"><span id="lane-title-building">Building</span><span class="lane-count" id="count-building">0</span></h2>
+    <div class="lane-body" id="lane-building"></div>
   </section>
   <section class="lane" data-lane="cooking">
     <h2 class="lane-head"><span id="lane-title-cooking">Cooking</span><span class="lane-count" id="count-cooking">0</span></h2>

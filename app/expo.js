@@ -68,10 +68,25 @@ const CATALOG = menu.catalog();
       .sort(function (a, b) { return new Date(a.readyAt) - new Date(b.readyAt); });
   }
 
+  /**
+   * What is coming, which is not only what is in the oven.
+   *
+   * A pizza being assembled is already work in progress - the club's own words
+   * were that the builder transfers the ticket to the cook and expo together.
+   * Leaving it out meant a runner saw an empty "Coming Up" while four pizzas
+   * were being built, and then four arriving at once.
+   *
+   * Sorted by whichever stamp the ticket has reached, so a pizza still on the
+   * bench queues behind one already baking rather than jumping it on a null.
+   */
   function cookingOrders() {
     return state.orders
-      .filter(function (o) { return o.status === 'cooking'; })
-      .sort(function (a, b) { return new Date(a.acceptedAt) - new Date(b.acceptedAt); });
+      .filter(function (o) { return o.status === 'cooking' || o.status === 'building'; })
+      .sort(function (a, b) {
+        var at = new Date(a.acceptedAt || a.buildingAt || a.submittedAt);
+        var bt = new Date(b.acceptedAt || b.buildingAt || b.submittedAt);
+        return at - bt;
+      });
   }
 
   function renderReadyCard(order) {
