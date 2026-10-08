@@ -305,3 +305,84 @@
 .menu-station:first-child { margin-top: 0; }
 .menu-station-sub { font-size: 13px; font-weight: 650; color: var(--ink-faint); }
 
+
+/* ----------------------------------------------------------- orders panel */
+
+/* One row per ticket, collapsed to a line until a manager opens it. The list
+   is read during service with a tablet in one hand, so the head carries the
+   four things that identify a ticket across a room - number, state, table,
+   who - and the food goes underneath in smaller type. */
+.orow {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.orow.is-open { border-color: var(--ink-soft, #b9ad9c); }
+/* Same amber the kitchen rail uses for a changed ticket, so a manager and a
+   cook are looking at one vocabulary rather than two. */
+.orow.is-edited { box-shadow: inset 4px 0 0 #e0a21c; }
+
+.orow-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.orow-no { font-family: var(--mono); font-weight: 800; font-size: 18px; }
+.orow-where { font-weight: 700; }
+.orow-body { margin-top: 6px; font-size: 14px; }
+
+.orow-status {
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: #eee6da;
+  color: #6b6058;
+}
+.orow-status.is-queued { background: #e5efe0; color: #3f6b36; }
+.orow-status.is-cooking { background: #fdf0d6; color: #8a6412; }
+.orow-status.is-ready { background: #dcebff; color: #27518c; }
+.orow-status.is-delivered { background: #ece7e1; color: #7b7169; }
+.orow-status.is-voided { background: #f6dedb; color: #8c2f23; }
+
+.orow-edited {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a6412;
+  background: #fdf0d6;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+}
+
+.orow-edit { margin-top: 12px; }
+
+/* Each item inside an open ticket, boxed so a long order does not read as one
+   undifferentiated wall of chips. */
+.oline {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 10px;
+  background: var(--paper);
+}
+
+/* A location chip that is a label with a remove button, not a toggle. */
+.chip.is-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.chip-x {
+  border: 0;
+  background: none;
+  font-size: 17px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+}
+.chip-x:hover { opacity: 1; }

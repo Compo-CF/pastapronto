@@ -63,15 +63,33 @@
   <!-- One section at a time. The QR grid, the cost sheet and the menu tables
        are each long enough that stacking all three buried the last one. -->
   <nav class="subnav no-print" role="tablist" aria-label="Manager sections">
+    <button class="subpill" type="button" role="tab" data-tab="orders"
+            id="tab-orders" aria-controls="panel-orders" aria-selected="true">Orders<span class="subpill-badge" id="badgeOrders" hidden></span></button>
     <button class="subpill" type="button" role="tab" data-tab="qr"
-            id="tab-qr" aria-controls="panel-qr" aria-selected="true">QR codes</button>
+            id="tab-qr" aria-controls="panel-qr" aria-selected="false" tabindex="-1">QR codes</button>
     <button class="subpill" type="button" role="tab" data-tab="cost"
             id="tab-cost" aria-controls="panel-cost" aria-selected="false" tabindex="-1">Food cost</button>
     <button class="subpill" type="button" role="tab" data-tab="menu"
             id="tab-menu" aria-controls="panel-menu" aria-selected="false" tabindex="-1">Menu, allergens &amp; 86<span class="subpill-badge" id="badge86" hidden></span></button>
   </nav>
 
-  <section class="no-print panel" id="panel-qr" role="tabpanel" aria-labelledby="tab-qr" tabindex="0">
+  <section class="no-print panel" id="panel-orders" role="tabpanel" aria-labelledby="tab-orders" tabindex="0">
+    <div class="card stack">
+      <div class="row" style="flex-wrap:wrap;align-items:center">
+        <div class="grow">
+          <strong>Tonight's orders</strong>
+          <p class="muted" style="margin:4px 0 0;font-size:14px">
+            Everything placed today, newest first. Change a table when a party moves,
+            fix an item, or take an order someone gave you at the bar.</p>
+        </div>
+        <button class="btn btn-primary" id="newOrderBtn" type="button">Take an order</button>
+      </div>
+    </div>
+    <div id="composeWrap"></div>
+    <div id="orderList" class="stack" style="margin-top:14px">Loading&hellip;</div>
+  </section>
+
+  <section class="no-print panel" id="panel-qr" role="tabpanel" aria-labelledby="tab-qr" tabindex="0" hidden>
     <div class="card stack">
       <div class="field">
         <label for="baseUrl">Base address printed into every QR code</label>
@@ -84,6 +102,28 @@
         <span class="muted" id="qrMeta"></span>
       </div>
     </div>
+    <div class="card stack">
+      <div>
+        <strong>Extra locations</strong>
+        <p class="muted" style="margin:4px 0 0;font-size:14px">
+          Somewhere that has no printed tent - the locker room, the halfway house.
+          A code appears below straight away and the name reaches every screen
+          without anyone reloading.</p>
+      </div>
+      <div class="row" style="flex-wrap:wrap;align-items:flex-end">
+        <div class="field grow" style="min-width:200px">
+          <label for="newTagLabel">Name</label>
+          <input class="input" id="newTagLabel" type="text" maxlength="40" placeholder="Locker Room">
+        </div>
+        <div class="field" style="min-width:150px">
+          <label for="newTagArea">Area</label>
+          <input class="input" id="newTagArea" type="text" maxlength="40" placeholder="Clubhouse">
+        </div>
+        <button class="btn btn-primary" id="addTagBtn" type="button">Add location</button>
+      </div>
+      <div id="customTagList"></div>
+    </div>
+
     <div class="qrgrid" id="qrgrid"></div>
   </section>
 

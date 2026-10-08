@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { STRINGS } from '../app/i18n.js';
 import { config, kindsForNight, nightById } from '../app/config.js';
+import * as cfgTags from '../app/config.js';
 import * as order from '../app/order.js';
 import * as cooktime from '../app/cooktime.js';
 import * as menu from '../app/menu.js';
@@ -61,6 +62,8 @@ const burgerDraft = (over = {}) => ({
   memberNumber: '1794', memberName: 'Compofelice', memberStatus: 'verified',
   guestCount: 1, lines: [burgerLine()], ...over,
 });
+
+const draftOf = (...lines) => ({ ...draft(), lines });
 
 let seq = 0;
 const make = (d = draft(), ctx = {}) => ({
@@ -1771,6 +1774,166 @@ test('no guest string is left behind unused', () => {
     KNOWN_UNUSED.filter((k) => orphans.indexOf(k) === -1), [],
     'allowlisted strings that are used again - remove them from KNOWN_UNUSED',
   );
+});
+
+// --------------------------------------------------------- manager edits
+
+function rulesSource() {
+  return readFileSync(fileURLToPath(new URL('../firestore.rules', import.meta.url)), 'utf8');
+}
+
+/**
+ * firestore.rules cannot import config.js, so every number in it is a copy.
+ * One of those copies went stale: the party size moved from 8 to 12 on the
+ * client and the rules kept refusing anything over 8, so a table of nine
+ * built an order, pressed Send, and got a permission error with nothing on
+ * screen to explain it. Nothing in this suite noticed, because nothing in
+ * this suite had ever read the rules.
+ */
+test('the rules agree with config about how big a party can be', () => {
+  const rules = rulesSource();
+  const cap = config.order.maxGuests;
+
+  const guestCaps = [...rules.matchAll(/guestCount\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
+  const lineCaps = [...rules.matchAll(/lines\.size\(\)\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
+
+  assert.ok(guestCaps.length >= 2, 'found ' + guestCaps.length + ' guest caps - the scan is broken');
+  assert.ok(lineCaps.length >= 2, 'found ' + lineCaps.length + ' line caps - the scan is broken');
+
+  guestCaps.forEach((n) => assert.strictEqual(n, cap, 'a guestCount cap in firestore.rules'));
+  lineCaps.forEach((n) => assert.strictEqual(n, cap, 'a lines.size cap in firestore.rules'));
+});
+
+/** The identity of a ticket is what the rules refuse to let anyone rewrite. */
+test('the rules still pin a ticket to its number and its kind', () => {
+  const rules = rulesSource();
+  ['ticketNo', 'kind', 'claimCode', 'serviceDate', 'submittedAt', 'memberNumber'].forEach((field) => {
+    assert.ok(
+      new RegExp('after\\.' + field + '\\s*==\\s*before\\.' + field).test(rules),
+      field + ' must stay immutable in firestore.rules',
+    );
+  });
+});
+
+test('a manager edit moves the table and says so', () => {
+  const o = make();
+  const patch = order.editPatch(o, {}, {
+    tag: { id: 'patio-03', label: 'Patio 3', kind: 'table' },
+    now: new Date('2026-10-08T18:30:00Z'),
+  });
+
+  assert.strictEqual(patch.tagLabel, 'Patio 3');
+  assert.strictEqual(patch.tag, 'patio-03');
+  assert.strictEqual(patch.editCount, 1);
+  assert.deepStrictEqual(patch.editedLineIds, [], 'the food did not change');
+  assert.strictEqual(patch.events.at(-1).action, 'edit');
+  assert.strictEqual(patch.events.at(-1).note, 'table');
+  // The queue position is not the manager's to give away.
+  assert.strictEqual(patch.ticketNo, undefined);
+  assert.strictEqual(patch.status, undefined);
+});
+
+test('an edit names the line that changed, and only that line', () => {
+  const o = make(draftOf(bowl(), bowl(), bowl()));
+  assert.strictEqual(o.lines.length, 3);
+
+  // Change the middle bowl only - the shape, because that is what the chit
+  // prints, so it proves the derived text was rebuilt and not carried over.
+  const lines = o.lines.map((l) => ({ ...l }));
+  lines[1].pasta = 'shells';
+  lines[1].toppings = ['olives'];
+
+  const patch = order.editPatch(o, { lines });
+  assert.deepStrictEqual(patch.editedLineIds, ['ln02']);
+  assert.notStrictEqual(patch.lines[1].dish, o.lines[1].dish, 'the dish text follows the food');
+  assert.deepStrictEqual(patch.lines[0].dish, o.lines[0].dish, 'the untouched bowl reads the same');
+  assert.deepStrictEqual(patch.lines[1].toppings, ['olives']);
+  // Derived fields are rebuilt, not carried over.
+  assert.strictEqual(typeof patch.cookEstimateSec, 'number');
+  assert.ok(patch.cookEstimateSec > 0);
+});
+
+test('reordering the same food is not an edit', () => {
+  // A line that moved up the ticket is the same food. Reporting it as edited
+  // would light up a chit and send a cook looking for a change nobody made.
+  const o = make(draftOf(bowl(), bowl()));
+  const same = o.lines.map((l) => ({ ...l }));
+  assert.strictEqual(order.editPatch(o, { lines: same }), null, 'no change, no patch');
+});
+
+test('saving an order nobody touched changes nothing', () => {
+  const o = make();
+  assert.strictEqual(order.editPatch(o, { guestCount: o.guestCount, notes: o.notes || '' }), null);
+  assert.strictEqual(order.editPatch(o, {}, { tag: { id: o.tag, label: o.tagLabel, kind: 'table' } }), null);
+});
+
+test('delivered and voided orders refuse to be edited', () => {
+  const delivered = { ...make(), status: 'delivered' };
+  assert.throws(() => order.editPatch(delivered, { guestCount: 4 }), /delivered/);
+
+  const voided = { ...make(), status: 'voided' };
+  assert.throws(() => order.editPatch(voided, { guestCount: 4 }), /voided/);
+});
+
+test('an edit cannot empty an order', () => {
+  const o = make();
+  assert.throws(() => order.editPatch(o, { lines: [] }), /at least one item/);
+});
+
+test('the kitchen stops highlighting an edit once the food is gone', () => {
+  const edited = { ...make(), editedAt: '2026-10-08T18:30:00.000Z', status: 'cooking' };
+  assert.strictEqual(order.isEdited(edited), true);
+  assert.strictEqual(order.isEdited({ ...edited, status: 'delivered' }), false);
+  assert.strictEqual(order.isEdited({ ...edited, status: 'voided' }), false);
+  assert.strictEqual(order.isEdited(make()), false, 'an order nobody edited');
+});
+
+test('a second edit highlights what changed this time, not last time', () => {
+  const o = make(draftOf(bowl(), bowl()));
+
+  const first = order.editPatch(o, {
+    lines: o.lines.map((l, i) => (i === 0 ? { ...l, toppings: ['olives'] } : { ...l })),
+  });
+  assert.deepStrictEqual(first.editedLineIds, ['ln01']);
+
+  const after = { ...o, ...first };
+  const second = order.editPatch(after, {
+    lines: after.lines.map((l, i) => (i === 1 ? { ...l, toppings: ['spinach'] } : { ...l })),
+  });
+  assert.deepStrictEqual(second.editedLineIds, ['ln02'], 'the first line is right already');
+  assert.strictEqual(second.editCount, 2);
+});
+
+// ------------------------------------------------------------- locations
+
+test('a manager can add a location, and cannot break one', () => {
+  const kept = cfgTags.setCustomTags([
+    { id: 'locker-room', label: 'Locker Room', kind: 'table', area: 'Clubhouse' },
+    { id: 'BAD ID', label: 'Nope', kind: 'table', area: 'Clubhouse' },
+    { id: 'no-kind', label: 'Nope', kind: 'spaceship', area: 'Clubhouse' },
+    { id: 'blank', label: '   ', kind: 'table', area: 'Clubhouse' },
+    { id: 'table-01', label: 'Impostor', kind: 'table', area: 'Clubhouse' },
+    { id: 'locker-room', label: 'Duplicate', kind: 'table', area: 'Clubhouse' },
+  ]);
+
+  assert.deepStrictEqual(kept.map((t) => t.id), ['locker-room'],
+    'only the one valid, non-colliding, non-duplicate entry survives');
+  assert.strictEqual(cfgTags.tagById('locker-room').label, 'Locker Room');
+  assert.strictEqual(cfgTags.tagById('table-01').label, 'Table 1',
+    'a built-in tent cannot be shadowed by something a manager typed');
+  assert.strictEqual(cfgTags.allTags().length, config.tags.length + 1);
+
+  cfgTags.setCustomTags([]);
+  assert.strictEqual(cfgTags.tagById('locker-room'), null);
+  assert.strictEqual(cfgTags.allTags().length, config.tags.length);
+});
+
+test('a location id is derived from what a manager types', () => {
+  assert.strictEqual(cfgTags.tagIdFor('Locker Room'), 'locker-room');
+  assert.strictEqual(cfgTags.tagIdFor('  Halfway  House!  '), 'halfway-house');
+  assert.strictEqual(cfgTags.tagIdFor('19th Hole'), '19th-hole');
+  assert.strictEqual(cfgTags.tagIdFor('***'), '', 'nothing usable is left, and that is not an id');
+  assert.strictEqual(cfgTags.isValidTag({ id: '', label: 'x', kind: 'table', area: 'a' }), false);
 });
 
 test('money renders a missing figure as a dash, never as zero', () => {

@@ -10,8 +10,11 @@ rules_version = '2';
 //
 // WHAT THIS DOES PROTECT:
 //   - unauthenticated traffic cannot touch anything
-//   - an order's contents and ticket number are immutable after it is created,
-//     so a client can advance a chit but cannot rewrite the food afterwards
+//   - an order's identity is immutable after it is created: its ticket number,
+//     claim code, kind, service date and member cannot be rewritten. Its
+//     contents can, because a manager has to be able to move a party to
+//     another table and fix an order taken verbally - but the result still has
+//     to look like an order, and the audit trail only ever grows
 //   - new orders must arrive in the 'queued' state with a sane shape
 //   - the audit trail can only grow
 //
@@ -67,6 +70,15 @@ service cloud.firestore {
         (docId == 'service'
           && request.resource.data.night is string
           && request.resource.data.night.size() <= 40)
+        ||
+        // Locations a manager added - the locker room, the halfway house.
+        // Bounded in size and nothing more; app/config.js isValidTag() checks
+        // each entry's shape on the way out, because a rule that walked a
+        // list of maps would be longer than the thing it protects and no
+        // stricter where it matters.
+        (docId == 'tags'
+          && request.resource.data.custom is list
+          && request.resource.data.custom.size() <= 60)
       );
     }
 
@@ -94,35 +106,54 @@ service cloud.firestore {
           && d.memberNumber is string
           // Canonical form only: 1-4 digits, no leading zeros, no member zero.
           && d.memberNumber.matches('^[1-9][0-9]{0,3}$')
-          && d.guestCount is int && d.guestCount >= 1 && d.guestCount <= 8
-          && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 8
+          // The club seats 12 to a table. These two tracked config.order
+          // .maxGuests at 8 and were left behind when it went to 12, so a
+          // party of nine built an order the screen accepted and Firestore
+          // then refused - the guest saw "Sending..." and a permission error.
+          // Rules cannot import config.js; when that number moves, this moves.
+          && d.guestCount is int && d.guestCount >= 1 && d.guestCount <= 12
+          && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 12
           && d.cookEstimateSec is int && d.cookEstimateSec > 0
           && d.events is list && d.events.size() == 1;
       }
 
-      // What a chit is allowed to change once it exists: its position in the
-      // lifecycle, the stamps, who touched it, and one more audit entry.
-      function contentsUnchanged() {
+      // A ticket's identity, which nothing may rewrite. These are the fields
+      // that say WHICH order this is rather than what is in it: renumber a
+      // ticket and the kitchen is calling out a number nobody holds; change
+      // the kind and it re-routes to a station that does not cook it.
+      function identityIntact() {
         let before = resource.data;
         let after = request.resource.data;
         return after.ticketNo == before.ticketNo
-          // Flipping the kind would re-route the ticket to another station.
           && after.kind == before.kind
           && after.claimCode == before.claimCode
           && after.serviceDate == before.serviceDate
-          && after.memberNumber == before.memberNumber
-          && after.guestCount == before.guestCount
-          && after.lines == before.lines
-          && after.cookEstimateSec == before.cookEstimateSec
           && after.submittedAt == before.submittedAt
-          && after.tag == before.tag;
+          && after.memberNumber == before.memberNumber;
+      }
+
+      // What a manager may correct on a live ticket: where it goes, how many
+      // are eating, and the food itself.
+      //
+      // This used to be contentsUnchanged(), which froze all of it - the club
+      // asked for exactly the opposite, because members move tables and change
+      // their minds. The bound that matters is no longer "nothing changed" but
+      // "it still looks like an order", so the shape is re-checked here rather
+      // than trusted because it was checked once at create.
+      function contentsEditable() {
+        let after = request.resource.data;
+        return after.guestCount is int && after.guestCount >= 1 && after.guestCount <= 12
+          && after.lines is list && after.lines.size() >= 1 && after.lines.size() <= 12
+          && after.cookEstimateSec is int && after.cookEstimateSec > 0;
       }
 
       function validUpdate() {
         let after = request.resource.data;
         return after.status in statuses()
-          && contentsUnchanged()
-          // The audit trail only ever grows.
+          && identityIntact()
+          && contentsEditable()
+          // The audit trail only ever grows, so an edit cannot erase the
+          // record of the edit before it.
           && after.events.size() >= resource.data.events.size();
       }
 

@@ -211,7 +211,13 @@ const CATALOG = menu.catalog();
 
   var KIND_LABEL = { pasta: 'Pasta', pizza: 'Pizza', burger: 'Burger' };
 
-  function renderLine(line, orderLang) {
+  /**
+   * @param {object} line
+   * @param {string} orderLang
+   * @param {Set<string>} changed  lineIds a manager edited since this ticket
+   *                               was placed, empty when nothing was
+   */
+  function renderLine(line, orderLang, changed) {
     var isPizza = menu.kindOf(line) === 'pizza';
     var adds = [];
     if (line.toppings && line.toppings.length) {
@@ -231,7 +237,10 @@ const CATALOG = menu.catalog();
     if (!isPizza && line.spice && line.spice !== 'mild') flags.push(line.spice.toUpperCase());
     if (line.allergens && line.allergens.length) flags.push(line.allergens.join('/'));
 
-    return html`<li class="cline">
+    // The cook is looking for what moved, not for the whole ticket again.
+    var isChanged = changed && changed.has(line.lineId);
+    return html`<li class="cline ${isChanged ? 'is-changed' : ''}">
+      ${raw(isChanged ? '<span class="cline-changed">Changed</span>' : '')}
       <span class="cline-art">${raw(art(lineGlyph(line)))}</span>
       <div class="grow">
         <div class="cline-who">${line.guestLabel}</div>
@@ -245,6 +254,12 @@ const CATALOG = menu.catalog();
 
   function renderChit(order) {
     var timer = timerFor(order);
+    // A manager changed this ticket after it was sent. The badge says so and
+    // the lines below say which part - a cook who has already started needs
+    // both, because "something changed" without "what" means re-reading the
+    // whole chit mid-service.
+    var wasEdited = orderLib.isEdited(order);
+    var changedLines = new Set(wasEdited ? (order.editedLineIds || []) : []);
     // The server used to attach allowedActions to every chit. The state machine
     // now runs on the device, so ask it directly.
     var allowed = orderLib.allowedActions(order, config.sla);
@@ -257,6 +272,10 @@ const CATALOG = menu.catalog();
     badges.push('<span class="badge badge-guests">' + order.guestCount + ' guests</span>');
     if (order.memberStatus === 'unverified') badges.push('<span class="badge badge-unverified">Member unverified</span>');
     if (order.status === 'held') badges.push('<span class="badge badge-held">On hold</span>');
+    if (wasEdited) {
+      badges.push('<span class="badge badge-edited">Changed'
+        + (order.editCount > 1 ? ' \u00d7' + order.editCount : '') + '</span>');
+    }
 
     var alert = order.avoidAllergens && order.avoidAllergens.length
       ? html`<div class="chit-alert">${t('kitchen.alert.allergy', { list: order.avoidAllergens.map(function (a) {
@@ -291,7 +310,7 @@ const CATALOG = menu.catalog();
       ? order.memberName + ' \u00b7 ' + order.memberNumber
       : 'Member ' + order.memberNumber;
 
-    return html`<article class="chit ${order.status === 'held' ? 'is-held' : ''} ${state.selected === order.id ? 'is-selected' : ''} ${state.seen[order.id] ? '' : 'is-new'}"
+    return html`<article class="chit ${order.status === 'held' ? 'is-held' : ''} ${wasEdited ? 'is-edited' : ''} ${state.selected === order.id ? 'is-selected' : ''} ${state.seen[order.id] ? '' : 'is-new'}"
       data-id="${order.id}" data-priority="${order.priority}" data-late="${timer.level}" tabindex="0">
       <div class="chit-top">
         ${raw(order._key ? '<span class="chit-key">' + order._key + '</span>' : '')}
@@ -306,7 +325,7 @@ const CATALOG = menu.catalog();
       </div>
       <div class="chit-badges">${raw(badges.join(''))}</div>
       ${raw(alert)}
-      <ul class="chit-lines">${order.lines.map(function (l) { return renderLine(l, order.lang); })}</ul>
+      <ul class="chit-lines">${order.lines.map(function (l) { return renderLine(l, order.lang, changedLines); })}</ul>
       ${raw(noteHtml(order.notes, 'chit-note', order.lang))}
       <div class="chit-actions">${buttons}</div>
     </article>`;
@@ -546,8 +565,12 @@ const CATALOG = menu.catalog();
    * snapshot with no second read.
    */
   function onSnapshotOrders(orders) {
+    // Status and edit count both, because a chit can change without moving
+    // lanes - which is exactly the case a cook would otherwise never notice.
     var previous = {};
-    state.orders.forEach(function (o) { previous[o.id] = o.status; });
+    state.orders.forEach(function (o) {
+      previous[o.id] = { status: o.status, editCount: o.editCount || 0 };
+    });
 
     state.orders = orders;
     render();
@@ -565,7 +588,13 @@ const CATALOG = menu.catalog();
       if (was === undefined && o.status === 'queued') {
         if (state.sound) chime('newOrder');
         toast('New ticket #' + o.ticketNo + ' · ' + o.tagLabel);
-      } else if (was && was !== o.status && o.status === 'ready' && state.sound) {
+        return;
+      }
+      if (!was) return;
+      if ((o.editCount || 0) > was.editCount) {
+        if (state.sound) chime('newOrder');
+        toast('Ticket #' + o.ticketNo + ' changed · ' + o.tagLabel, true);
+      } else if (was.status !== o.status && o.status === 'ready' && state.sound) {
         chime('runner');
       }
     });

@@ -1465,6 +1465,21 @@ import {
       return;
     }
 
+    // Locations a manager added since this file was written - the locker
+    // room, the halfway house. A code for one cannot resolve at first paint
+    // because it exists only in Firestore, and holding every guest behind
+    // that read to help the few would be the wrong trade. So the screen
+    // paints from the printed tents and corrects itself a moment later; this
+    // also means a location renamed mid-service follows without a reload.
+    db.watchTags(function () {
+      var resolved = tagId ? tagById(tagId) : null;
+      var sameAsBefore = (resolved && resolved.id) === (state.boot.tag && state.boot.tag.id);
+      if (sameAsBefore) return;
+      state.boot.tag = resolved;
+      state.boot.tagUnknown = Boolean(tagId && !resolved);
+      render();
+    });
+
     // Live 86 list. If the kitchen runs out of shrimp while a guest is mid-build
     // the tile greys out under them, and submitOrder re-checks anyway.
     // Live service night. A manager flipping to Burger Night changes the lane

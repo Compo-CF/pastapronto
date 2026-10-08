@@ -150,50 +150,80 @@ export function validateDraft(draft, cfg, unavailable = []) {
  * @param {object} draft     guest input
  * @param {object} ctx       { ticketNo, claimCode, station, queueDepth, tag, serviceDate, now }
  */
+/**
+ * One line of a ticket, normalised into what the kitchen reads.
+ *
+ * Shared by buildOrder() and editPatch() on purpose. A manager correcting an
+ * order has to produce a line indistinguishable from one a guest built - if
+ * these two ever diverged, an edited bowl would carry a stale cook time or a
+ * stale allergen list, and the chit would describe food nobody is making.
+ *
+ * @param {object} line  the raw choices
+ * @param {number} i     position in the ticket, which names the line
+ * @param {string} kind  pasta | pizza | burger, decided once for the ticket
+ */
+export function buildLine(line, i, kind) {
+  const common = {
+    lineId: 'ln' + String(i + 1).padStart(2, '0'),
+    guestLabel: String(line.guestLabel || `Guest ${i + 1}`).slice(0, 24),
+    kind,
+    sauces: menu.saucesOf(line),
+    proteins: menu.proteinsOf(line),
+    toppings: line.toppings || [],
+    notes: String(line.notes || '').slice(0, 140),
+    allergens: menu.allergensFor(line),
+    cookSec: cooktime.lineCookSec(line),
+    dish: menu.describe(line),
+  };
+
+  if (kind === 'burger') {
+    // The bun is the base, the patty is the protein, and one basket rides
+    // along as a side. No portion and no spice level - a burger is one size.
+    return {
+      ...common,
+      base: line.base,
+      cheeses: menu.cheesesOf(line),
+      sides: line.sides || [],
+    };
+  }
+
+  if (kind === 'pizza') {
+    // No portion (every pizza is the same size), no protein or sides - meats
+    // are just toppings on a pizza - and no spice level.
+    return { ...common, cheeses: menu.cheesesOf(line) };
+  }
+
+  return {
+    ...common,
+    pasta: line.pasta,
+    sides: line.sides || [],
+    portion: line.portion,
+    spice: line.spice || 'mild',
+  };
+}
+
+/**
+ * What a line amounts to, for telling "this changed" from "this did not".
+ *
+ * Only the parts a cook would act on. lineId is excluded because moving a bowl
+ * up the ticket does not change the food, and cookSec/dish/allergens are
+ * excluded because they are derived - including them would report every line
+ * as edited the day the cook-time model is retuned.
+ */
+export function lineFingerprint(line) {
+  const scalars = ['guestLabel', 'kind', 'pasta', 'base', 'portion', 'spice', 'notes']
+    .map((k) => k + '=' + (line[k] == null ? '' : String(line[k])));
+  const lists = ['sauces', 'cheeses', 'proteins', 'toppings', 'sides']
+    .map((k) => k + '=' + (line[k] || []).slice().sort().join('|'));
+  return scalars.concat(lists).join(';');
+}
+
 export function buildOrder(draft, ctx) {
   const nowIso = (ctx.now || new Date()).toISOString();
 
   const kind = menu.kindOf((draft.lines || [])[0] || {});
 
-  const lines = (draft.lines || []).map((line, i) => {
-    const common = {
-      lineId: 'ln' + String(i + 1).padStart(2, '0'),
-      guestLabel: String(line.guestLabel || `Guest ${i + 1}`).slice(0, 24),
-      kind,
-      sauces: menu.saucesOf(line),
-      proteins: menu.proteinsOf(line),
-      toppings: line.toppings || [],
-      notes: String(line.notes || '').slice(0, 140),
-      allergens: menu.allergensFor(line),
-      cookSec: cooktime.lineCookSec(line),
-      dish: menu.describe(line),
-    };
-
-    if (kind === 'burger') {
-      // The bun is the base, the patty is the protein, and one basket rides
-      // along as a side. No portion and no spice level - a burger is one size.
-      return {
-        ...common,
-        base: line.base,
-        cheeses: menu.cheesesOf(line),
-        sides: line.sides || [],
-      };
-    }
-
-    if (kind === 'pizza') {
-      // No portion (every pizza is the same size), no protein or sides - meats
-      // are just toppings on a pizza - and no spice level.
-      return { ...common, cheeses: menu.cheesesOf(line) };
-    }
-
-    return {
-      ...common,
-      pasta: line.pasta,
-      sides: line.sides || [],
-      portion: line.portion,
-      spice: line.spice || 'mild',
-    };
-  });
+  const lines = (draft.lines || []).map((line, i) => buildLine(line, i, kind));
 
   const avoid = Array.isArray(draft.avoidAllergens) ? draft.avoidAllergens : [];
   const cookEstimateSec = cooktime.orderCookSec(lines);
@@ -461,6 +491,122 @@ export function stationForTicket(ticketNo, stations, autoAssign = true, kind = '
   if (!eligible.length) return null;
   if (!autoAssign) return eligible[0].id;
   return eligible[(Math.max(1, ticketNo) - 1) % eligible.length].id;
+}
+
+/**
+ * Change an order that already exists, and record what changed.
+ *
+ * A manager fields a verbal correction - the member moved to another table, a
+ * bowl should have had no onion, a sixth person sat down - and the chit on the
+ * rail has to catch up without losing its ticket number or its place in the
+ * queue. So this is a patch, never a rebuild: identity (ticket number, claim
+ * code, service date, kind) is untouched, and firestore.rules enforces that
+ * independently of whatever a client believes.
+ *
+ * Returns null when nothing actually differs. A manager who opens an order,
+ * reads it and saves must not light up the kitchen screen - the highlight is
+ * only worth anything while it means something changed.
+ *
+ * @param {object} current   the order as it stands
+ * @param {object} changes   {lines?, guestCount?, notes?}
+ * @param {object} ctx       {actor, now, tag} - `tag` only when the table
+ *                           moves, and explicitly null to make it a walk-up
+ */
+export function editPatch(current, changes = {}, ctx = {}) {
+  const { actor = 'manager', now = new Date() } = ctx;
+
+  // Delivered food cannot be un-cooked and a voided ticket is not a ticket.
+  // Either would light up a rail nobody is working.
+  if (current.status === STATUS.VOIDED || current.status === STATUS.DELIVERED) {
+    throw Object.assign(
+      new Error(`Cannot edit an order that is ${current.status}`),
+      { code: 'NOT_EDITABLE', status: current.status },
+    );
+  }
+
+  const nowIso = now.toISOString();
+  const patch = {};
+  const what = [];
+  let editedLineIds = [];
+
+  if (Array.isArray(changes.lines)) {
+    if (!changes.lines.length) {
+      throw Object.assign(new Error('An order needs at least one item.'), { code: 'EMPTY_ORDER' });
+    }
+    // Rebuilt through the same path a new order takes, so an edited bowl
+    // carries a cook time and an allergen list that match what it now is.
+    const rebuilt = changes.lines.map((line, i) => buildLine(line, i, current.kind));
+    const was = new Map((current.lines || []).map((l) => [l.lineId, lineFingerprint(l)]));
+
+    editedLineIds = rebuilt
+      .filter((l) => was.get(l.lineId) !== lineFingerprint(l))
+      .map((l) => l.lineId);
+
+    const countChanged = rebuilt.length !== (current.lines || []).length;
+    if (editedLineIds.length || countChanged) {
+      patch.lines = rebuilt;
+      patch.cookEstimateSec = cooktime.orderCookSec(rebuilt);
+      patch.allergenFlags = [...new Set(rebuilt.flatMap((l) => l.allergens))];
+      what.push('items');
+    }
+  }
+
+  // `tag` being present at all means the table moved - including to null,
+  // which is how an order becomes a walk-up. Absent means leave it alone,
+  // which is why this reads the key rather than the value.
+  if ('tag' in ctx) {
+    const tag = ctx.tag;
+    const label = tag ? tag.label : 'Walk-up';
+    if (label !== current.tagLabel) {
+      patch.tag = tag ? tag.id : null;
+      patch.tagLabel = label;
+      patch.tagKind = tag ? tag.kind : 'pickup';
+      what.push('table');
+    }
+  }
+
+  if (changes.guestCount != null) {
+    const n = Number(changes.guestCount);
+    if (!Number.isInteger(n) || n < 1) {
+      throw Object.assign(new Error('Guest count must be a whole number of people.'), { code: 'BAD_GUESTS' });
+    }
+    if (n !== current.guestCount) { patch.guestCount = n; what.push('guests'); }
+  }
+
+  if (changes.notes != null) {
+    const note = String(changes.notes).slice(0, 240);
+    if (note !== (current.notes || '')) { patch.notes = note; what.push('note'); }
+  }
+
+  if (!what.length) return null;
+
+  patch.editedAt = nowIso;
+  patch.editedBy = actor;
+  // Which lines to light up. Replaced rather than accumulated: a cook needs
+  // "what changed just now", not every line ever touched - a second edit that
+  // kept the first one lit would point them at food that is already right.
+  patch.editedLineIds = editedLineIds;
+  patch.editCount = (current.editCount || 0) + 1;
+  patch.events = [
+    ...(current.events || []),
+    {
+      at: nowIso,
+      action: 'edit',
+      from: current.status,
+      to: current.status,
+      actor,
+      note: what.join(', ').slice(0, 140),
+    },
+  ];
+
+  return patch;
+}
+
+/** True while an edit is still worth showing a cook. */
+export function isEdited(order) {
+  return Boolean(order && order.editedAt)
+    && order.status !== STATUS.DELIVERED
+    && order.status !== STATUS.VOIDED;
 }
 
 /** Short claim code shown to the guest so a server can find their ticket. */

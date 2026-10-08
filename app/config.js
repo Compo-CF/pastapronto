@@ -168,8 +168,69 @@ export const config = {
   ],
 };
 
+/**
+ * Locations a manager added after the fact, which live in Firestore rather
+ * than in this file.
+ *
+ * The tents in `tags` above are printed card stock - they change when someone
+ * reprints them. These do not: the club wanted to put a code in the locker
+ * room on a Thursday afternoon without a deploy, so a manager types a name and
+ * every screen picks it up from the shared document. Built-ins always win a
+ * name collision, so nothing a manager types can shadow Table 7.
+ */
+let customTags = [];
+
+/** A location id: lowercase, dashed, and safe in a URL and a document id. */
+export function tagIdFor(label) {
+  return String(label || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+/**
+ * Is this something we are willing to put on a QR code and route food to?
+ *
+ * Checked on the way in and again on the way out of Firestore, because the
+ * rules cannot tell a manager from anyone else - so this is what stands
+ * between a malformed document and a screen full of broken tents.
+ */
+export function isValidTag(t) {
+  return Boolean(t)
+    && typeof t.id === 'string'
+    && /^[a-z0-9][a-z0-9-]{0,39}$/.test(t.id)
+    && typeof t.label === 'string'
+    && t.label.trim().length > 0
+    && t.label.length <= 40
+    && (t.kind === 'table' || t.kind === 'pickup')
+    && typeof t.area === 'string'
+    && t.area.length <= 40;
+}
+
+/** Replace the manager-added locations. Called from the Firestore listener. */
+export function setCustomTags(list) {
+  const builtIn = new Set(config.tags.map((t) => t.id));
+  const seen = new Set();
+  customTags = (Array.isArray(list) ? list : [])
+    .filter(isValidTag)
+    .filter((t) => !builtIn.has(t.id) && !seen.has(t.id) && seen.add(t.id))
+    .map((t) => ({ id: t.id, label: t.label.trim(), kind: t.kind, area: t.area, custom: true }));
+  return customTags.slice();
+}
+
+/** Just the manager-added ones, for the screen that edits them. */
+export function customTagList() {
+  return customTags.slice();
+}
+
+/** Every location a guest could be sitting at: printed tents plus additions. */
+export function allTags() {
+  return config.tags.concat(customTags);
+}
+
 export function tagById(id) {
-  return config.tags.find((t) => t.id === id) || null;
+  return allTags().find((t) => t.id === id) || null;
 }
 
 /**

@@ -5,7 +5,10 @@
  * The QR codes are generated in the browser by /app/qr.js - no external
  * service ever sees the venue's URLs, and it works with the wifi unplugged.
  */
-import { config, serviceDate, nightList, nightById } from './config.js';
+import {
+  config, serviceDate, nightList, nightById,
+  allTags, customTagList, tagIdFor, kindsForNight,
+} from './config.js';
 import * as menu from './menu.js';
 import * as order from './order.js';
 import * as costing from './costing.js';
@@ -27,6 +30,11 @@ const CATALOG = menu.catalog();
     base: '', orders: [], unavailable: [],
     costs: { items: {}, chargePerCover: null },
     night: config.defaultNight,
+    // The orders panel. `editing` is the id of the open ticket and `draft` is
+    // the working copy of it - never the live snapshot, or a Firestore update
+    // landing mid-edit would rewrite what a manager is halfway through typing.
+    editing: null, draft: null,
+    composing: false, compose: null, busy: false,
   };
 
   var el = {
@@ -43,6 +51,10 @@ const CATALOG = menu.catalog();
     costSheet: document.getElementById('costSheet'),
     chargePerCover: document.getElementById('chargePerCover'),
     toast: document.getElementById('toast'),
+    orderList: document.getElementById('orderList'),
+    composeWrap: document.getElementById('composeWrap'),
+    customTagList: document.getElementById('customTagList'),
+    badgeOrders: document.getElementById('badgeOrders'),
   };
 
   // -------------------------------------------------------------------- stats
@@ -91,7 +103,7 @@ const CATALOG = menu.catalog();
 
   function renderQrs() {
     var versions = [];
-    el.qrgrid.innerHTML = config.tags.map(function (tag) {
+    el.qrgrid.innerHTML = allTags().map(function (tag) {
       var url = tagUrl(tag);
       var svg;
       try {
@@ -112,7 +124,7 @@ const CATALOG = menu.catalog();
       </div>`;
     }).join('');
 
-    el.tents.innerHTML = config.tags.map(function (tag) {
+    el.tents.innerHTML = allTags().map(function (tag) {
       var url = tagUrl(tag);
       var svg;
       try {
@@ -145,7 +157,7 @@ const CATALOG = menu.catalog();
     }).join('');
 
     var maxVersion = versions.length ? Math.max.apply(null, versions) : 0;
-    el.qrMeta.textContent = config.tags.length + ' codes \u00b7 QR version ' + maxVersion +
+    el.qrMeta.textContent = allTags().length + ' codes \u00b7 QR version ' + maxVersion +
       ' \u00b7 error correction M (recovers ~15% damage)';
   }
 
@@ -595,7 +607,7 @@ const CATALOG = menu.catalog();
    * tents live outside the panels for the opposite reason: they print from the
    * QR panel's button, and hiding that panel would take them off the page.
    */
-  var TABS = ['qr', 'cost', 'menu'];
+  var TABS = ['orders', 'qr', 'cost', 'menu'];
   var activeTab = TABS[0];
 
   function showTab(name, moveFocus) {
@@ -698,6 +710,471 @@ const CATALOG = menu.catalog();
 
   // ---------------------------------------------------------------------- boot
 
+  // ------------------------------------------------------------------ orders
+
+  /**
+   * What a manager has to be able to pick for each kind when taking an order
+   * by word of mouth.
+   *
+   * Derived from the same groups the guest app builds from, in the order the
+   * kitchen thinks about them. `single` is the choice a dish cannot have two
+   * of - you get one shape and one size, one bun.
+   */
+  var COMPOSE = {
+    pasta: [
+      { field: 'pasta', group: 'pastas', label: 'Shape', single: true },
+      { field: 'sauces', group: 'sauces', label: 'Sauce' },
+      { field: 'proteins', group: 'proteins', label: 'Protein' },
+      { field: 'toppings', group: 'toppings', label: 'Toppings' },
+      { field: 'portion', group: 'portions', label: 'Size', single: true },
+    ],
+    pizza: [
+      { field: 'sauces', group: 'pizzaSauces', label: 'Sauce' },
+      { field: 'cheeses', group: 'pizzaCheeses', label: 'Cheese' },
+      { field: 'proteins', group: 'pizzaProteins', label: 'Protein' },
+      { field: 'toppings', group: 'pizzaToppings', label: 'Toppings' },
+    ],
+    burger: [
+      { field: 'proteins', group: 'burgerPatties', label: 'Patty' },
+      { field: 'base', group: 'burgerBuns', label: 'Bun', single: true },
+      { field: 'cheeses', group: 'burgerCheeses', label: 'Cheese' },
+      { field: 'toppings', group: 'burgerToppings', label: 'Toppings' },
+      { field: 'sauces', group: 'burgerSauces', label: 'Sauce' },
+      { field: 'sides', group: 'burgerSides', label: 'Side' },
+    ],
+  };
+
+  var CATALOG = menu.catalog();
+
+  function groupItems(groupName) {
+    return (CATALOG[groupName] || []).filter(function (x) { return !x.retired; });
+  }
+
+  function itemLabel(groupName, id) {
+    var found = (CATALOG[groupName] || []).find(function (x) { return x.id === id; });
+    return found ? found.name : id;
+  }
+
+  /** A blank line of the given kind, with the single choices pre-filled. */
+  function blankLine(kind, i) {
+    var line = {
+      guestLabel: 'Guest ' + (i + 1),
+      sauces: [], proteins: [], toppings: [], cheeses: [], sides: [], notes: '',
+    };
+    (COMPOSE[kind] || []).forEach(function (spec) {
+      if (!spec.single) return;
+      var first = groupItems(spec.group)[0];
+      line[spec.field] = first ? first.id : null;
+    });
+    return line;
+  }
+
+  function pickerHtml(spec, line, path) {
+    var items = groupItems(spec.group);
+    if (spec.single) {
+      return html`<div class="field">
+        <label>${spec.label}</label>
+        <select class="select" data-edit="${path}" data-field="${spec.field}">
+          ${items.map(function (x) {
+            return html`<option value="${x.id}" ${raw(line[spec.field] === x.id ? 'selected' : '')}>${x.name}</option>`;
+          })}
+        </select>
+      </div>`;
+    }
+    var chosen = line[spec.field] || [];
+    return html`<div class="field">
+      <label>${spec.label}</label>
+      <div class="chips">
+        ${items.map(function (x) {
+          var on = chosen.indexOf(x.id) !== -1;
+          return html`<button class="chip" type="button" data-toggle="${path}"
+            data-field="${spec.field}" data-id="${x.id}"
+            aria-pressed="${on ? 'true' : 'false'}">${x.name}</button>`;
+        })}
+      </div>
+    </div>`;
+  }
+
+  function lineEditor(line, kind, path, index, canRemove) {
+    return html`<div class="oline">
+      <div class="row" style="align-items:flex-end;flex-wrap:wrap">
+        <div class="field grow" style="min-width:160px">
+          <label>Who it is for</label>
+          <input class="input" type="text" maxlength="24" value="${line.guestLabel || ''}"
+            data-edit="${path}" data-field="guestLabel">
+        </div>
+        ${raw(canRemove
+          ? '<button class="btn btn-ghost" type="button" data-removeline="' + path + '">Remove</button>'
+          : '')}
+      </div>
+      ${(COMPOSE[kind] || []).map(function (spec) { return pickerHtml(spec, line, path); })}
+      <div class="field">
+        <label>Note for the kitchen</label>
+        <input class="input" type="text" maxlength="140" value="${line.notes || ''}"
+          data-edit="${path}" data-field="notes">
+      </div>
+    </div>`;
+  }
+
+  function tagOptions(selectedId) {
+    return allTags().map(function (tg) {
+      return html`<option value="${tg.id}" ${raw(tg.id === selectedId ? 'selected' : '')}>${tg.label}</option>`;
+    });
+  }
+
+  // --------------------------------------------------------------- the list
+
+  function orderSummary(o) {
+    return (o.lines || []).map(function (l) {
+      return l.guestLabel + ': ' + l.dish;
+    }).join(' \u00b7 ');
+  }
+
+  function orderRow(o) {
+    var editable = o.status !== 'delivered' && o.status !== 'voided';
+    var isOpen = state.editing === o.id;
+    var edited = order.isEdited(o);
+
+    var head = html`<div class="orow-head">
+      <span class="orow-no">#${o.ticketNo}</span>
+      <span class="orow-status is-${o.status}">${o.status}</span>
+      <span class="orow-where">${o.tagLabel}</span>
+      <span class="muted">${o.memberName || 'Member ' + o.memberNumber} \u00b7 ${o.guestCount} guests</span>
+      ${raw(edited ? '<span class="orow-edited">Changed</span>' : '')}
+      <span class="grow"></span>
+      ${raw(editable
+        ? '<button class="btn btn-ghost" type="button" data-openorder="' + o.id + '">'
+          + (isOpen ? 'Close' : 'Change') + '</button>'
+        : '')}
+    </div>`;
+
+    if (!isOpen) {
+      return html`<div class="orow ${edited ? 'is-edited' : ''}">
+        ${raw(head)}
+        <div class="orow-body muted">${orderSummary(o)}</div>
+      </div>`;
+    }
+
+    var d = state.draft;
+    return html`<div class="orow is-open ${edited ? 'is-edited' : ''}">
+      ${raw(head)}
+      <div class="orow-edit stack">
+        <div class="row" style="flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="min-width:200px">
+            <label>Table</label>
+            <select class="select" data-edit="order" data-field="tagId">${tagOptions(d.tagId)}</select>
+          </div>
+          <div class="field" style="width:120px">
+            <label>Guests</label>
+            <input class="input" type="number" min="1" max="${config.order.maxGuests}"
+              value="${d.guestCount}" data-edit="order" data-field="guestCount">
+          </div>
+        </div>
+        <div class="field">
+          <label>Note for the whole ticket</label>
+          <input class="input" type="text" maxlength="240" value="${d.notes || ''}"
+            data-edit="order" data-field="notes">
+        </div>
+        ${d.lines.map(function (l, i) {
+          return lineEditor(l, o.kind, 'line:' + i, i, d.lines.length > 1);
+        })}
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn btn-primary" type="button" data-saveorder="${o.id}">Save changes</button>
+          <button class="btn btn-ghost" type="button" data-openorder="${o.id}">Cancel</button>
+          <span class="grow"></span>
+          <button class="btn btn-ghost" type="button" data-voidorder="${o.id}">Void this ticket</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderOrders() {
+    var orders = (state.orders || []).slice().sort(function (a, b) {
+      return (b.ticketNo || 0) - (a.ticketNo || 0);
+    });
+
+    var live = orders.filter(function (o) {
+      return o.status !== 'delivered' && o.status !== 'voided';
+    }).length;
+    el.badgeOrders.hidden = live === 0;
+    el.badgeOrders.textContent = String(live);
+
+    el.orderList.innerHTML = orders.length
+      ? orders.map(orderRow).join('')
+      : '<div class="card muted">Nothing has been ordered yet tonight.</div>';
+
+    el.composeWrap.innerHTML = state.composing ? composePanel() : '';
+  }
+
+  // ------------------------------------------------------------- composing
+
+  function composePanel() {
+    var c = state.compose;
+    return html`<div class="card stack" style="margin-top:14px">
+      <div class="row" style="align-items:center">
+        <strong class="grow">Take an order</strong>
+        <button class="btn btn-ghost" type="button" data-cancelcompose="1">Cancel</button>
+      </div>
+      <div class="row" style="flex-wrap:wrap;align-items:flex-end">
+        <div class="field" style="min-width:200px">
+          <label>Table</label>
+          <select class="select" data-edit="compose" data-field="tagId">${tagOptions(c.tagId)}</select>
+        </div>
+        <div class="field" style="width:160px">
+          <label>${config.venue.memberLabel}</label>
+          <input class="input" type="text" inputmode="numeric" maxlength="4" value="${c.memberNumber}"
+            data-edit="compose" data-field="memberNumber" placeholder="1794">
+        </div>
+        <div class="field" style="width:120px">
+          <label>Guests</label>
+          <input class="input" type="number" min="1" max="${config.order.maxGuests}"
+            value="${c.guestCount}" data-edit="compose" data-field="guestCount">
+        </div>
+        <div class="field" style="min-width:150px">
+          <label>Kind</label>
+          <select class="select" data-edit="compose" data-field="kind">
+            ${kindsForNight(state.night).map(function (k) {
+              return html`<option value="${k}" ${raw(c.kind === k ? 'selected' : '')}>${k}</option>`;
+            })}
+          </select>
+        </div>
+      </div>
+      ${c.lines.map(function (l, i) {
+        return lineEditor(l, c.kind, 'cline:' + i, i, c.lines.length > 1);
+      })}
+      <div class="row" style="flex-wrap:wrap">
+        <button class="btn btn-ghost" type="button" data-addline="1">Add another item</button>
+        <span class="grow"></span>
+        <button class="btn btn-primary" type="button" data-placeorder="1"
+          ${raw(state.busy ? 'disabled' : '')}>${state.busy ? 'Sending...' : 'Send to the kitchen'}</button>
+      </div>
+    </div>`;
+  }
+
+  function freshCompose() {
+    var kinds = kindsForNight(state.night);
+    var kind = kinds[0];
+    var firstTable = allTags()[0];
+    return {
+      tagId: firstTable ? firstTable.id : null,
+      memberNumber: '',
+      guestCount: 1,
+      kind: kind,
+      lines: [blankLine(kind, 0)],
+    };
+  }
+
+  // ---------------------------------------------------------------- actions
+
+  /** Find the object a data-edit path points at. */
+  function targetFor(path) {
+    if (path === 'order') return state.draft;
+    if (path === 'compose') return state.compose;
+    var m = /^line:(\d+)$/.exec(path);
+    if (m) return state.draft.lines[Number(m[1])];
+    m = /^cline:(\d+)$/.exec(path);
+    if (m) return state.compose.lines[Number(m[1])];
+    return null;
+  }
+
+  function openOrder(id) {
+    if (state.editing === id) { state.editing = null; state.draft = null; renderOrders(); return; }
+    var o = (state.orders || []).find(function (x) { return x.id === id; });
+    if (!o) return;
+    state.editing = id;
+    // A copy. Editing the live snapshot would mean a Firestore update halfway
+    // through typing silently rewriting what is on screen.
+    state.draft = {
+      tagId: o.tag,
+      guestCount: o.guestCount,
+      notes: o.notes || '',
+      lines: (o.lines || []).map(function (l) { return JSON.parse(JSON.stringify(l)); }),
+    };
+    renderOrders();
+  }
+
+  async function saveOrder(id) {
+    var d = state.draft;
+    if (!d) return;
+    try {
+      var result = await db.editOrder(id, {
+        lines: d.lines,
+        guestCount: Number(d.guestCount),
+        notes: d.notes,
+      }, { actor: 'manager', tagId: d.tagId });
+
+      state.editing = null;
+      state.draft = null;
+      renderOrders();
+      toast(result ? 'Saved. The kitchen screen is showing the change.' : 'Nothing had changed.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function voidOrder(id) {
+    try {
+      await db.transition(id, 'void', { actor: 'manager', note: 'voided by manager' });
+      state.editing = null;
+      state.draft = null;
+      toast('Ticket voided.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function placeOrder() {
+    var c = state.compose;
+    if (!/^[1-9][0-9]{0,3}$/.test(String(c.memberNumber || ''))) {
+      toast('A member number is needed so the night bills correctly.', true);
+      return;
+    }
+    state.busy = true;
+    renderOrders();
+    try {
+      var created = await db.submitOrder({
+        memberNumber: String(c.memberNumber),
+        memberName: '',
+        memberStatus: 'unverified',
+        lang: 'en',
+        guestCount: Number(c.guestCount),
+        // Says where it came from, so the close-out can tell a ticket a member
+        // built from one a manager took at the bar.
+        source: 'manager',
+        avoidAllergens: [],
+        notes: '',
+        lines: c.lines.map(function (l) { return Object.assign({ kind: c.kind }, l); }),
+      }, { tagId: c.tagId, queueDepth: 0 });
+
+      state.busy = false;
+      state.composing = false;
+      state.compose = null;
+      renderOrders();
+      toast('Ticket #' + created.ticketNo + ' is on the rail.');
+    } catch (err) {
+      state.busy = false;
+      renderOrders();
+      toast(err.errors && err.errors.length ? err.errors[0] : err.message, true);
+    }
+  }
+
+  // ------------------------------------------------------------- locations
+
+  function renderCustomTags() {
+    var list = customTagList();
+    el.customTagList.innerHTML = list.length
+      ? '<div class="chips">' + list.map(function (tg) {
+        return html`<span class="chip is-static">${tg.label}
+          <button class="chip-x" type="button" data-removetag="${tg.id}"
+            aria-label="Remove ${tg.label}">&times;</button></span>`;
+      }).join('') + '</div>'
+      : '<p class="muted" style="margin:0;font-size:14px">No extra locations yet.</p>';
+  }
+
+  async function addTag() {
+    var label = document.getElementById('newTagLabel').value.trim();
+    var area = document.getElementById('newTagArea').value.trim() || 'Clubhouse';
+    var id = tagIdFor(label);
+    if (!id) { toast('Give the location a name.', true); return; }
+    if (allTags().some(function (tg) { return tg.id === id; })) {
+      toast('There is already a location called that.', true);
+      return;
+    }
+    try {
+      await db.saveTags(customTagList().concat([{ id: id, label: label, kind: 'table', area: area }]));
+      document.getElementById('newTagLabel').value = '';
+      document.getElementById('newTagArea').value = '';
+      toast(label + ' added. Its code is below.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function removeTag(id) {
+    try {
+      await db.saveTags(customTagList().filter(function (tg) { return tg.id !== id; }));
+      toast('Location removed. Any code already printed for it will stop working.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  // --------------------------------------------------------------- wiring
+
+  document.getElementById('newOrderBtn').addEventListener('click', function () {
+    state.composing = !state.composing;
+    state.compose = state.composing ? freshCompose() : null;
+    renderOrders();
+  });
+
+  document.getElementById('addTagBtn').addEventListener('click', addTag);
+
+  // One delegated listener for the whole panel. The markup is re-rendered on
+  // every keystroke that matters, so individually bound handlers would be
+  // rebound constantly and leak.
+  document.getElementById('panel-orders').addEventListener('click', function (ev) {
+    var t = ev.target.closest('[data-openorder],[data-saveorder],[data-voidorder],[data-toggle],[data-removeline],[data-addline],[data-placeorder],[data-cancelcompose]');
+    if (!t) return;
+    if (t.dataset.openorder) return openOrder(t.dataset.openorder);
+    if (t.dataset.saveorder) return saveOrder(t.dataset.saveorder);
+    if (t.dataset.voidorder) return voidOrder(t.dataset.voidorder);
+    if (t.dataset.placeorder) return placeOrder();
+    if (t.dataset.cancelcompose) {
+      state.composing = false; state.compose = null; return renderOrders();
+    }
+    if (t.dataset.addline) {
+      state.compose.lines.push(blankLine(state.compose.kind, state.compose.lines.length));
+      return renderOrders();
+    }
+    if (t.dataset.removeline) {
+      var rm = /^(c?)line:(\d+)$/.exec(t.dataset.removeline);
+      if (!rm) return;
+      var list = rm[1] ? state.compose.lines : state.draft.lines;
+      list.splice(Number(rm[2]), 1);
+      return renderOrders();
+    }
+    if (t.dataset.toggle) {
+      var obj = targetFor(t.dataset.toggle);
+      if (!obj) return;
+      var field = t.dataset.field;
+      var arr = obj[field] || (obj[field] = []);
+      var at = arr.indexOf(t.dataset.id);
+      if (at === -1) arr.push(t.dataset.id); else arr.splice(at, 1);
+      return renderOrders();
+    }
+    return undefined;
+  });
+
+  // Typing is kept out of the re-render path: rewriting the panel on every
+  // keystroke would move the caret to the end of whatever was being typed.
+  document.getElementById('panel-orders').addEventListener('input', function (ev) {
+    var t = ev.target.closest('[data-edit]');
+    if (!t) return;
+    var obj = targetFor(t.dataset.edit);
+    if (obj) obj[t.dataset.field] = t.value;
+  });
+
+  document.getElementById('panel-orders').addEventListener('change', function (ev) {
+    var t = ev.target.closest('[data-edit]');
+    if (!t || t.tagName !== 'SELECT') return;
+    var obj = targetFor(t.dataset.edit);
+    if (!obj) return;
+    obj[t.dataset.field] = t.value;
+    // Switching kind invalidates every choice already made - a pizza has no
+    // shape and a bowl has no bun.
+    if (t.dataset.field === 'kind' && t.dataset.edit === 'compose') {
+      state.compose.lines = state.compose.lines.map(function (_, i) {
+        return blankLine(state.compose.kind, i);
+      });
+    }
+    renderOrders();
+  });
+
+  document.getElementById('panel-qr').addEventListener('click', function (ev) {
+    var t = ev.target.closest('[data-removetag]');
+    if (t) removeTag(t.dataset.removetag);
+  });
+
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Manager');
@@ -709,7 +1186,7 @@ const CATALOG = menu.catalog();
     // Whichever section this manager was last working in. A cost sheet takes
     // more than one sitting to fill in, and landing back on QR codes every
     // time would make that worse than it needs to be.
-    showTab(recall('admin.tab', 'qr'), false);
+    showTab(recall('admin.tab', 'orders'), false);
 
     // Whatever address this page was opened from is an address a phone can
     // reach, so it is the right default to print into the codes.
@@ -765,11 +1242,21 @@ const CATALOG = menu.catalog();
       onError: function (err) { toast('Could not read the cost sheet: ' + err.code, true); },
     });
 
+    db.watchTags(function () {
+      renderCustomTags();
+      renderQrs();
+      // An order panel that is open shows a table dropdown built from this.
+      if (state.editing || state.composing) renderOrders();
+    }, {
+      onError: function (err) { toast('Could not read the locations: ' + err.code, true); },
+    });
+
     db.watchToday(function (orders) {
       state.orders = orders;
       renderStats(order.metrics(orders, config.sla));
       renderNightSwitch();
       applyCosts();
+      renderOrders();
     }, {
       onError: function (err) { toast('Lost the connection: ' + err.code, true); },
     });

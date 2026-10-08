@@ -34,7 +34,9 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 import { firebaseConfig, isConfigured } from './firebase-config.js';
-import { config, serviceDate, tagById } from './config.js';
+import {
+  config, serviceDate, tagById, setCustomTags, isValidTag,
+} from './config.js';
 import * as order from './order.js';
 import * as menu from './menu.js';
 import * as costing from './costing.js';
@@ -112,6 +114,7 @@ const ordersCol = collection(db, 'orders');
 const availabilityRef = doc(db, 'config', 'availability');
 const costsRef = doc(db, 'config', 'costs');
 const serviceRef = doc(db, 'config', 'service');
+const tagsRef = doc(db, 'config', 'tags');
 
 /**
  * How long to wait for an anonymous identity before calling it a failure.
@@ -509,6 +512,111 @@ export async function transition(orderId, action, { actor = 'kitchen', note = ''
     tx.update(ref, patch);
     return { ...current, ...patch };
   });
+}
+
+/**
+ * Apply a manager's correction to an order that already exists.
+ *
+ * Read-modify-write inside a transaction, like transition(), and for the same
+ * reason: two managers on two tablets editing one ticket must not each write a
+ * patch built from a version the other has already replaced. The transaction
+ * re-reads, so the second edit builds on the first instead of erasing it.
+ *
+ * Returns null when the edit was a no-op, so a caller can say "nothing
+ * changed" rather than claim a save that did not happen.
+ */
+export async function editOrder(orderId, changes, { actor = 'manager', tagId } = {}) {
+  await ready();
+  const ref = doc(db, 'orders', orderId);
+
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) {
+      throw Object.assign(new Error('Order not found'), { code: 'NOT_FOUND' });
+    }
+    const current = { id: snap.id, ...snap.data() };
+
+    const ctx = { actor };
+    // Only pass a tag when the caller asked for one. order.editPatch() tells
+    // "move this to walk-up" from "leave the table alone" by whether the key
+    // is there at all, so undefined must not be forwarded as null.
+    if (tagId !== undefined) ctx.tag = tagId ? tagById(tagId) : null;
+
+    const patch = order.editPatch(current, changes, ctx);
+    if (!patch) return null;
+
+    tx.update(ref, patch);
+    return { ...current, ...patch };
+  });
+}
+
+// ------------------------------------------------------------- locations
+
+/**
+ * Locations a manager added, shared by every screen.
+ *
+ * Validated on the way out as well as the way in. The rules can bound the
+ * shape of this document but cannot tell a manager from anyone else, so a
+ * malformed entry is dropped here rather than rendered as a broken tent or
+ * used to route food somewhere that does not exist.
+ */
+export function watchTags(cb, { onError } = {}) {
+  return onSnapshot(
+    tagsRef,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      cb(setCustomTags(data && Array.isArray(data.custom) ? data.custom : []));
+    },
+    (err) => {
+      console.error('[db] watchTags failed:', err.code, err.message);
+      // Fall back to the printed tents rather than to no locations at all:
+      // every table in the building still works, only the additions are lost.
+      cb(setCustomTags([]));
+      if (onError) onError(err);
+    },
+  );
+}
+
+/** Replace the manager-added locations. Manager screen only. */
+export async function saveTags(list) {
+  await ready();
+  const clean = (Array.isArray(list) ? list : []).filter(isValidTag).map((t) => ({
+    id: t.id, label: String(t.label).trim(), kind: t.kind, area: t.area,
+  }));
+  if (clean.length > 60) {
+    throw Object.assign(new Error('That is more locations than the club has.'), { code: 'TOO_MANY' });
+  }
+  await setDoc(tagsRef, { custom: clean, updatedAt: serverTimestamp() }, { merge: true });
+  return setCustomTags(clean);
+}
+
+/**
+ * Read the locations once, before anything that needs to resolve a tag id.
+ *
+ * The guest app boots from a `?t=` in the URL, and a manager-added code only
+ * exists in Firestore - so resolving it before the first snapshot lands would
+ * tell a member in the locker room that their code is unknown. Bounded the
+ * same way getUnavailable() is, and for the same reason: a hang is not a
+ * rejection, and a slow read must not stop the majority of guests sitting at a
+ * table this file already knows about.
+ */
+export async function loadTags({ timeoutMs = 2500 } = {}) {
+  await ready();
+  try {
+    const snap = await Promise.race([
+      getDoc(tagsRef),
+      new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    if (!snap) {
+      console.warn('[db] loadTags timed out after ' + timeoutMs + 'ms; printed tents only');
+      return setCustomTags([]);
+    }
+    const data = snap.exists() ? snap.data() : null;
+    return setCustomTags(data && Array.isArray(data.custom) ? data.custom : []);
+  } catch (err) {
+    console.warn('[db] loadTags failed, printed tents only:', err && err.message);
+    return setCustomTags([]);
+  }
 }
 
 // ----------------------------------------------------------------- listeners
