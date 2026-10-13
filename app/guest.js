@@ -1604,6 +1604,17 @@ import {
     // that read to help the few would be the wrong trade. So the screen
     // paints from the printed tents and corrects itself a moment later; this
     // also means a location renamed mid-service follows without a reload.
+    // A rename the club made last week has to be on the tiles the first time
+    // they paint, not a moment later - so this is read once before the menu
+    // is built, and watched after.
+    await db.loadMenuOverrides();
+    state.boot.menu = menuCatalog();
+    render();
+    db.watchMenuOverrides(function () {
+      state.boot.menu = menuCatalog();
+      render();
+    });
+
     db.watchTags(function () {
       var resolved = tagId ? tagById(tagId) : null;
       var sameAsBefore = (resolved && resolved.id) === (state.boot.tag && state.boot.tag.id);

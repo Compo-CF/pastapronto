@@ -2609,6 +2609,72 @@ test('the close-out counts every kind it served, and names it correctly', () => 
   });
 });
 
+// ------------------------------------------------- manager menu edits
+
+test("a rename reaches every screen, because they share the objects", () => {
+  const c = menu.catalog();
+  const before = c.toppings.find((x) => x.id === "parmesan").name;
+
+  menu.applyMenuOverrides({ parmesan: { name: "Shaved Parmesan" } });
+  // The same array every screen captured at load, not a copy of it.
+  assert.strictEqual(c.toppings.find((x) => x.id === "parmesan").name, "Shaved Parmesan");
+  // And everything derived from it follows without being told.
+  const bowl = { pasta: "penne", sauces: ["marinara"], proteins: [], toppings: ["parmesan"], sides: [], portion: "regular" };
+  assert.ok(menu.ingredientList(bowl, "en").some((r) => r.items.includes("Shaved Parmesan")));
+
+  menu.applyMenuOverrides({});
+  assert.strictEqual(c.toppings.find((x) => x.id === "parmesan").name, before,
+    "clearing an override restores the real name, not the last one");
+});
+
+test("removing an item takes it off the menu and leaves old tickets alone", () => {
+  const c = menu.catalog();
+  menu.applyMenuOverrides({ broccoli: { retired: true } });
+  assert.strictEqual(c.toppings.find((x) => x.id === "broccoli").retired, true);
+
+  // A ticket already taken still reads correctly - the item is hidden from
+  // members, not deleted from the world.
+  const old = { pasta: "penne", sauces: ["marinara"], proteins: [], toppings: ["broccoli"], sides: [], portion: "regular" };
+  assert.deepStrictEqual(menu.validateLine(old, config.order), []);
+  assert.ok(menu.ingredientList(old, "en").some((r) => r.items.includes("Broccoli")));
+  menu.applyMenuOverrides({});
+});
+
+test("a mechanic can be renamed but never removed", () => {
+  const c = menu.catalog();
+  // "No Sauce" is how a guest says no. Retiring it would take away the
+  // answer, not the ingredient.
+  assert.strictEqual(menu.isEditableItem(c.pizzaSauces.find((x) => x.id === "pz_no_sauce")), false);
+  menu.applyMenuOverrides({ pz_no_sauce: { retired: true, name: "Plain" } });
+  const it = c.pizzaSauces.find((x) => x.id === "pz_no_sauce");
+  assert.ok(!it.retired, "the removal is refused");
+  assert.strictEqual(it.name, "Plain", "the rename is not");
+  menu.applyMenuOverrides({});
+});
+
+test("a group cannot be emptied", () => {
+  // Retiring every cheese leaves a pizza nobody can order, and the failure
+  // would surface as a guest stuck on a step with no tiles on it.
+  const all = {};
+  menu.catalog().pizzaCheeses.filter(menu.isEditableItem).forEach((x) => { all[x.id] = { retired: true }; });
+  assert.ok(menu.overrideProblems(all).length, "saving this has to be refused");
+
+  // One left is enough.
+  const keys = Object.keys(all);
+  delete all[keys[0]];
+  assert.deepStrictEqual(menu.overrideProblems(all), []);
+});
+
+test("what a manager changed round-trips back out", () => {
+  menu.applyMenuOverrides({ parmesan: { name: "Shaved Parmesan" }, broccoli: { retired: true } });
+  assert.deepStrictEqual(menu.menuOverrides(), {
+    parmesan: { name: "Shaved Parmesan" },
+    broccoli: { retired: true },
+  });
+  menu.applyMenuOverrides({});
+  assert.deepStrictEqual(menu.menuOverrides(), {}, "nothing changed means nothing saved");
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');

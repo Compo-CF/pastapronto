@@ -470,6 +470,146 @@ export function findAnywhere(id) {
   return null;
 }
 
+// ------------------------------------------------------- manager overrides
+
+/**
+ * The groups a manager may edit, in the order the manager screen lists them.
+ *
+ * Allergens, portions and spice are absent on purpose: they are not
+ * ingredients a kitchen stocks, and renaming "Kid Size" is not the kind of
+ * change this is for.
+ */
+export const EDITABLE_GROUPS = [
+  ['pastas', 'Pasta shapes'],
+  ['sauces', 'Pasta sauces'],
+  ['proteins', 'Pasta proteins'],
+  ['toppings', 'Pasta toppings'],
+  ['sides', 'Pasta sides'],
+  ['pizzaCrusts', 'Pizza crusts'],
+  ['pizzaSauces', 'Pizza sauces'],
+  ['pizzaCheeses', 'Pizza cheeses'],
+  ['pizzaProteins', 'Pizza meats'],
+  ['pizzaToppings', 'Pizza toppings'],
+  ['burgerBuns', 'Burger buns'],
+  ['burgerPatties', 'Burger patties'],
+  ['burgerCheeses', 'Burger cheeses'],
+  ['burgerToppings', 'Burger toppings'],
+  ['burgerSauces', 'Burger sauces'],
+  ['burgerSides', 'Burger sides'],
+];
+
+/**
+ * What an item said before anybody renamed it.
+ *
+ * Captured once, at load, from the arrays themselves - so clearing an
+ * override restores the real name rather than whatever the last override
+ * happened to be. Without this, reverting would mean knowing the original,
+ * and the only copy of it would already have been overwritten.
+ */
+const ORIGINAL = new Map();
+EDITABLE_GROUPS.forEach(([group]) => {
+  (GROUPS[group] || []).forEach((item) => {
+    ORIGINAL.set(item.id, { name: item.name, es: item.es, retired: Boolean(item.retired) });
+  });
+});
+
+/** Is this an ingredient, or one of the mechanics that shares its list? */
+export function isEditableItem(item) {
+  return Boolean(item) && !item.exclusive && !item.amount;
+}
+
+/**
+ * Apply a manager's renames and removals to the live menu.
+ *
+ * Written onto the item objects rather than layered over them, because every
+ * screen holds a reference to these same arrays - several captured
+ * menu.catalog() when their module loaded. Mutating in place is what makes a
+ * rename reach a chit, a cost sheet and a guest's phone at once, without any
+ * of them needing to know an override exists.
+ *
+ * Reverts to ORIGINAL first, so removing an override is simply leaving it out
+ * of the map.
+ *
+ * @param {Object<string, {name?: string, es?: string, retired?: boolean}>} map
+ */
+export function applyMenuOverrides(map) {
+  const safe = map && typeof map === 'object' ? map : {};
+
+  EDITABLE_GROUPS.forEach(([group]) => {
+    (GROUPS[group] || []).forEach((item) => {
+      const was = ORIGINAL.get(item.id);
+      if (!was) return;
+
+      item.name = was.name;
+      if (was.es === undefined) delete item.es; else item.es = was.es;
+      if (was.retired) item.retired = true; else delete item.retired;
+
+      const o = safe[item.id];
+      if (!o) return;
+      if (typeof o.name === 'string' && o.name.trim()) item.name = o.name.trim().slice(0, 40);
+      if (typeof o.es === 'string' && o.es.trim()) item.es = o.es.trim().slice(0, 40);
+      // A mechanic cannot be retired: "No Sauce" is how a guest says no, not
+      // something the kitchen runs out of.
+      if (o.retired === true && isEditableItem(item)) item.retired = true;
+    });
+  });
+
+  return safe;
+}
+
+/** Everything a manager has changed, as it would be saved. */
+export function menuOverrides() {
+  const out = {};
+  EDITABLE_GROUPS.forEach(([group]) => {
+    (GROUPS[group] || []).forEach((item) => {
+      const was = ORIGINAL.get(item.id);
+      if (!was) return;
+      const o = {};
+      if (item.name !== was.name) o.name = item.name;
+      if (item.es !== was.es) o.es = item.es;
+      if (Boolean(item.retired) !== was.retired) o.retired = Boolean(item.retired);
+      if (Object.keys(o).length) out[item.id] = o;
+    });
+  });
+  return out;
+}
+
+/** The item a manager would be editing, with its group. */
+export function editableItem(id) {
+  for (const [group] of EDITABLE_GROUPS) {
+    const hit = (GROUPS[group] || []).find((x) => x.id === id);
+    if (hit) return { group, item: hit, original: ORIGINAL.get(id) };
+  }
+  return null;
+}
+
+/**
+ * Why this set of overrides cannot be saved, or an empty list.
+ *
+ * One rule, and it is the one that matters: a group cannot be emptied.
+ * Retiring every cheese leaves a pizza nobody can order, and the failure
+ * shows up as a guest stuck on a step with no tiles on it and nothing to say
+ * why.
+ */
+export function overrideProblems(map) {
+  const safe = map && typeof map === 'object' ? map : {};
+  const out = [];
+
+  EDITABLE_GROUPS.forEach(([group, label]) => {
+    const items = (GROUPS[group] || []).filter(isEditableItem);
+    if (!items.length) return;
+
+    const left = items.filter((item) => {
+      const o = safe[item.id];
+      if (o && typeof o.retired === 'boolean') return !o.retired;
+      return !(ORIGINAL.get(item.id) || {}).retired;
+    });
+    if (!left.length) out.push(label + ' would have nothing left on it.');
+  });
+
+  return out;
+}
+
 /** Every allergen implied by a built bowl or pizza, de-duplicated. */
 export function allergensFor(line) {
   const out = new Set();

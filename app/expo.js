@@ -312,6 +312,8 @@ const CATALOG = menu.catalog();
     el.conn.textContent = 'live';
     if (db.cacheWarning) toast(db.cacheWarning, true);
 
+    db.watchMenuOverrides(function () { render(); });
+
     db.watchToday(onSnapshotOrders, {
       onError: function (err) {
         el.conn.className = 'conn is-down';

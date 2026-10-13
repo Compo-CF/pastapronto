@@ -115,6 +115,7 @@ const availabilityRef = doc(db, 'config', 'availability');
 const costsRef = doc(db, 'config', 'costs');
 const serviceRef = doc(db, 'config', 'service');
 const tagsRef = doc(db, 'config', 'tags');
+const menuRef = doc(db, 'config', 'menu');
 
 /**
  * How long to wait for an anonymous identity before calling it a failure.
@@ -624,6 +625,90 @@ export async function loadTags({ timeoutMs = 2500 } = {}) {
   } catch (err) {
     console.warn('[db] loadTags failed, printed tents only:', err && err.message);
     return setCustomTags([]);
+  }
+}
+
+// ------------------------------------------------------------ menu edits
+
+/**
+ * Renames and removals a manager has made, applied to the live menu.
+ *
+ * menu.applyMenuOverrides() writes onto the catalog objects every screen
+ * already holds, so a rename lands on a guest's tiles, a kitchen chit and the
+ * cost sheet from one listener - nothing downstream has to know this exists.
+ *
+ * The callback fires after the menu has been changed, not before, so a screen
+ * can simply re-render.
+ */
+export function watchMenuOverrides(cb, { onError } = {}) {
+  return onSnapshot(
+    menuRef,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      cb(menu.applyMenuOverrides(data && data.items ? data.items : {}));
+    },
+    (err) => {
+      console.error('[db] watchMenuOverrides failed:', err.code, err.message);
+      // Fall back to the menu as written. Every item is then on offer under
+      // its original name, which is wrong but workable - the alternative is
+      // a screen with no menu on it at all.
+      cb(menu.applyMenuOverrides({}));
+      if (onError) onError(err);
+    },
+  );
+}
+
+/** Replace the renames and removals. Manager screen only. */
+export async function saveMenuOverrides(map) {
+  await ready();
+
+  const problems = menu.overrideProblems(map);
+  if (problems.length) {
+    throw Object.assign(new Error(problems[0]), { code: 'EMPTY_GROUP', problems });
+  }
+
+  const clean = {};
+  Object.keys(map || {}).forEach((id) => {
+    if (!menu.editableItem(id)) return;
+    const o = map[id];
+    const keep = {};
+    if (typeof o.name === 'string' && o.name.trim()) keep.name = o.name.trim().slice(0, 40);
+    if (typeof o.es === 'string' && o.es.trim()) keep.es = o.es.trim().slice(0, 40);
+    if (o.retired === true) keep.retired = true;
+    if (Object.keys(keep).length) clean[id] = keep;
+  });
+
+  if (Object.keys(clean).length > 300) {
+    throw Object.assign(new Error('That is more menu changes than the club has items.'), { code: 'TOO_MANY' });
+  }
+
+  await setDoc(menuRef, { items: clean, updatedAt: serverTimestamp() }, { merge: false });
+  return menu.applyMenuOverrides(clean);
+}
+
+/**
+ * Read the overrides once, before a screen paints its first menu.
+ *
+ * The guest app draws tiles immediately; without this the first paint shows
+ * an item the club renamed last week under its old name, and corrects itself
+ * a moment later. Bounded the same way the other one-shot reads are.
+ */
+export async function loadMenuOverrides({ timeoutMs = 2500 } = {}) {
+  await ready();
+  try {
+    const snap = await Promise.race([
+      getDoc(menuRef),
+      new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    if (!snap) {
+      console.warn('[db] loadMenuOverrides timed out; using the menu as written');
+      return menu.applyMenuOverrides({});
+    }
+    const data = snap.exists() ? snap.data() : null;
+    return menu.applyMenuOverrides(data && data.items ? data.items : {});
+  } catch (err) {
+    console.warn('[db] loadMenuOverrides failed:', err && err.message);
+    return menu.applyMenuOverrides({});
   }
 }
 

@@ -79,6 +79,14 @@ service cloud.firestore {
         (docId == 'tags'
           && request.resource.data.custom is list
           && request.resource.data.custom.size() <= 60)
+        ||
+        // Renames and removals a manager made. Bounded in size and nothing
+        // more; menu.applyMenuOverrides() checks each entry on the way out,
+        // and refuses to retire a mechanic or empty a group - neither of
+        // which a rule could express without restating the whole menu here.
+        (docId == 'menu'
+          && request.resource.data.items is map
+          && request.resource.data.items.size() <= 300)
       );
     }
 

@@ -768,6 +768,10 @@ const CATALOG = menu.catalog();
 
     db.watchAvailability(render86);
 
+    // A renamed ingredient has to read the new way on the next chit, not the
+    // next time somebody reloads a screen bolted to a wall.
+    db.watchMenuOverrides(function () { render(); });
+
     // The manager can flip the night mid-setup; the rail has to follow without
     // someone reloading a tablet that is mounted to a wall.
     db.watchServiceNight(function (night) {

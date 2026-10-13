@@ -35,6 +35,9 @@ const CATALOG = menu.catalog();
     // landing mid-edit would rewrite what a manager is halfway through typing.
     editing: null, draft: null,
     composing: false, compose: null, busy: false,
+    // The menu editor. `draft` is a working copy of the overrides; nothing
+    // reaches the other screens until Save.
+    menuOpen: false, menuDraft: null, menuSaving: false,
   };
 
   var el = {
@@ -714,6 +717,127 @@ const CATALOG = menu.catalog();
 
   // ---------------------------------------------------------------------- boot
 
+  // ------------------------------------------------------------- menu editor
+
+  /**
+   * One row per item: what it is called, and whether it is on the menu.
+   *
+   * The mechanics that share these lists - "No Sauce", "Heavy Cheese" - can be
+   * renamed but not removed, because they are how a guest says something
+   * rather than something the kitchen stocks. They are shown greyed rather
+   * than hidden, so nobody hunts for the row that is missing.
+   */
+  function menuEditorHtml() {
+    var draft = state.menuDraft || {};
+    var problems = menu.overrideProblems(draft);
+
+    var groups = menu.EDITABLE_GROUPS.map(function (pair) {
+      var key = pair[0];
+      var label = pair[1];
+      var items = CATALOG[key] || [];
+      if (!items.length) return '';
+
+      var rows = items.map(function (it) {
+        var o = draft[it.id] || {};
+        var editable = menu.isEditableItem(it);
+        var gone = o.retired === true;
+        return html`<div class="medit-row ${gone ? 'is-gone' : ''}">
+          <input class="input medit-name" type="text" maxlength="40"
+            value="${o.name != null ? o.name : it.name}"
+            data-menuname="${it.id}" aria-label="Name for ${it.name}">
+          ${raw(editable
+            ? '<button class="btn btn-ghost medit-go" type="button" data-menuretire="' + it.id + '">'
+              + (gone ? 'Put back' : 'Remove') + '</button>'
+            : '<span class="medit-fixed" title="This is how a guest says no, not an ingredient">always on</span>')}
+        </div>`;
+      }).join('');
+
+      return html`<div class="medit-group">
+        <h4 class="medit-head">${label}</h4>
+        ${raw(rows)}
+      </div>`;
+    }).join('');
+
+    return html`
+      ${raw(problems.length
+        ? '<div class="notice notice-bad" style="margin:0 0 12px">' + escapeHtml(problems[0]) + '</div>'
+        : '')}
+      <div class="meditgrid">${raw(groups)}</div>
+      <div class="row" style="flex-wrap:wrap;margin-top:14px">
+        <button class="btn btn-primary" type="button" data-menusave="1"
+          ${raw(state.menuSaving || problems.length ? 'disabled' : '')}>
+          ${state.menuSaving ? 'Saving...' : 'Save menu changes'}</button>
+        <button class="btn btn-ghost" type="button" data-menureset="1">Undo my changes</button>
+        <span class="grow"></span>
+        <span class="muted" style="font-size:14px">${Object.keys(draft).length} change${Object.keys(draft).length === 1 ? '' : 's'}</span>
+      </div>`;
+  }
+
+  function renderMenuEditor() {
+    var box = document.getElementById('menuEditor');
+    box.hidden = !state.menuOpen;
+    document.getElementById('menuEditToggle').textContent =
+      state.menuOpen ? 'Close the editor' : 'Edit the menu';
+    box.innerHTML = state.menuOpen ? menuEditorHtml() : '';
+  }
+
+  document.getElementById('menuEditToggle').addEventListener('click', function () {
+    state.menuOpen = !state.menuOpen;
+    // Start from what is live, so the editor opens showing the real menu.
+    if (state.menuOpen) state.menuDraft = menu.menuOverrides();
+    renderMenuEditor();
+  });
+
+  document.getElementById('panel-menu').addEventListener('input', function (ev) {
+    var box = ev.target.closest('[data-menuname]');
+    if (!box) return;
+    var id = box.dataset.menuname;
+    var hit = menu.editableItem(id);
+    if (!hit) return;
+    var draft = state.menuDraft || (state.menuDraft = {});
+    var typed = box.value.trim();
+    var entry = draft[id] || (draft[id] = {});
+    // Typing the original name back is not a change, so it stops being one.
+    if (typed && typed !== hit.original.name) entry.name = typed; else delete entry.name;
+    if (!Object.keys(entry).length) delete draft[id];
+  });
+
+  document.getElementById('panel-menu').addEventListener('click', async function (ev) {
+    var t = ev.target.closest('[data-menuretire],[data-menusave],[data-menureset]');
+    if (!t) return;
+
+    if (t.dataset.menuretire) {
+      var id = t.dataset.menuretire;
+      var draft = state.menuDraft || (state.menuDraft = {});
+      var entry = draft[id] || (draft[id] = {});
+      if (entry.retired) delete entry.retired; else entry.retired = true;
+      if (!Object.keys(entry).length) delete draft[id];
+      return renderMenuEditor();
+    }
+
+    if (t.dataset.menureset) {
+      state.menuDraft = menu.menuOverrides();
+      return renderMenuEditor();
+    }
+
+    if (t.dataset.menusave) {
+      state.menuSaving = true;
+      renderMenuEditor();
+      try {
+        await db.saveMenuOverrides(state.menuDraft || {});
+        state.menuSaving = false;
+        renderMenuEditor();
+        renderMenu();
+        toast('Menu saved. Every screen has it.');
+      } catch (err) {
+        state.menuSaving = false;
+        renderMenuEditor();
+        toast(err.message, true);
+      }
+    }
+    return undefined;
+  });
+
   // ------------------------------------------------------------------ orders
 
   /**
@@ -1374,6 +1498,17 @@ const CATALOG = menu.catalog();
       applyCosts();
     }, {
       onError: function (err) { toast('Could not read the cost sheet: ' + err.code, true); },
+    });
+
+    db.watchMenuOverrides(function () {
+      // The catalog objects were changed in place, so everything that reads
+      // them needs repainting - the reference tables, the cost sheet rows,
+      // and the editor itself if it is open.
+      renderMenu();
+      applyCosts();
+      if (state.menuOpen) renderMenuEditor();
+    }, {
+      onError: function (err) { toast('Could not read the menu changes: ' + err.code, true); },
     });
 
     db.watchTags(function () {

@@ -156,6 +156,20 @@
 
   <section class="no-print panel" id="panel-menu" role="tabpanel" aria-labelledby="tab-menu" tabindex="0" hidden>
     <div class="notice" id="summary86" style="margin-bottom:14px">Loading&hellip;</div>
+
+    <div class="card stack" style="margin-bottom:14px">
+      <div class="row" style="flex-wrap:wrap;align-items:center">
+        <div class="grow">
+          <strong>Rename or remove items</strong>
+          <p class="muted" style="margin:4px 0 0;font-size:14px">
+            Change what an item is called, or take it off the menu entirely. Removing
+            keeps it on tickets already taken tonight &mdash; it just stops members
+            picking it. Saves to every screen at once.</p>
+        </div>
+        <button class="btn btn-ghost" id="menuEditToggle" type="button">Edit the menu</button>
+      </div>
+      <div id="menuEditor" hidden></div>
+    </div>
     <div class="card" id="menuRef"></div>
   </section>
 

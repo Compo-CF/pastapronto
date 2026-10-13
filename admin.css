@@ -401,3 +401,39 @@
   font-size: 14px;
   font-weight: 650;
 }
+
+/* --------------------------------------------------------- menu editor */
+
+/* Two columns of groups on a desktop, one on a tablet. A manager works down
+   a list looking for one item, so the groups keep their headings and the
+   rows stay narrow enough to scan rather than read. */
+.meditgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
+.medit-group { min-width: 0; }
+.medit-head {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft, #6b6058);
+}
+.medit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.medit-name { flex: 1 1 auto; min-width: 0; }
+.medit-go { flex: 0 0 auto; padding: 0 12px; min-height: 38px; }
+
+/* An item on its way off the menu. Struck through rather than hidden, so the
+   row stays where it was and putting it back is where you left it. */
+.medit-row.is-gone .medit-name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+/* "No Sauce" and the amount chips. Renameable, never removable - they are how
+   a guest says something, not something the kitchen runs out of. */
+.medit-fixed {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--ink-soft, #6b6058);
+  padding: 0 10px;
+  white-space: nowrap;
+}
