@@ -121,6 +121,7 @@
 .ncard-who { display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .ncard-who svg { width: 22px; height: 22px; }
 .ncard-note {
+  overflow-wrap: anywhere;
   margin-top: 6px;
   font-size: 14px;
   font-style: italic;

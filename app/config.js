@@ -67,13 +67,22 @@ export const config = {
     // enforced - menu.validateLine() deliberately does not check it, so the
     // screen and the validator cannot disagree about what is allowed.
     toppingAdvice: 10,
+    // How long a free-text note may be. Short on purpose: a chit is read from
+    // six feet away across a pass, and a paragraph pushes the food off the
+    // bottom of it. The kitchen screen wraps what does arrive, so a long note
+    // is unreadable rather than destructive - but shorter is better than both.
+    maxNoteLength: 60,
+    maxOrderNoteLength: 90,
     maxCheesesPerPizza: 3,
     // A bowl can be half-and-half, or a three-way. More than this and the
     // pan stops tasting like anything.
     maxSaucesPerBowl: 3,
     // More than one protein is ordinary - chicken and sausage, pepperoni and
     // bacon. Past three the pan or the pie stops working.
-    maxProteinsPerItem: 3,
+    // No cap, by the club's instruction - the same call they made on
+  // toppings. menu.validateLine() reads this and skips the check when it is
+  // null, so the screen and the validator stay in step.
+    maxProteinsPerItem: null,
     maxSidesPerBowl: 2,
     // A burger takes one patty, one cheese, one basket.
     maxSidesPerBurger: 1,

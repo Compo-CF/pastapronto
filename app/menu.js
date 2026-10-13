@@ -39,7 +39,9 @@ const PASTAS = [
 
 const SAUCES = [
   { id: 'marinara',    name: 'Marinara', es: 'Marinara',      icon: 'tomato', finishSec: 60,  allergens: [], kid: true },
-  { id: 'butter',      name: 'Just Butter', es: 'Solo Mantequilla',   icon: 'butter', finishSec: 30,  allergens: ['dairy'], kid: true },
+  // Exclusive the same way "No Sauce" is: a bowl of buttered pasta is the
+  // whole answer, and marinara on top of it is a different dish.
+  { id: 'butter',      name: 'Just Butter', es: 'Solo Mantequilla',   icon: 'butter', finishSec: 30,  allergens: ['dairy'], kid: true, exclusive: true },
   { id: 'alfredo',     name: 'Alfredo', es: 'Alfredo',       icon: 'cream',  finishSec: 120, allergens: ['dairy'], kid: true },
   { id: 'butter_parm', name: 'Butter & Parm', es: 'Mantequilla y Parmesano', icon: 'cheese', finishSec: 45,  allergens: ['dairy'], kid: true },
   { id: 'pesto',       name: 'Basil Pesto', es: 'Pesto de Albahaca',   icon: 'herb',   finishSec: 45,  allergens: ['dairy', 'tree_nuts'], kid: false },

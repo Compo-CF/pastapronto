@@ -203,7 +203,10 @@ test('a bowl can carry more than one sauce, up to the cap', () => {
   assert.ok(built.lines[0].allergens.includes('dairy'), 'alfredo brings dairy');
 
   const tooMany = draft();
-  tooMany.lines[0].sauces = ['marinara', 'alfredo', 'pesto', 'butter'];
+  // Four sauces that are all real choices. 'butter' used to be the fourth
+  // here and is now exclusive, so it trips the contradiction rule instead of
+  // the cap - a different rule, tested on its own below.
+  tooMany.lines[0].sauces = ['marinara', 'alfredo', 'pesto', 'arrabbiata'];
   assert.ok(order.validateDraft(tooMany, config).some((e) => /Up to 3 sauces/.test(e)));
 });
 
@@ -215,6 +218,23 @@ test('two sauces cost the slowest plus a handling penalty, not the sum', () => {
   const delta = cooktime.bowlCookSec(two) - cooktime.bowlCookSec(one);
   assert.strictEqual(delta, (alfredo - marinara) + cooktime.MODEL.extraSaucePenaltySec);
   assert.ok(cooktime.bowlCookSec(two) < cooktime.bowlCookSec(one) + alfredo, 'not a naive sum');
+});
+
+test('just butter is the whole answer to the sauce question', () => {
+  // Buttered pasta is a dish, not a base to put marinara on. Same mechanic as
+  // "No Sauce" on a pizza, so the screen greys the rest out and the validator
+  // refuses the combination - one rule, read by both.
+  const L = config.order;
+  const bowl = { pasta: 'penne', proteins: [], toppings: [], sides: [], portion: 'regular' };
+
+  assert.deepStrictEqual(menu.validateLine({ ...bowl, sauces: ['butter'] }, L), []);
+  assert.ok(menu.validateLine({ ...bowl, sauces: ['butter', 'marinara'] }, L).length,
+    'butter and marinara together is not a dish anyone ordered');
+
+  // The tiles grey out for the same reason, from the same rule.
+  const ruled = menu.groupRules('sauces', ['butter']);
+  assert.ok(ruled.exclusive && ruled.exclusive.id === 'butter');
+  assert.ok(ruled.blocked.marinara, 'marinara is greyed once butter is chosen');
 });
 
 test('a bowl or a pizza can carry more than one protein', () => {
@@ -230,11 +250,16 @@ test('a bowl or a pizza can carry more than one protein', () => {
   assert.deepStrictEqual(menu.validateLine(pie, L), []);
   assert.strictEqual(menu.describe(pie), 'BBQ Sauce Pizza w/ Shredded Mozzarella + Pepperoni, Bacon, Onions');
 
-  // The cap applies to both lanes.
-  assert.ok(menu.validateLine({ ...bowl, proteins: ['chicken', 'meatballs', 'sausage', 'shrimp'] }, L)
-    .some((e) => /3 proteins each/.test(e)));
-  assert.ok(menu.validateLine({ ...pie, proteins: ['pepperoni', 'bacon', 'ham', 'pz_chicken'] }, L)
-    .some((e) => /3 proteins each/.test(e)));
+  // No cap on either lane, by the club's instruction - the same call they
+  // made on toppings. A member who wants all of it gets all of it, and the
+  // validator agrees by staying silent rather than refusing an order the
+  // screen invited them to build.
+  assert.deepStrictEqual(
+    menu.validateLine({ ...bowl, proteins: ['chicken', 'meatballs', 'sausage', 'shrimp'] }, L), [],
+  );
+  assert.deepStrictEqual(
+    menu.validateLine({ ...pie, proteins: ['pepperoni', 'bacon', 'ham', 'pz_chicken'] }, L), [],
+  );
 
   // No protein is an empty array, not a 'none' tile.
   assert.deepStrictEqual(menu.validateLine({ ...bowl, proteins: [] }, L), []);
@@ -2557,6 +2582,31 @@ test('every crust can be priced, and a pizza is costed on the one it used', () =
   const got = costing.lineCost(line, costs);
   assert.ok(got.complete, 'both priced, so the line is complete: ' + JSON.stringify(got.missing));
   near(got.total, 24 / 12 + 6 / 24, 'crust plus sauce');
+});
+
+test('the close-out counts every kind it served, and names it correctly', () => {
+  // A burger night used to report '0 bowls / 0 pizzas' beside an item count
+  // that was not zero, because the close-out knew about two kinds and the
+  // menu had three. Derived from menu.KINDS so a fourth cannot be missed.
+  const sla2 = config.sla;
+  const mk = (kind, station) => ({
+    id: kind, kind, status: 'delivered', guestCount: 2, memberNumber: '1794',
+    lines: [{ lineId: 'ln01', kind }],
+    submittedAt: '2026-10-13T18:00:00.000Z', acceptedAt: '2026-10-13T18:01:00.000Z',
+    readyAt: '2026-10-13T18:05:00.000Z', deliveredAt: '2026-10-13T18:06:00.000Z',
+    station, events: [],
+  });
+
+  menu.KINDS.forEach((kind) => {
+    const r = order.shiftReport([mk(kind, 'PASTA-1')], sla2);
+    assert.strictEqual(r.byKind[kind].items, 1, kind + ' was not counted');
+    assert.strictEqual(r.totals.bowls, 1, kind + ' is missing from the item total');
+    // And the curve has a column for it, or the chart draws nothing.
+    const key = { pasta: 'bowls', pizza: 'pizzas', burger: 'burgers' }[kind];
+    assert.ok(key, kind + ' has no curve column name');
+    assert.strictEqual(r.curve.reduce((a, b) => a + (b[key] || 0), 0), 1,
+      kind + ' is counted in the totals but not drawn on the curve');
+  });
 });
 
 test('money renders a missing figure as a dash, never as zero', () => {

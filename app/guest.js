@@ -753,7 +753,8 @@ import {
       </div>
       <div class="field">
         <label for="bowlNotes">${t('guest.who.notes')}</label>
-        <textarea class="textarea" id="bowlNotes" maxlength="140" data-act="setNotes">${bowl.notes}</textarea>
+        <textarea class="textarea" id="bowlNotes" maxlength="${state.boot.limits.maxNoteLength}"
+          data-act="setNotes">${bowl.notes}</textarea>
       </div>
     </div>`;
   }
@@ -868,7 +869,7 @@ import {
     var notesField = state.mode === 'pro'
       ? html`<div class="field">
           <label for="orderNotes">Anything else for the kitchen?</label>
-          <textarea class="textarea" id="orderNotes" maxlength="240"
+          <textarea class="textarea" id="orderNotes" maxlength="${state.boot.limits.maxOrderNoteLength}"
             data-act="setOrderNotes">${state.orderNotes}</textarea>
         </div>`
       : '';
@@ -1569,6 +1570,8 @@ import {
         maxCheesesPerPizza: config.order.maxCheesesPerPizza,
         maxSidesPerBurger: config.order.maxSidesPerBurger,
         toppingAdvice: config.order.toppingAdvice,
+        maxNoteLength: config.order.maxNoteLength,
+        maxOrderNoteLength: config.order.maxOrderNoteLength,
       },
       sla: config.sla,
       open: isOpen(),

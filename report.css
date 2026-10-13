@@ -243,3 +243,10 @@
 
 /* Print-only identity block: no place for it on screen, the appbar has it. */
 .rpt-printhead { display: none; }
+
+/* Burger night on the service curve. The other two lanes had colours from the
+   day they existed; burgers were counted and then never drawn, which is why
+   a burger night's chart came out empty under a legend naming pizzas. */
+.curve-key i.is-burger { background: #b5762a; }
+.curve-seg.is-burger { background: #b5762a; }
+.curve-col[data-peak="true"] .curve-seg.is-burger { background: #8c5a1d; }

@@ -63,7 +63,10 @@ const CATALOG = menu.catalog();
    */
   var ROLE_LANES = {
     builder: { built: ['queued', 'building'], plain: ['queued', 'cooking'] },
-    cook: { built: ['building', 'cooking', 'ready'], plain: ['queued', 'cooking', 'ready'] },
+    // A pasta range has no build bench and hands finished food to expo, so a
+    // cook there needs the two columns that are theirs: what is waiting and
+    // what is in the pan. The runner column belongs to expo.
+    cook: { built: ['building', 'cooking', 'ready'], plain: ['queued', 'cooking'] },
     all: { built: ['queued', 'building', 'cooking', 'ready'], plain: ['queued', 'cooking', 'ready'] },
   };
 
@@ -71,9 +74,29 @@ const CATALOG = menu.catalog();
     return kindsForNight(state.night).some(orderLib.isBuilt);
   }
 
+  /** What the station this screen is filtered to actually cooks, or null. */
+  function stationKind() {
+    if (!state.station) return null;
+    var st = config.kitchen.stations.find(function (x) { return x.id === state.station; });
+    return st ? (st.kind || 'pasta') : null;
+  }
+
+  /**
+   * Does this screen deal in things that get built?
+   *
+   * The station answers it when there is one, and only the night answers it
+   * otherwise. Reading the night alone was wrong on the only night that
+   * matters: on a Neapolitan night a pasta cook was shown Building and On Its
+   * Way columns, because somewhere in the building there were pizzas.
+   */
+  function screenBuilds() {
+    var kind = stationKind();
+    return kind === null ? nightBuilds() : orderLib.isBuilt(kind);
+  }
+
   function visibleLanes() {
     var spec = ROLE_LANES[state.role] || ROLE_LANES.all;
-    return nightBuilds() ? spec.built : spec.plain;
+    return screenBuilds() ? spec.built : spec.plain;
   }
 
   /**
@@ -355,7 +378,7 @@ const CATALOG = menu.catalog();
     var buttons = [];
     if (primary && allowed.indexOf(primary.action) !== -1) {
       buttons.push(html`<button class="kact ${primary.cls}" data-act="${primary.action}" data-id="${order.id}">
-        ${t(primary.labelKey)}</button>`);
+        ${t(primary.labelKey, { where: order.tagLabel })}</button>`);
     }
     var undo = undoFor(order);
     if (undo && allowed.indexOf(undo) !== -1) {
@@ -406,6 +429,7 @@ const CATALOG = menu.catalog();
     // Recompute here rather than only on snapshot, so switching station
     // updates the header instead of leaving the whole room's numbers up.
     renderCounts(orderLib.metrics(visibleOrders(), config.sla).counts);
+    syncRoleOptions();
     var shown = visibleLanes();
     document.getElementById('lanes').style.setProperty('--lane-count', shown.length);
 
@@ -593,6 +617,27 @@ const CATALOG = menu.catalog();
    * first option while state.station still said something else, and the rail
    * would filter by a station the cook cannot see selected.
    */
+  /**
+   * Offer the build bench only where there is one.
+   *
+   * A pasta range has no builder, so the option is disabled rather than left
+   * there to be picked by mistake - and a screen already sitting on it is
+   * moved to the cook line rather than being shown two empty columns.
+   */
+  function syncRoleOptions() {
+    var canBuild = screenBuilds();
+    var opt = el.roleFilter.querySelector('option[value="builder"]');
+    if (opt) {
+      opt.disabled = !canBuild;
+      opt.textContent = canBuild ? 'Build bench' : 'Build bench (pizza only)';
+    }
+    if (!canBuild && state.role === 'builder') {
+      state.role = 'cook';
+      remember('kds.role', state.role);
+    }
+    el.roleFilter.value = state.role;
+  }
+
   function fillStations(night) {
     var kinds = kindsForNight(night);
     var tonight = config.kitchen.stations.filter(function (st) {

@@ -44,6 +44,37 @@ function prettyDate(dateStr) {
 
 // ------------------------------------------------------------------ sections
 
+/**
+ * What to call an item of each kind, in the right number.
+ *
+ * The close-out used to write "bowls" and "pizzas" into the page by hand,
+ * which was wrong twice: a burger night reported "0 bowls / 0 pizzas" beside
+ * an item count that was not zero, and a single item read as "1 bowls".
+ * One table, read everywhere a count is printed.
+ */
+const KIND_NOUN = {
+  pasta: ['bowl', 'bowls'],
+  pizza: ['pizza', 'pizzas'],
+  burger: ['burger', 'burgers'],
+};
+
+function nounFor(kind, n) {
+  const pair = KIND_NOUN[kind] || KIND_NOUN.pasta;
+  return n === 1 ? pair[0] : pair[1];
+}
+
+function countOf(kind, n) {
+  return n + ' ' + nounFor(kind, n);
+}
+
+/** "3 bowls / 2 pizzas", naming only the kinds that were actually served. */
+function kindBreakdown(byKind) {
+  const parts = Object.keys(KIND_NOUN)
+    .filter((k) => (byKind[k] || {}).items > 0)
+    .map((k) => countOf(k, byKind[k].items));
+  return parts.length ? parts.join(' / ') : 'nothing yet';
+}
+
 function statTiles(r) {
   const tiles = [
     {
@@ -52,7 +83,7 @@ function statTiles(r) {
     },
     {
       label: 'Items', value: r.totals.bowls,
-      note: (r.byKind.pasta.items || 0) + ' bowls / ' + (r.byKind.pizza.items || 0) + ' pizzas',
+      note: kindBreakdown(r.byKind),
     },
     {
       label: 'Items per cover', value: r.totals.bowlsPerCover,
@@ -99,24 +130,32 @@ function serviceCurve(r) {
   const max = Math.max(...r.curve.map((b) => b.items));
   const showLabel = (i) => r.curve.length <= 12 || i % Math.ceil(r.curve.length / 12) === 0;
   const pct = (n) => (n > 0 ? Math.max(2, Math.round((n / max) * 100)) : 0);
+  // Only the lanes that ran. A legend naming pizzas on a burger night is the
+  // same mislabel as the one above, in picture form.
+  const lanes = [
+    { kind: 'pasta', key: 'bowls', cls: 'is-pasta', label: 'Bowls' },
+    { kind: 'pizza', key: 'pizzas', cls: 'is-pizza', label: 'Pizzas' },
+    { kind: 'burger', key: 'burgers', cls: 'is-burger', label: 'Burgers' },
+  ].filter((l) => r.curve.some((b) => (b[l.key] || 0) > 0));
   const anyPizza = r.curve.some((b) => b.pizzas > 0);
+  const tip = (b) => lanes.map((l) => countOf(l.kind, b[l.key] || 0)).join(' \u00b7 ');
 
   return html`<section class="rpt-section">
     <h2 class="sec-title">${t('report.curve')}</h2>
     <div class="card">
       <div class="curve-legend">
-        <span class="curve-key"><i class="is-pasta"></i>Bowls</span>
-        <span class="curve-key"><i class="is-pizza"></i>Pizzas</span>
+        ${lanes.map((l) => html`<span class="curve-key"><i class="${l.cls}"></i>${l.label}</span>`)}
       </div>
 
       <div class="curve" role="img"
-        aria-label="${'Bowls and pizzas per quarter hour. Peak ' + r.peak.items + ' items at ' + r.peak.bucket + ', being ' + r.peak.bowls + ' bowls and ' + r.peak.pizzas + ' pizzas.'}">
+        aria-label="${'Items per quarter hour. Peak ' + r.peak.items + ' items at ' + r.peak.bucket + '.'}">
         ${r.curve.map((b) => html`<div class="curve-col" tabindex="0" data-peak="${b === r.peak ? 'true' : 'false'}">
           ${raw(b === r.peak ? '<span class="curve-peak">' + b.items + '</span>' : '')}
-          <span class="curve-tip">${b.bucket} &middot; ${b.bowls} bowls &middot; ${b.pizzas} pizzas &middot; ${b.orders} orders</span>
+          <span class="curve-tip">${b.bucket} &middot; ${tip(b)} &middot; ${b.orders} orders</span>
           <div class="curve-stack">
-            ${raw(b.pizzas > 0 ? '<div class="curve-seg is-pizza" style="height:' + pct(b.pizzas) + '%"></div>' : '')}
-            ${raw(b.bowls > 0 ? '<div class="curve-seg is-pasta" style="height:' + pct(b.bowls) + '%"></div>' : '')}
+            ${lanes.map((l) => raw((b[l.key] || 0) > 0
+              ? '<div class="curve-seg ' + l.cls + '" style="height:' + pct(b[l.key]) + '%"></div>'
+              : ''))}
           </div>
         </div>`)}
       </div>
@@ -131,12 +170,13 @@ function serviceCurve(r) {
         <div class="mtable-wrap" style="margin-top:10px">
           <table class="rpt-table">
             <thead><tr>
-              <th>Time</th><th class="num">Orders</th><th class="num">Bowls</th>
-              <th class="num">Pizzas</th><th class="num">Total</th><th class="num">Covers</th>
+              <th>Time</th><th class="num">Orders</th>
+              ${lanes.map((l) => html`<th class="num">${l.label}</th>`)}
+              <th class="num">Total</th><th class="num">Covers</th>
             </tr></thead>
             <tbody>${r.curve.map((b) => html`<tr>
               <td>${b.bucket}</td><td class="num">${b.orders}</td>
-              <td class="num">${b.bowls}</td><td class="num">${b.pizzas}</td>
+              ${lanes.map((l) => html`<td class="num">${b[l.key] || 0}</td>`)}
               <td class="num">${b.items}</td><td class="num">${b.covers}</td>
             </tr>`)}</tbody>
           </table>
@@ -178,7 +218,7 @@ function menuMix(r) {
       return html`<div class="rpt-lane">
         <h3 class="rpt-lane-head">
           ${label}
-          <span class="rpt-lane-sub">${k.orders} orders &middot; ${k.items} ${kind === 'pizza' ? 'pizzas' : 'bowls'} &middot; ${k.covers} covers</span>
+          <span class="rpt-lane-sub">${k.orders} order${k.orders === 1 ? '' : 's'} &middot; ${countOf(kind, k.items)} &middot; ${k.covers} covers</span>
         </h3>
         <div class="mixgrid">
           ${live.map(([groupLabel, rows]) => {

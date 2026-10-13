@@ -200,10 +200,10 @@
 .cline-who { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--kmuted); }
 .cline-dish { font-size: 18px; font-weight: 750; line-height: 1.2; }
 .cline-add { font-size: 14px; color: #c7d0dc; line-height: 1.4; }
-.cline-note { margin-top: 3px; font-size: 13px; font-weight: 750; color: var(--kwarn); }
+.cline-note { margin-top: 3px; font-size: 13px; font-weight: 750; color: var(--kwarn); overflow-wrap: anywhere; }
 .cline-portion { font-size: 12px; font-weight: 800; color: var(--kmuted); text-transform: uppercase; letter-spacing: .05em; }
 
-.chit-note { margin: 4px 12px 0; padding: 8px 11px; border-radius: 8px; background: #2f3742; font-size: 13px; font-weight: 650; color: #dbe3ec; }
+.chit-note { margin: 4px 12px 0; padding: 8px 11px; border-radius: 8px; background: #2f3742; font-size: 13px; font-weight: 650; color: #dbe3ec; overflow-wrap: anywhere; }
 
 .chit-actions { display: flex; gap: 8px; padding: 12px; }
 .kact {

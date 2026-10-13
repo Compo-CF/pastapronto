@@ -140,7 +140,7 @@ const CATALOG = menu.catalog();
           </div>`;
         })}
       </div>
-      <button class="rcard-go" data-act="deliver" data-id="${order.id}">Delivered to ${order.tagLabel}</button>
+      <button class="rcard-go" data-act="deliver" data-id="${order.id}">Deliver to ${order.tagLabel}</button>
     </article>`;
   }
 
