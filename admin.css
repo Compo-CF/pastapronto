@@ -386,3 +386,18 @@
   opacity: 0.6;
 }
 .chip-x:hover { opacity: 1; }
+
+/* An item the kitchen would refuse. Stated under the item it belongs to and
+   left on screen, because the toast that used to carry this expired in three
+   seconds and a manager at the bar reasonably read that as "nothing
+   happened". */
+.oline.has-missing { border-color: #c9a227; background: #fdf8ea; }
+.oline-missing {
+  margin-top: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #fdf0d6;
+  color: #7a5a0c;
+  font-size: 14px;
+  font-weight: 650;
+}

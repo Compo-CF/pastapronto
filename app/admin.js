@@ -788,6 +788,75 @@ const CATALOG = menu.catalog();
     }
   }
 
+  /**
+   * What the kitchen would refuse about this line, right now.
+   *
+   * The composer used to let a manager fill in the obvious fields, press Send,
+   * and get a toast reading "Pick at least one sauce" for three seconds before
+   * it disappeared. The guest app never hits this because it marches a member
+   * through every step; the composer shows the same groups as chips that are
+   * easy to walk straight past. The answer is not to guess a sauce on their
+   * behalf - it is to say what is missing, where it is missing, and to stop
+   * the button pretending it will work.
+   *
+   * menu.validateLine() is the same function that runs at submit, so what this
+   * shows and what the send refuses cannot disagree.
+   */
+  function lineProblems(line, kind) {
+    return menu.validateLine(Object.assign({ kind: kind }, line), config.order);
+  }
+
+  /** Everything wrong with the order as composed, line by line. */
+  function composeProblems() {
+    var c = state.compose;
+    if (!c) return [];
+    var out = [];
+    if (!/^[1-9][0-9]{0,3}$/.test(String(c.memberNumber || ''))) {
+      out.push('A ' + String(config.venue.memberLabel).toLowerCase()
+        + ' is needed so the night bills correctly.');
+    }
+    c.lines.forEach(function (l, i) {
+      lineProblems(l, c.kind).forEach(function (p) {
+        out.push('Item ' + (i + 1) + ': ' + p);
+      });
+    });
+    return out;
+  }
+
+  /**
+   * Update the warnings in place, touching nothing else.
+   *
+   * Typing is deliberately kept out of the re-render path, because rewriting
+   * the panel on every keystroke moves the caret to the end of whatever is
+   * being typed. That left the warnings stale: a manager typed the member
+   * number and the banner went on insisting it was missing. So this reaches
+   * for the three things that can change and leaves the inputs alone.
+   */
+  function refreshProblems() {
+    if (!state.composing || !state.compose) return;
+    var problems = composeProblems();
+
+    var banner = document.querySelector('#composeWrap .compose-problems');
+    if (banner) {
+      banner.textContent = problems.length === 1 ? problems[0]
+        : problems.length + ' things still needed before this can go to the kitchen.';
+      banner.hidden = problems.length === 0;
+    }
+
+    state.compose.lines.forEach(function (line, i) {
+      var box = document.querySelector('#composeWrap [data-missing="cline:' + i + '"]');
+      if (!box) return;
+      var mine = lineProblems(line, state.compose.kind);
+      box.textContent = mine.length ? 'Still needed: ' + mine.join(' ') : '';
+      box.hidden = mine.length === 0;
+      var card = box.closest('.oline');
+      if (card) card.classList.toggle('has-missing', mine.length > 0);
+    });
+
+    var send = document.querySelector('#composeWrap [data-placeorder]');
+    if (send) send.disabled = state.busy || problems.length > 0;
+  }
+
   function blankLine(kind, i) {
     var line = {
       guestLabel: 'Guest ' + (i + 1),
@@ -831,7 +900,10 @@ const CATALOG = menu.catalog();
   }
 
   function lineEditor(line, kind, path, index, canRemove) {
-    return html`<div class="oline">
+    // Only while composing: an order that already exists was accepted once,
+    // and nagging about it is not the same as helping.
+    var problems = /^cline:/.test(path) ? lineProblems(line, kind) : [];
+    return html`<div class="oline ${problems.length ? 'has-missing' : ''}">
       <div class="row" style="align-items:flex-end;flex-wrap:wrap">
         <div class="field grow" style="min-width:160px">
           <label>Who it is for</label>
@@ -848,6 +920,12 @@ const CATALOG = menu.catalog();
         <input class="input" type="text" maxlength="140" value="${line.notes || ''}"
           data-edit="${path}" data-field="notes">
       </div>
+      ${raw(/^cline:/.test(path)
+        ? '<div class="oline-missing" data-missing="' + escapeHtml(path) + '"'
+          + (problems.length ? '' : ' hidden') + '>'
+          + (problems.length ? 'Still needed: ' + escapeHtml(problems.join(' ')) : '')
+          + '</div>'
+        : '')}
     </div>`;
   }
 
@@ -945,6 +1023,7 @@ const CATALOG = menu.catalog();
 
   function composePanel() {
     var c = state.compose;
+    var problems = composeProblems();
     return html`<div class="card stack" style="margin-top:14px">
       <div class="row" style="align-items:center">
         <strong class="grow">Take an order</strong>
@@ -977,11 +1056,14 @@ const CATALOG = menu.catalog();
       ${c.lines.map(function (l, i) {
         return lineEditor(l, c.kind, 'cline:' + i, i, c.lines.length > 1);
       })}
+      <div class="notice notice-warn compose-problems" style="margin:0"
+        ${raw(problems.length ? '' : 'hidden')}>${problems.length === 1 ? problems[0]
+          : problems.length + ' things still needed before this can go to the kitchen.'}</div>
       <div class="row" style="flex-wrap:wrap">
         <button class="btn btn-ghost" type="button" data-addline="1">Add another item</button>
         <span class="grow"></span>
         <button class="btn btn-primary" type="button" data-placeorder="1"
-          ${raw(state.busy ? 'disabled' : '')}>${state.busy ? 'Sending...' : 'Send to the kitchen'}</button>
+          ${raw(state.busy || problems.length ? 'disabled' : '')}>${state.busy ? 'Sending...' : 'Send to the kitchen'}</button>
       </div>
     </div>`;
   }
@@ -1060,8 +1142,13 @@ const CATALOG = menu.catalog();
 
   async function placeOrder() {
     var c = state.compose;
-    if (!/^[1-9][0-9]{0,3}$/.test(String(c.memberNumber || ''))) {
-      toast('A member number is needed so the night bills correctly.', true);
+    // The button is disabled while anything is missing, so arriving here with
+    // problems means something got past the screen. Repaint and say which,
+    // rather than letting the submit fail with a message that expires.
+    var problems = composeProblems();
+    if (problems.length) {
+      renderOrders();
+      toast(problems[0], true);
       return;
     }
     state.busy = true;
@@ -1187,6 +1274,8 @@ const CATALOG = menu.catalog();
     if (!t) return;
     var obj = targetFor(t.dataset.edit);
     if (obj) obj[t.dataset.field] = t.value;
+    // Not a re-render: just the warnings, so the caret stays where it is.
+    refreshProblems();
   });
 
   document.getElementById('panel-orders').addEventListener('change', function (ev) {
