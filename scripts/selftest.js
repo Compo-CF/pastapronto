@@ -2675,6 +2675,95 @@ test("what a manager changed round-trips back out", () => {
   assert.deepStrictEqual(menu.menuOverrides(), {}, "nothing changed means nothing saved");
 });
 
+// --------------------------------------------- reopening a finished ticket
+
+test("a manager can reopen delivered food, with no clock on it", () => {
+  const done = { ...make(), status: "delivered", deliveredAt: "2026-10-14T18:00:00.000Z" };
+
+  // The cook's undo arrow has expired - this happened an hour ago.
+  const hourLater = new Date("2026-10-14T19:00:00.000Z").getTime();
+  const allowed = order.allowedActions(done, sla, hourLater);
+  assert.ok(!allowed.includes("undeliver"), "the mis-tap window is long gone");
+  assert.ok(allowed.includes("reopen"), "but a manager is not correcting a mis-tap");
+
+  const back = { ...done, ...order.transitionPatch(done, "reopen", { sla, actor: "manager", now: new Date(hourLater) }) };
+  assert.strictEqual(back.status, "ready", "cooked food goes back to the runner, not the pan");
+  assert.strictEqual(back.deliveredAt, null);
+  assert.strictEqual(back.events.at(-1).action, "reopen");
+});
+
+test("a voided ticket goes back to the queue, because it was never made", () => {
+  const killed = { ...make(), status: "voided", voidedAt: "2026-10-14T18:00:00.000Z" };
+  assert.strictEqual(order.reopenAction(killed), "unvoid");
+
+  const back = { ...killed, ...order.transitionPatch(killed, "unvoid", { sla, actor: "manager" }) };
+  assert.strictEqual(back.status, "queued", "the kitchen has to actually cook it");
+  assert.strictEqual(back.voidedAt, null);
+
+  // And it can be edited again, which it could not be while voided.
+  assert.ok(order.editPatch(back, { guestCount: 4 }), "a reopened ticket is editable");
+});
+
+test("only finished tickets can be reopened", () => {
+  ["queued", "cooking", "ready", "held"].forEach((status) => {
+    const live = { ...make(), status };
+    assert.strictEqual(order.isReopenable(live), false, status + " is not finished with");
+    assert.strictEqual(order.reopenAction(live), null);
+  });
+  assert.strictEqual(order.isReopenable({ ...make(), status: "delivered" }), true);
+  assert.strictEqual(order.isReopenable({ ...make(), status: "voided" }), true);
+});
+
+test("reopening is the manager's call, not the rail's", () => {
+  // allowedActions still reports them, because the state machine is the one
+  // answer to what is legal. The kitchen names the buttons it draws, so a
+  // cook is never handed one of these.
+  ["reopen", "unvoid", "void"].forEach((a) => {
+    assert.ok(order.MANAGER_ACTIONS.includes(a), a + " belongs to the manager");
+  });
+  const rail = readFileSync(fileURLToPath(new URL("../app/kitchen.js", import.meta.url)), "utf8");
+  order.MANAGER_ACTIONS.filter((a) => a !== "void").forEach((a) => {
+    assert.ok(!rail.includes('data-act="' + a + '"'), a + " must not be a button on the rail");
+  });
+});
+
+/**
+ * The manager panel acts through one delegated listener, which matches a
+ * selector and then branches on whichever attribute it found. Those were two
+ * lists that had to agree, and twice did not - data-placeorder, then
+ * data-reopen, each given a branch and left out of the selector. The symptom
+ * is the worst kind available: a button that does nothing at all, with no
+ * error, no toast and nothing to debug from.
+ *
+ * The selector is built from the list now. This checks the other direction,
+ * that every branch names something the list carries.
+ */
+test('every manager button the panel handles is one it listens for', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+
+  const listed = /var ORDER_ACTIONS = \[([\s\S]*?)\];/.exec(src);
+  assert.ok(listed, 'ORDER_ACTIONS not found in admin.js');
+  const names = [...listed[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
+  assert.ok(names.length >= 8, 'found ' + names.length + ' actions - the scan is broken');
+
+  // Every attribute the click handler branches on, which is what makes a button
+  // a button. Bounded to that one listener, and to an `if` on the attribute
+  // alone: a toggle button also carries data-field and data-id as payload, and
+  // the input and change handlers beside it read data-edit, none of which are
+  // actions anyone clicks.
+  const from = src.indexOf('ORDER_ACTION_SELECTOR', src.indexOf('var ORDER_ACTION_SELECTOR') + 1);
+  const to = src.indexOf("addEventListener('input'", from);
+  assert.ok(from > 0 && to > from, 'could not find the click handler');
+  const handler = src.slice(from, to);
+  const branched = [...handler.matchAll(/if \(t\.dataset\.([a-z]+)\)/g)].map((m) => m[1]);
+  assert.ok(branched.length >= 8, 'found ' + branched.length + ' branches - scan is broken');
+
+  assert.deepStrictEqual(
+    [...new Set(branched)].filter((b) => !names.includes(b)).sort(), [],
+    'handled but never listened for, so the button does nothing',
+  );
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');

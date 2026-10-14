@@ -86,12 +86,48 @@ export const TRANSITIONS = {
   unoven:    { from: [STATUS.COOKING],   to: STATUS.BUILDING,  stamp: null, clears: ['acceptedAt'], kinds: BUILT_KINDS },
   unready:   { from: [STATUS.READY],     to: STATUS.COOKING,   stamp: null, clears: ['readyAt'] },
   undeliver: { from: [STATUS.DELIVERED], to: STATUS.READY,     stamp: null, clears: ['deliveredAt'], window: 'undoWindowSec' },
+
+  // A manager reopening something that was finished with. Distinct from the
+  // undo arrows beside them: undo is a cook correcting a mis-tap seconds ago
+  // and is withdrawn after a couple of minutes, whereas this is a manager
+  // deciding, an hour later, that a table's food is coming back or that a
+  // ticket should never have been cancelled. Neither has a window.
+  //
+  // They land in different places because the two situations differ. Food
+  // that was delivered and came back is cooked, so it goes to the runner
+  // column. A ticket that was voided was never made, so it goes to the back
+  // of the queue and the kitchen starts it.
+  reopen:    { from: [STATUS.DELIVERED], to: STATUS.READY,     stamp: null, clears: ['deliveredAt'] },
+  unvoid:    { from: [STATUS.VOIDED],    to: STATUS.QUEUED,    stamp: null, clears: ['voidedAt'] },
 };
+
+/**
+ * Actions only the manager screen offers.
+ *
+ * allowedActions() still reports them, because the state machine is the one
+ * answer to what is legal - but the rail filters them out, so a cook is not
+ * handed a button for a decision that is not theirs.
+ */
+export const MANAGER_ACTIONS = ['reopen', 'unvoid', 'void'];
 
 const UNDO_TARGET = {
   unaccept: 'accept', unbuild: 'build', unoven: 'oven',
   unready: 'ready', undeliver: 'deliver',
 };
+
+/** Can a manager pick this ticket back up? */
+export function isReopenable(order) {
+  return Boolean(order)
+    && (order.status === STATUS.DELIVERED || order.status === STATUS.VOIDED);
+}
+
+/** Which action reopens it, given where it ended up. */
+export function reopenAction(order) {
+  if (!order) return null;
+  if (order.status === STATUS.DELIVERED) return 'reopen';
+  if (order.status === STATUS.VOIDED) return 'unvoid';
+  return null;
+}
 
 /** Which buttons a screen should offer for this order right now. */
 export function allowedActions(order, sla, now = Date.now()) {

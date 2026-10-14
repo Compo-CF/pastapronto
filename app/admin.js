@@ -1083,6 +1083,10 @@ const CATALOG = menu.catalog();
         ? '<button class="btn btn-ghost" type="button" data-openorder="' + o.id + '">'
           + (isOpen ? 'Close' : 'Change') + '</button>'
         : '')}
+      ${raw(order.isReopenable(o)
+        ? '<button class="btn btn-ghost" type="button" data-reopen="' + o.id + '">'
+          + (o.status === 'voided' ? 'Put back on' : 'Reopen') + '</button>'
+        : '')}
     </div>`;
 
     if (!isOpen) {
@@ -1253,6 +1257,28 @@ const CATALOG = menu.catalog();
     }
   }
 
+  /**
+   * Pick a ticket back up after it was finished with.
+   *
+   * Separate from the undo arrow a cook gets, which expires after a couple
+   * of minutes because it is for a mis-tap. This is a manager an hour later
+   * deciding food is coming back, or that a ticket should not have been
+   * cancelled, and it has no window.
+   */
+  async function reopenOrder(id) {
+    var o = (state.orders || []).find(function (x) { return x.id === id; });
+    var action = order.reopenAction(o);
+    if (!action) return;
+    try {
+      await db.transition(id, action, { actor: 'manager', note: 'reopened by manager' });
+      toast(action === 'unvoid'
+        ? 'Back in the queue. The kitchen has it again.'
+        : 'Reopened. It is waiting on a runner.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
   async function voidOrder(id) {
     try {
       await db.transition(id, 'void', { actor: 'manager', note: 'voided by manager' });
@@ -1355,15 +1381,33 @@ const CATALOG = menu.catalog();
 
   document.getElementById('addTagBtn').addEventListener('click', addTag);
 
+  /**
+   * Every attribute the orders panel acts on.
+   *
+   * One list, and the selector is built from it, because the selector and
+   * the branches below were two lists that had to agree and twice did not:
+   * data-placeorder and then data-reopen were each given a branch and left
+   * out of the selector, which presents as a button that does nothing at
+   * all - no error, no toast, nothing to debug from.
+   */
+  var ORDER_ACTIONS = [
+    'openorder', 'saveorder', 'voidorder', 'reopen',
+    'toggle', 'removeline', 'addline', 'placeorder', 'cancelcompose',
+  ];
+  var ORDER_ACTION_SELECTOR = ORDER_ACTIONS.map(function (a) {
+    return '[data-' + a + ']';
+  }).join(',');
+
   // One delegated listener for the whole panel. The markup is re-rendered on
   // every keystroke that matters, so individually bound handlers would be
   // rebound constantly and leak.
   document.getElementById('panel-orders').addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-openorder],[data-saveorder],[data-voidorder],[data-toggle],[data-removeline],[data-addline],[data-placeorder],[data-cancelcompose]');
+    var t = ev.target.closest(ORDER_ACTION_SELECTOR);
     if (!t) return;
     if (t.dataset.openorder) return openOrder(t.dataset.openorder);
     if (t.dataset.saveorder) return saveOrder(t.dataset.saveorder);
     if (t.dataset.voidorder) return voidOrder(t.dataset.voidorder);
+    if (t.dataset.reopen) return reopenOrder(t.dataset.reopen);
     if (t.dataset.placeorder) return placeOrder();
     if (t.dataset.cancelcompose) {
       state.composing = false; state.compose = null; return renderOrders();

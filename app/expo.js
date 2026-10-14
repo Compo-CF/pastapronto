@@ -5,7 +5,7 @@
  * number, the destination, what is on the tray, and one button. Everything
  * else is noise while carrying four bowls.
  */
-import { config } from './config.js';
+import { config, kindsForNight } from './config.js';
 import * as menu from './menu.js';
 import * as order from './order.js';
 import * as db from './db.js';
@@ -27,6 +27,11 @@ const CATALOG = menu.catalog();
 
   var state = {
     orders: [], sound: recall('expo.sound', false), firstLoadDone: false,
+    // Which pass this pad belongs to. The club runs two, side by side and
+    // deliberately independent: a pizza runner should not be reading pasta
+    // tickets to find theirs.
+    lane: recall('expo.lane', 'all'),
+    night: config.defaultNight,
     // Which Coming Up ticket is open. One at a time: this column is narrow and
     // two open tickets push the rest of the night off the bottom of it.
     open: null,
@@ -35,6 +40,7 @@ const CATALOG = menu.catalog();
   var el = {
     readyGrid: document.getElementById('readyGrid'),
     nextList: document.getElementById('nextList'),
+    laneFilter: document.getElementById('laneFilter'),
     readyCount: document.getElementById('readyCount'),
     nextCount: document.getElementById('nextCount'),
     clock: document.getElementById('clock'),
@@ -67,8 +73,26 @@ const CATALOG = menu.catalog();
     return sec >= sla.runnerLateSec ? 'late' : sec >= sla.runnerWarnSec ? 'warn' : '';
   }
 
+  /** Only this pass's tickets, or all of them where no pass is chosen. */
+  function mine() {
+    if (state.lane === 'all') return state.orders;
+    return state.orders.filter(function (o) { return (o.kind || 'pasta') === state.lane; });
+  }
+
+  /**
+   * How much food, not how many tickets.
+   *
+   * The club asked for this and the reason is the job: a runner looking at
+   * "3" needs to know whether that is three plates or nine, because it
+   * decides whether they pick up a tray. Two tickets of four bowls each is a
+   * different night from four tickets of one.
+   */
+  function itemsIn(orders) {
+    return orders.reduce(function (a, o) { return a + ((o.lines || []).length); }, 0);
+  }
+
   function readyOrders() {
-    return state.orders
+    return mine()
       .filter(function (o) { return o.status === 'ready'; })
       .sort(function (a, b) { return new Date(a.readyAt) - new Date(b.readyAt); });
   }
@@ -89,7 +113,7 @@ const CATALOG = menu.catalog();
   var COMING_UP = ['queued', 'building', 'cooking'];
 
   function cookingOrders() {
-    return state.orders
+    return mine()
       .filter(function (o) { return COMING_UP.indexOf(o.status) !== -1; })
       .sort(function (a, b) { return new Date(a.submittedAt) - new Date(b.submittedAt); });
   }
@@ -205,8 +229,14 @@ const CATALOG = menu.catalog();
   function render() {
     var ready = readyOrders();
     var next = cookingOrders();
-    el.readyCount.textContent = ready.length;
-    el.nextCount.textContent = next.length;
+    // The number is food. The label beside it says so, and the title spells
+    // out the tickets behind it for anyone who wants them.
+    var readyItems = itemsIn(ready);
+    var nextItems = itemsIn(next);
+    el.readyCount.textContent = readyItems;
+    el.nextCount.textContent = nextItems;
+    el.readyCount.title = readyItems + ' to run, across ' + ready.length + ' ticket' + (ready.length === 1 ? '' : 's');
+    el.nextCount.title = nextItems + ' coming, across ' + next.length + ' ticket' + (next.length === 1 ? '' : 's');
     el.readyGrid.innerHTML = ready.length
       ? ready.map(renderReadyCard).join('')
       : '<div class="lane-empty">Nothing to run right now</div>';
@@ -290,6 +320,39 @@ const CATALOG = menu.catalog();
     });
   }
 
+  var LANE_LABEL = { pasta: 'Pasta pass', pizza: 'Pizza pass', burger: 'Grill pass' };
+
+  /**
+   * Offer only the passes running tonight.
+   *
+   * Two pads sit at the pizza station and the pasta range on a Neapolitan
+   * night, and each wants its own. A pass that is not cooking tonight is not
+   * an option, for the same reason the rail does not offer a cold station.
+   */
+  function fillLanes(night) {
+    var kinds = kindsForNight(night);
+    while (el.laneFilter.options.length > 1) el.laneFilter.remove(1);
+    kinds.forEach(function (k) {
+      var opt = document.createElement('option');
+      opt.value = k;
+      opt.textContent = LANE_LABEL[k] || k;
+      el.laneFilter.appendChild(opt);
+    });
+    // A pass that stopped running tonight takes this pad back to everything,
+    // rather than leaving it filtered to a column that can never fill.
+    if (state.lane !== 'all' && kinds.indexOf(state.lane) === -1) {
+      state.lane = 'all';
+      remember('expo.lane', state.lane);
+    }
+    el.laneFilter.value = state.lane;
+  }
+
+  el.laneFilter.addEventListener('change', function () {
+    state.lane = el.laneFilter.value;
+    remember('expo.lane', state.lane);
+    render();
+  });
+
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Expo & Runners');
@@ -311,6 +374,14 @@ const CATALOG = menu.catalog();
     el.conn.className = 'conn is-live';
     el.conn.textContent = 'live';
     if (db.cacheWarning) toast(db.cacheWarning, true);
+
+    fillLanes(config.defaultNight);
+
+    db.watchServiceNight(function (night) {
+      state.night = night;
+      fillLanes(night);
+      render();
+    });
 
     db.watchMenuOverrides(function () { render(); });
 
