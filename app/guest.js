@@ -12,7 +12,7 @@
 import { config, tagById, isOpen, kindsForNight, nightById } from './config.js';
 import {
   catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine,
-  GROUPS_FOR, crustOf, crustBlocks, crustSkips,
+  GROUPS_FOR, crustOf, crustBlocks, crustSkips, atCap,
 } from './menu.js';
 import * as i18n from './i18n.js';
 import * as cooktime from './cooktime.js';
@@ -339,7 +339,7 @@ import {
       return true;
     });
 
-    if (!entry.amount && groupRules(groupKey, bowl[field]).bases.length >= cap) {
+    if (!entry.amount && atCap(groupRules(groupKey, bowl[field]).bases.length, cap)) {
       toast(capMessage);
       return false;
     }
@@ -1300,7 +1300,7 @@ import {
       var i = bowl.proteins.indexOf(id);
       if (i !== -1) {
         bowl.proteins.splice(i, 1);
-      } else if (bowl.proteins.length >= state.boot.limits.maxProteinsPerItem) {
+      } else if (atCap(bowl.proteins.length, state.boot.limits.maxProteinsPerItem)) {
         toast('Up to ' + state.boot.limits.maxProteinsPerItem + ' proteins. Tap one to swap it.');
         return;
       } else {

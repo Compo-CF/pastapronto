@@ -13,6 +13,7 @@
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import * as pdf from '../app/pdf.js';
 import { config } from '../app/config.js';
+import { capLabel } from '../app/menu.js';
 
 /**
  * Screens captured from the running app into shots/. They are committed rather
@@ -437,13 +438,12 @@ if (SHOTS.build) {
 panel(cardX, cardY, 152, 198, { fill: WASH });
 doc.text('WHAT THEY CAN BUILD', { x: cardX + 12, y: cardY + 20, size: 7, font: 'monoBold', color: FAINT });
 const limits = [
-  ['People', 'up to ' + config.order.maxGuests],
-  ['Sauces, bowl', 'up to ' + config.order.maxSaucesPerBowl],
-  ['Proteins', 'up to ' + config.order.maxProteinsPerItem],
-  ['Toppings, bowl', 'up to ' + config.order.maxToppingsPerBowl],
-  ['Sides', 'up to ' + config.order.maxSidesPerBowl],
-  ['Cheeses, pizza', 'up to ' + config.order.maxCheesesPerPizza],
-  ['Toppings, pizza', 'up to ' + config.order.maxToppingsPerPizza],
+  ['People', capLabel(config.order.maxGuests)],
+  ['Sauces, bowl', capLabel(config.order.maxSaucesPerBowl)],
+  ['Proteins', capLabel(config.order.maxProteinsPerItem)],
+  ['Toppings', 'chef suggests ' + config.order.toppingAdvice],
+  ['Sides', capLabel(config.order.maxSidesPerBowl)],
+  ['Cheeses, pizza', capLabel(config.order.maxCheesesPerPizza)],
   ['Claim code', '4 chars'],
 ];
 let liy = cardY + 40;

@@ -77,11 +77,10 @@ export const config = {
     // A bowl can be half-and-half, or a three-way. More than this and the
     // pan stops tasting like anything.
     maxSaucesPerBowl: 3,
-    // More than one protein is ordinary - chicken and sausage, pepperoni and
-    // bacon. Past three the pan or the pie stops working.
-    // No cap, by the club's instruction - the same call they made on
-  // toppings. menu.validateLine() reads this and skips the check when it is
-  // null, so the screen and the validator stay in step.
+    // No cap, by the club's instruction - the same call they made on toppings.
+    // null means no limit. Everything that reads a cap goes through
+    // menu.overCap() / menu.atCap(), which know that; comparing against null
+    // directly refuses the first pick, because 0 >= null is true.
     maxProteinsPerItem: null,
     maxSidesPerBowl: 2,
     // A burger takes one patty, one cheese, one basket.

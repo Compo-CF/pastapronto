@@ -2764,6 +2764,74 @@ test('every manager button the panel handles is one it listens for', () => {
   );
 });
 
+/**
+ * The club lifted the cap on toppings, and then on proteins. A lifted cap is
+ * written as null, and null is a trap: `0 >= null` is true, so a bare
+ * comparison refuses the very first pick. That shipped. Every protein tile on
+ * the member's phone was dead, and the toast read "Up to null proteins."
+ *
+ * One function decides now, and this is what it has to get right.
+ */
+test('a lifted cap lets the first pick through, and every one after', () => {
+  assert.strictEqual(menu.overCap(0, null), false, 'no cap cannot be exceeded by nothing');
+  assert.strictEqual(menu.overCap(99, null), false, 'no cap cannot be exceeded at all');
+  assert.strictEqual(menu.atCap(0, null), false, 'the first pick is the one that broke');
+  assert.strictEqual(menu.atCap(99, null), false);
+  assert.strictEqual(menu.atCap(0, undefined), false, 'a missing cap is no cap either');
+
+  // A real cap still bites, in both directions.
+  assert.strictEqual(menu.atCap(2, 3), false, 'two picked, three allowed - room for one');
+  assert.strictEqual(menu.atCap(3, 3), true, 'three picked, three allowed - full');
+  assert.strictEqual(menu.overCap(3, 3), false, 'three is not over three');
+  assert.strictEqual(menu.overCap(4, 3), true);
+
+  // And a cap of zero means zero, which null must not be confused with.
+  assert.strictEqual(menu.atCap(0, 0), true, 'a cap of none is not the same as no cap');
+});
+
+/**
+ * The validator was tested and passed; the screen was not, and the screen is
+ * what the member touches. Both now ask menu.overCap()/atCap(). This holds
+ * them to it, because the next cap the club lifts will land the same way.
+ */
+test('nothing compares a cap by hand', () => {
+  const files = ['../app/guest.js', '../app/menu.js', '../app/admin.js', '../app/order.js'];
+  const offences = [];
+
+  // Not every max is a cap on what someone may pick. These are structural -
+  // a loop bound and the length of a typed number - and comparing them is
+  // ordinary. The assertion below is what keeps this list honest: the day one
+  // of them is lifted to null it stops being structural, and this test starts
+  // demanding it go through the helper like everything else.
+  const STRUCTURAL = ['maxGuests', 'maxMemberNumberLength'];
+  STRUCTURAL.forEach((name) => {
+    assert.ok(
+      config.order[name] != null,
+      name + ' has no value any more, so it is a cap now - take it off the list',
+    );
+  });
+
+  files.forEach((rel) => {
+    const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+    src.split('\n').forEach((line, i) => {
+      // A relational operator immediately beside a cap, either way round. It
+      // has to be adjacent: markup carries both a `<` and a cap on one line
+      // (`<input max="${config.order.maxGuests}">`) and is not a comparison.
+      const CAP = String.raw`[\w.]*\b(?:limits|config\.order)\.max[A-Za-z]+`;
+      const beside = new RegExp(CAP + String.raw`\s*[<>]=?|[<>]=?\s*` + CAP);
+      if (!beside.test(line)) return;
+      if (STRUCTURAL.some((name) => line.includes(name))) return;
+      offences.push(rel.replace('../', '') + ':' + (i + 1) + '  ' + line.trim());
+    });
+  });
+
+  assert.deepStrictEqual(
+    offences, [],
+    'compare caps with menu.overCap()/menu.atCap() - a null cap means no cap, '
+    + 'and a bare >= refuses the first pick',
+  );
+});
+
 test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.money(null), '--', 'no answer is not $0.00');
   assert.strictEqual(costing.money(1.5), '$1.50');

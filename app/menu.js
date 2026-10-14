@@ -808,6 +808,30 @@ export function describe(line, lang) {
 }
 
 /** Validate an incoming bowl or pizza. Returns human-readable problems. */
+/**
+ * Is a count over its cap? The one place that decides, because the guest's
+ * screen and this validator both ask.
+ *
+ * A null or missing cap means no cap, which is how the club removed the
+ * limit on toppings and then on proteins. Comparing against it directly is
+ * a trap: `0 >= null` is true, so a bare `>=` refuses the very first pick
+ * and tells the guest "up to null". That shipped, and nobody could add a
+ * protein at all.
+ */
+export function overCap(count, cap) {
+  return cap != null && count > cap;
+}
+
+/** Is one more pick going to be refused? What a tile asks before it accepts. */
+export function atCap(count, cap) {
+  return overCap(count + 1, cap);
+}
+
+/** How a cap reads on a printed sheet, when there may not be one. */
+export function capLabel(cap) {
+  return cap == null ? 'no limit' : 'up to ' + cap;
+}
+
 export function validateLine(line, limits) {
   const errors = [];
   const kind = kindOf(line);
@@ -825,13 +849,13 @@ export function validateLine(line, limits) {
   if (sauces.some((id) => sauceRule.blocked[id])) {
     errors.push('Those sauce choices contradict each other.');
   }
-  if (limits.maxSaucesPerBowl && sauceRule.bases.length > limits.maxSaucesPerBowl) {
+  if (overCap(sauceRule.bases.length, limits.maxSaucesPerBowl)) {
     errors.push('Up to ' + limits.maxSaucesPerBowl + ' sauces each.');
   }
 
   const proteins = proteinsOf(line);
   if (proteins.some((id) => !find(g.proteins, id))) errors.push('That protein is not on the menu.');
-  if (limits.maxProteinsPerItem && proteins.length > limits.maxProteinsPerItem) {
+  if (overCap(proteins.length, limits.maxProteinsPerItem)) {
     errors.push('Up to ' + limits.maxProteinsPerItem + ' proteins each.');
   }
 
@@ -847,7 +871,7 @@ export function validateLine(line, limits) {
     if (cheeses.some((id) => cheeseRule.blocked[id])) {
       errors.push('Those cheese choices contradict each other.');
     }
-    if (limits.maxCheesesPerPizza && cheeseRule.bases.length > limits.maxCheesesPerPizza) {
+    if (overCap(cheeseRule.bases.length, limits.maxCheesesPerPizza)) {
       errors.push('Up to ' + limits.maxCheesesPerPizza + ' cheeses per pizza.');
     }
 
@@ -894,7 +918,7 @@ export function validateLine(line, limits) {
     const bSides = line.sides || [];
     if (bSides.some((x) => !find('burgerSides', x))) errors.push('Unknown side.');
     // One basket. The fryer runs one at a time at this volume.
-    if (bSides.length > limits.maxSidesPerBurger) {
+    if (overCap(bSides.length, limits.maxSidesPerBurger)) {
       errors.push('Pick one side.');
     }
     return errors;
@@ -904,7 +928,7 @@ export function validateLine(line, limits) {
   if (!find('portions', line.portion)) errors.push('Pick a portion size.');
   const sides = line.sides || [];
   if (sides.some((x) => !find('sides', x))) errors.push('Unknown side.');
-  if (sides.length > limits.maxSidesPerBowl) {
+  if (overCap(sides.length, limits.maxSidesPerBowl)) {
     errors.push('Up to ' + limits.maxSidesPerBowl + ' sides per bowl.');
   }
   if (line.spice && !SPICE_LEVELS.some((x) => x.id === line.spice)) errors.push('Unknown spice level.');
