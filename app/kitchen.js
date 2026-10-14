@@ -633,16 +633,45 @@ const CATALOG = menu.catalog();
    * there to be picked by mistake - and a screen already sitting on it is
    * moved to the cook line rather than being shown two empty columns.
    */
+  /*
+   * A role nobody at this station fills is offered as a choice that leads to
+   * two empty columns. Both halves of that are real: a pasta range has no
+   * build bench, and a pizza station has no cook line - the club runs two pads
+   * there, the builder's and expo's, and the oven is watched by eye rather
+   * than tapped along.
+   *
+   * Only a screen filtered to one station can say this. The whole-rail view
+   * has no station and keeps every role, because it is covering all of them.
+   */
   function syncRoleOptions() {
-    var canBuild = screenBuilds();
-    var opt = el.roleFilter.querySelector('option[value="builder"]');
-    if (opt) {
-      opt.disabled = !canBuild;
-      opt.textContent = canBuild ? 'Build bench' : 'Build bench (pizza only)';
-    }
-    if (!canBuild && state.role === 'builder') {
-      state.role = 'cook';
-      remember('kds.role', state.role);
+    var kind = stationKind();
+    var only = kind === null ? null : orderLib.isBuilt(kind);
+
+    var pairs = [
+      ['builder', only === false, 'Build bench', 'Build bench (pizza only)', 'cook'],
+      ['cook', only === true, 'Cook line', 'Cook line (pasta only)', 'builder'],
+    ];
+    pairs.forEach(function (p) {
+      var opt = el.roleFilter.querySelector('option[value="' + p[0] + '"]');
+      if (opt) {
+        opt.disabled = p[1];
+        opt.textContent = p[1] ? p[3] : p[2];
+      }
+      if (p[1] && state.role === p[0]) {
+        state.role = p[4];
+        remember('kds.role', state.role);
+      }
+    });
+
+    // A pasta-only night still has no build bench anywhere, station or not.
+    var buildOpt = el.roleFilter.querySelector('option[value="builder"]');
+    if (buildOpt && !nightBuilds()) {
+      buildOpt.disabled = true;
+      buildOpt.textContent = 'Build bench (pizza only)';
+      if (state.role === 'builder') {
+        state.role = 'cook';
+        remember('kds.role', state.role);
+      }
     }
     el.roleFilter.value = state.role;
   }

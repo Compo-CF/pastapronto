@@ -2316,6 +2316,39 @@ test('a pizza is taken out of the oven at the window, a bowl at the rail', () =>
   );
 });
 
+/**
+ * A role nobody at this station fills is a choice that leads to two empty
+ * columns, and the club asked for both halves: a pasta range has no build
+ * bench, and a pizza station has no cook line - the oven is watched rather
+ * than tapped along.
+ *
+ * This reads the source because syncRoleOptions touches the DOM. What it can
+ * hold is the shape: both roles gated, each on the opposite kind, and neither
+ * gated on a screen with no station.
+ */
+test('a station is only offered the roles somebody there actually fills', () => {
+  const kitchen = readFileSync(fileURLToPath(new URL('../app/kitchen.js', import.meta.url)), 'utf8');
+  const fn = /function syncRoleOptions\(\)\s*\{([\s\S]*?)\n  \}/.exec(kitchen);
+  assert.ok(fn, 'syncRoleOptions not found in kitchen.js');
+  const body = fn[1];
+
+  assert.ok(
+    /stationKind\(\)/.test(body),
+    'the roles are gated on something other than the station, so the whole-rail '
+    + 'view will lose roles it is covering for',
+  );
+  ['builder', 'cook'].forEach((role) => {
+    assert.ok(
+      body.includes("'" + role + "'"),
+      role + ' is not gated at all, so it is offered where nobody fills it',
+    );
+  });
+  assert.ok(
+    /pizza only/.test(body) && /pasta only/.test(body),
+    'a disabled role has to say why it is disabled, or it reads as broken',
+  );
+});
+
 // -------------------------------------------------- ticket layout
 
 test('a dish reads as rows, and every choice appears in one', () => {
