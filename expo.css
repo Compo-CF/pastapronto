@@ -137,3 +137,34 @@
   font-size: 13px;
   letter-spacing: 0.04em;
 }
+
+/* Taking a pizza out of the oven. Sized for a thumb across a hot pass, but
+   quieter than Deliver - this is the middle of the job, not the end of it. */
+.ncard-go {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 12px;
+  min-height: 48px;
+  border: 1px solid var(--kok);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--kok);
+  font-size: 17px;
+  font-weight: 800;
+}
+.ncard-go:hover { background: var(--kok); color: #10231a; }
+
+/* Undoing that. Deliberately the smallest thing on the card: wanted rarely,
+   and never worth a mis-tap on the way to Deliver. */
+.rcard-undo {
+  margin-top: 8px;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--kmuted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.rcard-undo:hover { color: #fff; text-decoration: underline; }

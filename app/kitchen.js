@@ -66,7 +66,16 @@ const CATALOG = menu.catalog();
     // A pasta range has no build bench and hands finished food to expo, so a
     // cook there needs the two columns that are theirs: what is waiting and
     // what is in the pan. The runner column belongs to expo.
-    cook: { built: ['building', 'cooking', 'ready'], plain: ['queued', 'cooking'] },
+    // No ready column for a cook on a built station. A pizza is taken out of
+    // the oven at the window, not here - the builder has moved on to the next
+    // one by then, and the club did not want a second pair of hands waiting at
+    // the oven door for something to tap. A bowl still finishes where it
+    // started, so a plain station keeps it.
+    cook: { built: ['building', 'cooking'], plain: ['queued', 'cooking'] },
+    // The whole-rail view is nobody's station - it is the overview, and it
+    // keeps every lane. It has to: on a night running both, this screen is the
+    // built one (there are pizzas in the building) and the bowls on it still
+    // need finishing somewhere.
     all: { built: ['queued', 'building', 'cooking', 'ready'], plain: ['queued', 'cooking', 'ready'] },
   };
 

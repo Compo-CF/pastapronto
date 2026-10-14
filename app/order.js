@@ -230,7 +230,7 @@ export function validateDraft(draft, cfg, unavailable = []) {
  * Nothing is priced - charges post against the member number elsewhere.
  *
  * @param {object} draft     guest input
- * @param {object} ctx       { ticketNo, claimCode, station, queueDepth, tag, serviceDate, now }
+ * @param {object} ctx       { ticketNo, station, queueDepth, tag, serviceDate, now }
  */
 /**
  * One line of a ticket, normalised into what the kitchen reads.
@@ -319,7 +319,6 @@ export function buildOrder(draft, ctx) {
 
   return {
     ticketNo: ctx.ticketNo,
-    claimCode: ctx.claimCode,
     serviceDate: ctx.serviceDate,
 
     // Stored canonical, so 0002 and 2 are one member on the report.
@@ -433,7 +432,6 @@ export function publicView(order) {
   return {
     id: order.id,
     ticketNo: order.ticketNo,
-    claimCode: order.claimCode,
     status: order.status,
     tagLabel: order.tagLabel,
     guestCount: order.guestCount,
@@ -806,14 +804,6 @@ export function visibleAtStation(orders, stationId, stations) {
     if (!o.station) return cooks !== null && cooks === (o.kind || 'pasta');
     return o.station === stationId;
   });
-}
-
-/** Short claim code shown to the guest so a server can find their ticket. */
-export function claimCode(random = Math.random) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < 4; i += 1) out += alphabet[Math.floor(random() * alphabet.length)];
-  return out;
 }
 
 // ------------------------------------------------------- end-of-night report

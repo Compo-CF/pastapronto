@@ -70,7 +70,6 @@ const make = (d = draft(), ctx = {}) => ({
   id: 'ord_test_' + (seq += 1),
   ...order.buildOrder(d, {
     ticketNo: seq,
-    claimCode: 'TEST',
     station: 'PASTA-1',
     queueDepth: 0,
     tag: { id: 'table-12', label: 'Table 12', kind: 'table' },
@@ -151,8 +150,8 @@ test('building an order leaves the draft it was given untouched', () => {
 
   // And a second build of the same draft must produce the same order, which is
   // what pressing "Same again" actually does.
-  const first = order.buildOrder(d, { ticketNo: 7, claimCode: 'AAAA', station: 'PASTA-1', queueDepth: 0, tag: null, serviceDate: '2026-10-08', now: new Date(0) });
-  const second = order.buildOrder(d, { ticketNo: 7, claimCode: 'AAAA', station: 'PASTA-1', queueDepth: 0, tag: null, serviceDate: '2026-10-08', now: new Date(0) });
+  const first = order.buildOrder(d, { ticketNo: 7, station: 'PASTA-1', queueDepth: 0, tag: null, serviceDate: '2026-10-08', now: new Date(0) });
+  const second = order.buildOrder(d, { ticketNo: 7, station: 'PASTA-1', queueDepth: 0, tag: null, serviceDate: '2026-10-08', now: new Date(0) });
   assert.deepStrictEqual(second, first, 'ordering the same thing twice builds the same order');
 });
 
@@ -591,7 +590,6 @@ const makePizza = (d = pizzaDraft()) => ({
   id: 'ord_pz_' + (seq += 1),
   ...order.buildOrder(d, {
     ticketNo: seq,
-    claimCode: 'TEST',
     station: order.stationForTicket(seq, config.kitchen.stations, true, 'pizza'),
     queueDepth: 0,
     tag: { id: 'table-04', label: 'Table 4', kind: 'table' },
@@ -1043,7 +1041,7 @@ test('an order keeps the cheese the guest chose', () => {
       proteins: [], toppings: [],
     }],
   }, {
-    ticketNo: 1, claimCode: 'AAAA', serviceDate: '2026-09-11',
+    ticketNo: 1, serviceDate: '2026-09-11',
     station: 'PIZZA-1', tag: null, queueDepth: 0,
   });
   assert.deepStrictEqual(o.lines[0].cheeses, ['pz_fresh_mozz', 'pz_cheese_light']);
@@ -1514,7 +1512,7 @@ test('a burger is a valid order, and routes to the grill', () => {
   assert.deepStrictEqual(menu.validateLine(burgerLine(), config.order), []);
 
   const built = order.buildOrder(burgerDraft(), {
-    ticketNo: 1, claimCode: 'ABCD', serviceDate: '2026-10-02', tag: null,
+    ticketNo: 1, serviceDate: '2026-10-02', tag: null,
   });
   assert.strictEqual(built.kind, 'burger');
   assert.strictEqual(built.lines[0].base, 'bun_brioche');
@@ -1852,7 +1850,6 @@ const KNOWN_UNUSED = [
   'guest.review.contains',
   'guest.review.nextItem',
   'guest.review.with',
-  'guest.sent.code',
   'guest.sent.ticket',
 ];
 
@@ -1906,7 +1903,16 @@ test('the rules agree with config about how big a party can be', () => {
 /** The identity of a ticket is what the rules refuse to let anyone rewrite. */
 test('the rules still pin a ticket to its number and its kind', () => {
   const rules = rulesSource();
-  ['ticketNo', 'kind', 'claimCode', 'serviceDate', 'submittedAt', 'memberNumber'].forEach((field) => {
+  const IDENTITY = ['ticketNo', 'kind', 'serviceDate', 'submittedAt', 'memberNumber'];
+  const built = make();
+
+  IDENTITY.forEach((field) => {
+    // A rule guarding a field the model no longer carries guards nothing, and
+    // reads like protection. The claim code sat here after it was removed.
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(built, field),
+      field + ' is guarded in firestore.rules but is not on a ticket any more',
+    );
     assert.ok(
       new RegExp('after\\.' + field + '\\s*==\\s*before\\.' + field).test(rules),
       field + ' must stay immutable in firestore.rules',
@@ -2148,22 +2154,166 @@ test('an order being built still counts as live work', () => {
  * status missing from it does not throw - findIndex returns -1 and the bar
  * silently falls back to the first step. A member watching a pizza being
  * assembled saw "Sent" for the whole of it, and nothing anywhere said why.
+ *
+ * A stage now covers several statuses, and the bar differs by kind: a pizza
+ * is built and a bowl is not. So this asks the real state machine which
+ * statuses each kind can actually reach, rather than keeping a second list
+ * here that would have to be remembered.
  */
+/** The member's progress bar, parsed out of guest.js as data. */
+function trackSegments() {
+  const block = /var TRACK_ALL = \[([\s\S]*?)\n  \];/.exec(guestSource());
+  assert.ok(block, 'TRACK_ALL not found in guest.js');
+  const list = (line, name) => {
+    const m = new RegExp(name + String.raw`:\s*\[([^\]]*)\]`).exec(line);
+    return m ? [...m[1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]) : null;
+  };
+  const segments = block[1].split('\n')
+    .filter((line) => line.includes('statuses:'))
+    .map((line) => ({
+      statuses: list(line, 'statuses'),
+      kinds: list(line, 'kinds'),
+      notKinds: list(line, 'notKinds'),
+    }));
+  assert.ok(segments.length >= 3, 'found ' + segments.length + ' stages - the scan is broken');
+  return segments;
+}
+
 test('every stage a guest can be in has a step on their tracker', () => {
   const src = guestSource();
-  const block = /var TRACK_ALL = \[([\s\S]*?)\];/.exec(src);
+  const block = /var TRACK_ALL = \[([\s\S]*?)\n  \];/.exec(src);
   assert.ok(block, 'TRACK_ALL not found in guest.js');
 
-  const tracked = [...block[1].matchAll(/status: '([a-z]+)'/g)].map((m) => m[1]);
+  const list = (line, name) => {
+    const m = new RegExp(name + String.raw`:\s*\[([^\]]*)\]`).exec(line);
+    return m ? [...m[1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]) : null;
+  };
+  const segments = block[1].split('\n')
+    .filter((line) => line.includes('statuses:'))
+    .map((line) => ({
+      statuses: list(line, 'statuses'),
+      kinds: list(line, 'kinds'),
+      notKinds: list(line, 'notKinds'),
+    }));
+  assert.ok(segments.length >= 3, 'found ' + segments.length + ' stages - the scan is broken');
 
   // held and voided are not stages on the way to food - a guest whose ticket
   // is parked or cancelled is told in words, not moved along a bar.
   const offBar = [order.STATUS.HELD, order.STATUS.VOIDED];
-  Object.values(order.STATUS)
-    .filter((st) => !offBar.includes(st))
-    .forEach((st) => {
-      assert.ok(tracked.includes(st), st + ' can happen but has no step on the guest tracker');
+
+  /** Every status this kind can actually end up in, per order.js itself. */
+  const reachable = (kind) => {
+    const out = new Set([order.STATUS.QUEUED]);
+    Object.values(order.TRANSITIONS).forEach((tr) => {
+      if (tr.kinds && !tr.kinds.includes(kind)) return;
+      if (tr.notKinds && tr.notKinds.includes(kind)) return;
+      if (tr.to) out.add(tr.to);
     });
+    return [...out].filter((st) => !offBar.includes(st));
+  };
+
+  ['pasta', 'pizza'].forEach((kind) => {
+    const covered = new Set();
+    segments.forEach((seg) => {
+      if (seg.kinds && !seg.kinds.includes(kind)) return;
+      if (seg.notKinds && seg.notKinds.includes(kind)) return;
+      seg.statuses.forEach((st) => covered.add(st));
+    });
+    reachable(kind).forEach((st) => {
+      assert.ok(
+        covered.has(st),
+        'a ' + kind + ' can be ' + st + ', and nothing on the guest tracker covers it',
+      );
+    });
+  });
+});
+
+/**
+ * The club's objection, kept honest: "don't tell the member it's ready until
+ * the runner is walking." Food on a pass is not food at a table, and a member
+ * told it is ready starts waiting, then starts asking a server.
+ *
+ * So the bar must not move when a ticket is plated. ready and cooking have to
+ * land on the same stage - if ready ever gets a stage of its own again, the
+ * member is being told, whatever the words on it say.
+ */
+test('the member is not told their food is ready, only that it is coming', () => {
+  const stages = trackSegments();
+
+  ['pasta', 'pizza'].forEach((kind) => {
+    const forKind = stages.filter((seg) => {
+      if (seg.kinds && !seg.kinds.includes(kind)) return false;
+      if (seg.notKinds && seg.notKinds.includes(kind)) return false;
+      return true;
+    });
+    const stageOf = (st) => forKind.findIndex((seg) => seg.statuses.includes(st));
+
+    assert.ok(stageOf('ready') >= 0, 'a plated ' + kind + ' has fallen off the bar entirely');
+    assert.strictEqual(
+      stageOf('ready'), stageOf('cooking'),
+      "a plated " + kind + " moves the member's bar, which tells them it is ready",
+    );
+    assert.ok(
+      stageOf('delivered') > stageOf('ready'),
+      'the bar has to finish moving when a runner picks it up',
+    );
+  });
+
+  // And nothing on that screen announces a ready ticket.
+  const src = guestSource();
+  const banner = /readyBanner = ticket\.status === '([a-z]+)'/.exec(src);
+  assert.ok(banner, 'the banner condition has moved - check it still waits for a runner');
+  assert.strictEqual(banner[1], 'delivered', 'the banner fires before a runner has it');
+});
+
+/**
+ * A pizza leaves the kitchen at the oven door: the builder loads it and starts
+ * the next one. Nobody stands at the oven to tap, so the window takes it out.
+ * A bowl is the opposite - one cook owns it start to finish - and the rail
+ * keeps that tap. The two must not drift into each other.
+ */
+test('a pizza is taken out of the oven at the window, a bowl at the rail', () => {
+  const kitchen = readFileSync(fileURLToPath(new URL('../app/kitchen.js', import.meta.url)), 'utf8');
+  const expo = readFileSync(fileURLToPath(new URL('../app/expo.js', import.meta.url)), 'utf8');
+
+  const lanes = /var ROLE_LANES = \{([\s\S]*?)\n  \};/.exec(kitchen);
+  assert.ok(lanes, 'ROLE_LANES not found in kitchen.js');
+
+  const roles = {};
+  [...lanes[1].matchAll(/(\w+):\s*\{\s*built:\s*\[([^\]]*)\][^}]*plain:\s*\[([^\]]*)\]/g)]
+    .forEach((m) => {
+      const ids = (t) => [...t.matchAll(/'([a-z]+)'/g)].map((x) => x[1]);
+      roles[m[1]] = { built: ids(m[2]), plain: ids(m[3]) };
+    });
+  assert.ok(Object.keys(roles).length >= 3, 'the lane scan is broken');
+
+  // 'all' is nobody's station - it is the whole-rail overview, and it keeps
+  // every lane. Every other role is somebody standing at one bench.
+  assert.ok(roles.all, "the overview role is gone - this test no longer knows what it is checking");
+  assert.ok(roles.all.built.includes('ready') && roles.all.plain.includes('ready'),
+    'the overview has lost its ready column, so on a mixed night a bowl cannot be finished');
+
+  Object.keys(roles).filter((r) => r !== 'all').forEach((role) => {
+    assert.ok(
+      !roles[role].built.includes('ready'),
+      role + ' has a ready column on a built lane, so the rail and the window '
+      + 'both claim the tap that takes a pizza out of the oven',
+    );
+    assert.ok(
+      roles[role].plain.length,
+      role + ' has no plain lanes at all - the scan is broken',
+    );
+  });
+  assert.ok(
+    Object.values(roles).some((r) => r.plain.includes('ready')),
+    'no plain lane has a ready column - a bowl now has nobody to finish it',
+  );
+
+  // The tap has to exist somewhere, or a pizza never leaves the oven.
+  assert.ok(
+    /data-act="ready"/.test(expo),
+    'the window cannot take a pizza out of the oven, and the rail no longer can either',
+  );
 });
 
 // -------------------------------------------------- ticket layout

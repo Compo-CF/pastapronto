@@ -22,7 +22,7 @@ import { art } from './art.js';
 import { burgerStackSvg } from './burgerstack.js';
 import { mastheadHtml, pageTitle, activeBrand, taglineFor } from './brand.js';
 import {
-  html, raw, humanMins, escapeHtml,
+  html, raw, escapeHtml,
   remember, recall, chime, unlockAudio, toast, now,
 } from './ui.js';
 
@@ -194,17 +194,28 @@ import {
    * a pizza being assembled saw the bar stuck on "Sent", because findIndex
    * returned -1 for a status this list had never heard of.
    */
+  /*
+   * Three stages, and a stage covers several statuses rather than one. The
+   * club asked for Sent - Building - On its way on a pizza, which means the
+   * oven is not a stage of its own; and a member is not told their food is
+   * ready, only that it is coming, which means neither is the pass. Both of
+   * those are statuses the kitchen still works in - they just do not surface
+   * here, and a segment that listed one status each would leave the bar
+   * stranded on "Sent" the moment the food reached a status it had never
+   * heard of.
+   */
   var TRACK_ALL = [
-    { status: 'queued', key: 'guest.track.sent' },
-    { status: 'building', key: 'guest.track.building', kinds: ['pizza'] },
-    { status: 'cooking', key: 'guest.track.cooking' },
-    { status: 'ready', key: 'guest.track.ready' },
-    { status: 'delivered', key: 'guest.track.enjoy' },
+    { statuses: ['queued'], key: 'guest.track.sent' },
+    { statuses: ['building', 'cooking', 'ready'], key: 'guest.track.building', kinds: ['pizza'] },
+    { statuses: ['cooking', 'ready'], key: 'guest.track.cooking', notKinds: ['pizza'] },
+    { statuses: ['delivered'], key: 'guest.track.onway' },
   ];
 
   function trackFor(kind) {
     return TRACK_ALL.filter(function (seg) {
-      return !seg.kinds || seg.kinds.indexOf(kind) !== -1;
+      if (seg.kinds && seg.kinds.indexOf(kind) === -1) return false;
+      if (seg.notKinds && seg.notKinds.indexOf(kind) !== -1) return false;
+      return true;
     });
   }
 
@@ -887,7 +898,7 @@ import {
           <div class="summary-line"><span>${lane().many[0].toUpperCase() + lane().many.slice(1)}</span><span>${state.bowls.length}</span></div>
           <div class="summary-line"><span>Guests</span><span>${state.guestCount}</span></div>
           <div class="summary-line"><span>Where</span><span>${state.boot.tag ? state.boot.tag.label : 'Takeout'}</span></div>
-          <div class="summary-total"><span>Cook time</span><span>${humanMins(estimate.cookEstimateSec)}</span></div>
+          <div class="summary-total"><span>${t('guest.wait.label')}</span><span>${t('guest.wait.flat')}</span></div>
           <p class="muted" style="margin:0;font-size:14px">${memberLabel()} ${state.memberDigits}</p>
         </div>
         ${raw(notesField)}
@@ -956,7 +967,9 @@ import {
     var ticket = state.order;
     var tr = t;
     var TRACK = trackFor(ticket.kind);
-    var stepIndex = TRACK.findIndex(function (seg) { return seg.status === ticket.status; });
+    var stepIndex = TRACK.findIndex(function (seg) {
+      return seg.statuses.indexOf(ticket.status) !== -1;
+    });
     if (stepIndex < 0) stepIndex = 0;
 
     var segs = TRACK.map(function (seg, i) {
@@ -967,32 +980,45 @@ import {
       return html`<span class="${i === stepIndex ? 'is-now' : ''}">${tr(seg.key)}</span>`;
     });
 
+    /*
+     * Nothing here tells a member their food is ready, because the club asked
+     * that we not: food sitting on a pass is not food at the table, and a
+     * member told "it's up!" starts waiting and then starts asking. The
+     * kitchen still has a ready status and still works in it - it is the one
+     * status this screen deliberately says nothing new about. The message
+     * arrives when a runner picks the tray up, and it says what is actually
+     * true at that moment: it is on its way.
+     */
     var headline, note;
     if (ticket.status === 'queued') {
       headline = t('guest.sent.queued');
       note = 'A cook will pick it up in a moment.';
-    } else if (ticket.status === 'cooking') {
+    } else if (ticket.status === 'cooking' || ticket.status === 'ready') {
       headline = t('guest.sent.cookingSub');
       note = t('guest.sent.queuedSub');
-    } else if (ticket.status === 'ready') {
-      headline = t('guest.sent.ready');
-      note = 'A runner is bringing it to ' + ticket.tagLabel + '.';
     } else if (ticket.status === 'delivered') {
-      headline = t('guest.sent.delivered');
-      note = t('guest.sent.deliveredSub');
+      headline = t('guest.sent.onway');
+      note = t('guest.sent.onwaySub', { where: ticket.tagLabel })
+        + ' ' + t('guest.sent.delivered');
     } else {
       headline = t('guest.sent.cooking');
       note = '';
     }
 
+    /*
+     * A flat wait, by the club's instruction. The live figure was accurate and
+     * unhelpful: it moved while a member watched it, and a number that goes up
+     * reads as a broken promise even when the kitchen is on time. The real
+     * estimate is still on the ticket and still drives the kitchen's own
+     * clocks - this is the only place it stopped being shown.
+     */
     var eta = '';
-    if (ticket.status === 'queued' || ticket.status === 'cooking') {
-      var remaining = Math.max(0, (new Date(ticket.promisedReadyAt).getTime() - now()) / 1000);
-      eta = html`<p class="eta">Ready in <strong>${humanMins(remaining)}</strong></p>`;
+    if (ticket.status === 'queued' || ticket.status === 'cooking' || ticket.status === 'ready') {
+      eta = html`<p class="eta">${t('guest.wait.flat')}</p>`;
     }
 
-    var readyBanner = ticket.status === 'ready'
-      ? html`<div class="ready-banner">Ticket #${ticket.ticketNo} is up!</div>`
+    var readyBanner = ticket.status === 'delivered'
+      ? html`<div class="ready-banner">Ticket #${ticket.ticketNo} is on its way!</div>`
       : '';
 
     var bowls = ticket.lines.map(function (line) {
@@ -1012,8 +1038,6 @@ import {
         <div class="ticket">
           <div class="ticket-label">Ticket</div>
           <div class="ticket-no">#${ticket.ticketNo}</div>
-          <div class="ticket-label" style="margin-top:10px">Show this code if a server asks</div>
-          <div class="ticket-code">${ticket.claimCode}</div>
           <div class="track">${segs}</div>
           <div class="track-labels">${labels}</div>
         </div>

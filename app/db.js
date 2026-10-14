@@ -470,7 +470,6 @@ export async function submitOrder(draft, { tagId, queueDepth = 0 } = {}) {
 
     const built = order.buildOrder(draft, {
       ticketNo,
-      claimCode: order.claimCode(),
       // Null where the kind has more than one station: the cook who starts it
       // claims it. See order.initialStation().
       station: order.initialStation(

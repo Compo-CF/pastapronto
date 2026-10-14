@@ -7,7 +7,10 @@
  */
 import { config, kindsForNight } from './config.js';
 import * as menu from './menu.js';
-import * as order from './order.js';
+// Aliased, because every render function here takes a parameter called
+// `order` - the module would be shadowed inside exactly the places that
+// need to ask it whether a kind gets built.
+import * as orderLib from './order.js';
 import * as db from './db.js';
 import { art } from './art.js';
 import { mastheadHtml, pageTitle } from './brand.js';
@@ -165,6 +168,9 @@ const CATALOG = menu.catalog();
         })}
       </div>
       <button class="rcard-go" data-act="deliver" data-id="${order.id}">Deliver to ${order.tagLabel}</button>
+      ${raw(orderLib.isBuilt(order.kind)
+        ? '<button class="rcard-undo" data-act="unready" data-id="' + order.id + '">Not out yet</button>'
+        : '')}
     </article>`;
   }
 
@@ -215,6 +221,20 @@ const CATALOG = menu.catalog();
         </div>`
       : '';
 
+    /*
+     * A pizza leaves the kitchen's hands at the oven door. The builder loads
+     * it and moves on to the next one; nobody at the pizza station is watching
+     * for it to come out, and the club did not want a second person standing
+     * there to tap. So the window takes it out, which is also the moment the
+     * window can actually see that it is done.
+     *
+     * A bowl is not like this - the cook who started it finishes it and hands
+     * it over, so the rail keeps that tap.
+     */
+    var outOfOven = orderLib.isBuilt(order.kind) && order.status === 'cooking'
+      ? html`<button class="ncard-go" data-act="ready" data-id="${order.id}">Out of the oven</button>`
+      : '';
+
     return html`<div class="ncard ${open ? 'is-open' : ''}">
       <button class="ncard-head" type="button" data-open="${order.id}"
         aria-expanded="${open ? 'true' : 'false'}">
@@ -223,6 +243,7 @@ const CATALOG = menu.catalog();
         ${raw(right)}
       </button>
       ${raw(detail)}
+      ${raw(outOfOven)}
     </div>`;
   }
 

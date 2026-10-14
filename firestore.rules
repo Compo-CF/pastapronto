@@ -136,7 +136,6 @@ service cloud.firestore {
         let after = request.resource.data;
         return after.ticketNo == before.ticketNo
           && after.kind == before.kind
-          && after.claimCode == before.claimCode
           && after.serviceDate == before.serviceDate
           && after.submittedAt == before.submittedAt
           && after.memberNumber == before.memberNumber;

@@ -168,7 +168,6 @@ function build(spec) {
   const kind = (spec.lines[0] || {}).kind === 'pizza' ? 'pizza' : 'pasta';
   return order.buildOrder(draft, {
     ticketNo,
-    claimCode: order.claimCode(),
     // Same routing the live app uses, so seeded chits land on the right rails.
     station: order.stationForTicket(ticketNo, config.kitchen.stations, true, kind),
     queueDepth: 2,
