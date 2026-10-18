@@ -519,6 +519,89 @@ export function isEditableItem(item) {
 }
 
 /**
+ * Items the club added themselves.
+ *
+ * A new item is never typed from nothing: it is modelled on one already on
+ * that list. The template supplies the things the club has no way to know and
+ * the app cannot do without - the cook-time field for that group (a pasta has
+ * a boil time, a crust has a bake time), the artwork, and whether a kid
+ * portion exists. What the club supplies is the name and the allergens.
+ *
+ * That is why there is no "blank new item" path. One without a boil time
+ * would cost the kitchen nothing on the clock and quietly skew every estimate
+ * the rail makes; one without artwork would draw the crossed-out circle,
+ * which on a tile reads as "we are out of this".
+ */
+const ADDED_PREFIX = 'cw_';
+
+/** Ids currently injected into the catalog by an override. */
+const ADDED = new Set();
+
+/** Did the club add this, rather than it shipping with the app? */
+export function isAddedItem(item) {
+  return Boolean(item) && item.added === true;
+}
+
+/**
+ * Items in a group that a new one can be modelled on.
+ *
+ * Mechanics are excluded for the same reason they cannot be retired: "No
+ * Sauce" is how a guest says no, and an item cloned from it would inherit
+ * that behaviour and silently cancel everything else on the step.
+ */
+export function templatesFor(group) {
+  return (GROUPS[group] || []).filter(
+    (x) => isEditableItem(x) && !isAddedItem(x) && !x.retired,
+  );
+}
+
+/** A stable id for a new item. Prefixed, so it can never collide with ours. */
+export function newItemId(name, taken) {
+  const slug = String(name || '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24);
+  const base = ADDED_PREFIX + (slug || 'item');
+  const used = typeof taken === 'function' ? taken : () => false;
+  let id = base;
+  let n = 2;
+  while (used(id)) { id = base + '_' + n; n += 1; }
+  return id;
+}
+
+/**
+ * Turn one override entry into a live menu item, or null if it cannot be.
+ *
+ * Returns null rather than a half-made item: a pasta with no boil time or an
+ * item whose allergens were never answered must not reach a guest's phone,
+ * and the editor and overrideProblems() both refuse it long before here.
+ */
+function buildAddedItem(id, o) {
+  const group = typeof o.group === 'string' ? o.group : '';
+  if (!EDITABLE_GROUPS.some(([g]) => g === group)) return null;
+
+  const pool = templatesFor(group);
+  const tpl = pool.find((x) => x.id === o.template) || pool[0];
+  if (!tpl) return null;
+
+  const name = typeof o.name === 'string' ? o.name.trim().slice(0, 40) : '';
+  // An unanswered allergen question is not the same as "no allergens", and
+  // the difference is the whole point of asking. Absent means nobody said.
+  if (!name || !Array.isArray(o.allergens)) return null;
+
+  const allergens = o.allergens.filter((a) => ALLERGENS.some((x) => x.id === a));
+  const item = { ...tpl, id, name, allergens, added: true, addedFrom: tpl.id };
+
+  if (typeof o.es === 'string' && o.es.trim()) item.es = o.es.trim().slice(0, 40);
+  else delete item.es;
+  if (o.retired === true) item.retired = true; else delete item.retired;
+
+  // Derived from the answer, never inherited. Cloning the gluten-free fusilli
+  // to make a wheat linguini must not carry the badge across with it.
+  if ('glutenFree' in tpl) item.glutenFree = !allergens.includes('gluten');
+
+  return { group, item };
+}
+
+/**
  * Apply a manager's renames and removals to the live menu.
  *
  * Written onto the item objects rather than layered over them, because every
@@ -534,6 +617,29 @@ export function isEditableItem(item) {
  */
 export function applyMenuOverrides(map) {
   const safe = map && typeof map === 'object' ? map : {};
+
+  // Take out whatever a previous override added, so re-applying cannot stack
+  // duplicates. Spliced rather than reassigned, for the same reason the
+  // renames below are written onto the items: every screen is holding a
+  // reference to these very arrays.
+  EDITABLE_GROUPS.forEach(([group]) => {
+    const arr = GROUPS[group] || [];
+    for (let i = arr.length - 1; i >= 0; i -= 1) {
+      if (ADDED.has(arr[i].id)) arr.splice(i, 1);
+    }
+  });
+  ADDED.clear();
+
+  // The club's own items go on first, so everything below sees a complete
+  // list - including the check that a group has not been emptied.
+  Object.keys(safe).forEach((id) => {
+    const o = safe[id];
+    if (!o || o.added !== true) return;
+    const made = buildAddedItem(id, o);
+    if (!made) return;
+    (GROUPS[made.group] || []).push(made.item);
+    ADDED.add(id);
+  });
 
   EDITABLE_GROUPS.forEach(([group]) => {
     (GROUPS[group] || []).forEach((item) => {
@@ -562,6 +668,21 @@ export function menuOverrides() {
   const out = {};
   EDITABLE_GROUPS.forEach(([group]) => {
     (GROUPS[group] || []).forEach((item) => {
+      // An added item has no original to differ from - the entry that made it
+      // is the whole of it, and is rebuilt here so a save round-trips.
+      if (isAddedItem(item)) {
+        const entry = {
+          added: true,
+          group,
+          template: item.addedFrom,
+          name: item.name,
+          allergens: [...(item.allergens || [])],
+        };
+        if (item.es) entry.es = item.es;
+        if (item.retired) entry.retired = true;
+        out[item.id] = entry;
+        return;
+      }
       const was = ORIGINAL.get(item.id);
       if (!was) return;
       const o = {};
@@ -595,6 +716,39 @@ export function overrideProblems(map) {
   const safe = map && typeof map === 'object' ? map : {};
   const out = [];
 
+  /*
+   * A new item has to answer the allergen question before it can be saved,
+   * and "No allergens" is an answer - an unanswered one is not. The two look
+   * identical once stored if the answer is an empty list, so the shape says
+   * which: the key being absent means nobody was asked.
+   *
+   * This matters more than any other rule here. An item that reaches a chit
+   * with no allergens on it reads as safe, and the member who asked whether
+   * it contains nuts is told by the screen that it does not.
+   */
+  Object.keys(safe).forEach((id) => {
+    const o = safe[id];
+    if (!o || o.added !== true) return;
+    const name = (typeof o.name === 'string' ? o.name.trim() : '');
+    const label = name || 'A new item';
+
+    if (!EDITABLE_GROUPS.some(([g]) => g === o.group)) {
+      out.push(label + ' is on a list the club cannot change.');
+      return;
+    }
+    if (!name) out.push('A new item needs a name before it can be saved.');
+    if (!templatesFor(o.group).length) {
+      out.push(label + ' has nothing on its list to be modelled on.');
+    }
+
+    if (!Array.isArray(o.allergens)) {
+      out.push(label + ' needs its allergens answered - either "No allergens",'
+        + ' or the ones it contains.');
+    } else if (o.allergens.some((a) => !ALLERGENS.some((x) => x.id === a))) {
+      out.push(label + ' lists something that is not on the allergen list.');
+    }
+  });
+
   EDITABLE_GROUPS.forEach(([group, label]) => {
     const items = (GROUPS[group] || []).filter(isEditableItem);
     if (!items.length) return;
@@ -604,7 +758,15 @@ export function overrideProblems(map) {
       if (o && typeof o.retired === 'boolean') return !o.retired;
       return !(ORIGINAL.get(item.id) || {}).retired;
     });
-    if (!left.length) out.push(label + ' would have nothing left on it.');
+    // Counted on a draft, before anything is applied - so a list the club has
+    // retired entirely but refilled with items of their own is not empty.
+    const incoming = Object.keys(safe).filter((id) => {
+      const o = safe[id];
+      return o && o.added === true && o.group === group && o.retired !== true;
+    });
+    if (!left.length && !incoming.length) {
+      out.push(label + ' would have nothing left on it.');
+    }
   });
 
   return out;

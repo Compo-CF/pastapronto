@@ -2349,6 +2349,188 @@ test('a station is only offered the roles somebody there actually fills', () => 
   );
 });
 
+/**
+ * A stylesheet that names a custom property nobody defines does not warn, it
+ * just drops the declaration. The chip for a selected allergen was written
+ * with var(--brand), which exists nowhere: it rendered white text on a cream
+ * panel, so ticking "Gluten" looked like it had not registered. On the one
+ * control in this app where that matters most.
+ */
+test('every CSS variable a stylesheet uses is one some stylesheet defines', () => {
+  const sheets = ['shared', 'admin', 'guest', 'kitchen', 'expo', 'report'];
+  const read = (n) => readFileSync(fileURLToPath(new URL('../' + n + '.css', import.meta.url)), 'utf8');
+  const all = sheets.map(read).join('\n');
+
+  const defined = new Set([...all.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]));
+  assert.ok(defined.size > 10, 'found ' + defined.size + ' definitions - the scan is broken');
+
+  const missing = [];
+  sheets.forEach((name) => {
+    read(name).split('\n').forEach((line, i) => {
+      [...line.matchAll(/var\(\s*(--[\w-]+)\s*(,)?/g)].forEach((m) => {
+        // A var() with a fallback still renders if the token is absent.
+        if (m[2] || defined.has(m[1])) return;
+        missing.push(name + '.css:' + (i + 1) + '  ' + m[1]);
+      });
+    });
+  });
+
+  assert.deepStrictEqual(
+    missing, [],
+    'these resolve to nothing, so the declaration is silently dropped - define '
+    + 'the token or give var() a fallback',
+  );
+});
+
+// ------------------------------------------- items the club added itself
+
+/**
+ * The club asked to add items, not just rename them, and the Sous Chef made
+ * it the gate on live testing. A new item is modelled on one already on its
+ * list, because the template is what supplies the things nobody types: the
+ * cook-time field for that group, and the artwork.
+ */
+test('an item the club adds arrives whole, not half-made', () => {
+  const id = 'cw_linguini';
+  menu.applyMenuOverrides({
+    [id]: {
+      added: true, group: 'pastas', template: 'penne',
+      name: 'Linguini', es: 'Linguini', allergens: ['gluten'],
+    },
+  });
+
+  const made = menu.find('pastas', id);
+  assert.ok(made, 'the new item never reached the menu');
+  assert.strictEqual(made.name, 'Linguini');
+
+  // The two things a template exists to supply. Without the first the kitchen
+  // clock counts it as free; without the second its tile draws the crossed
+  // circle, which on a menu reads as "we are out of this".
+  assert.strictEqual(made.boilSec, menu.find('pastas', 'penne').boilSec,
+    'a new pasta with no boil time costs the rail nothing and skews every estimate');
+  assert.ok(made.shape && made.shape !== 'none',
+    'a new item with no artwork draws the "unavailable" glyph');
+  assert.strictEqual(made.shape, menu.find('pastas', 'penne').shape,
+    'the artwork should come from the template it was modelled on');
+
+  // And it behaves like any other pasta from here on.
+  const line = { kind: 'pasta', pasta: id, sauces: ['marinara'], portion: 'regular' };
+  assert.deepStrictEqual(menu.validateLine(line, config.order), []);
+  assert.deepStrictEqual(menu.allergensFor(line), ['gluten'],
+    'the allergen the club declared has to reach the ticket');
+
+  menu.applyMenuOverrides({});
+});
+
+/**
+ * The rule the club asked for by name: a new item must answer the allergen
+ * question, and "No allergens" is an answer. An unanswered one is not.
+ *
+ * The two are indistinguishable once stored if the answer is an empty list,
+ * so absence of the key is what "nobody said" looks like. This is the only
+ * check here that protects a person rather than a number: an item that
+ * reaches a chit with no allergens on it reads as safe.
+ */
+test('a new item cannot be saved until somebody answers the allergen question', () => {
+  const base = { added: true, group: 'pastas', template: 'penne', name: 'Gemelli' };
+
+  assert.ok(
+    menu.overrideProblems({ cw_g: { ...base } }).length,
+    'an item with no allergen answer was allowed through',
+  );
+  assert.deepStrictEqual(
+    menu.overrideProblems({ cw_g: { ...base, allergens: [] } }), [],
+    '"No allergens" is a real answer and must be accepted',
+  );
+  assert.deepStrictEqual(
+    menu.overrideProblems({ cw_g: { ...base, allergens: ['gluten'] } }), [],
+  );
+  assert.ok(
+    menu.overrideProblems({ cw_g: { ...base, allergens: ['kryptonite'] } }).length,
+    'an allergen nobody has heard of was allowed through',
+  );
+  assert.ok(
+    menu.overrideProblems({ cw_g: { ...base, name: '  ' , allergens: [] } }).length,
+    'a nameless item was allowed through',
+  );
+
+  // And an unanswered one never becomes a live item, whatever reaches apply.
+  menu.applyMenuOverrides({ cw_g: { ...base } });
+  assert.ok(!menu.find('pastas', 'cw_g'),
+    'an item with no allergen answer reached the menu anyway');
+});
+
+/**
+ * Cloning the gluten-free fusilli to make a wheat pasta must not carry the
+ * badge across. The flag follows the answer the club gave, never the template.
+ */
+test('gluten free follows what was declared, not what it was cloned from', () => {
+  const from = { added: true, group: 'pastas', template: 'fusilli_gf' };
+
+  menu.applyMenuOverrides({ cw_w: { ...from, name: 'Wheat Linguini', allergens: ['gluten'] } });
+  assert.strictEqual(menu.find('pastas', 'cw_w').glutenFree, false,
+    'a pasta declared to contain gluten is wearing a gluten-free badge');
+
+  menu.applyMenuOverrides({ cw_r: { ...from, name: 'Rice Spirals', allergens: [] } });
+  assert.strictEqual(menu.find('pastas', 'cw_r').glutenFree, true);
+
+  menu.applyMenuOverrides({});
+});
+
+/** A mechanic is not a template: cloning "No Sauce" would cancel the step. */
+test('a new item cannot be modelled on a mechanic', () => {
+  const ids = menu.templatesFor('sauces').map((x) => x.id);
+  assert.ok(ids.length, 'no templates at all - the scan is broken');
+  assert.ok(!ids.includes('none'), '"No Sauce" is offered as something to clone');
+  menu.catalog().sauces.filter((x) => !menu.isEditableItem(x)).forEach((x) => {
+    assert.ok(!ids.includes(x.id), x.id + ' is a mechanic and cannot be a template');
+  });
+});
+
+/** Saving, reopening and saving again must not stack duplicates. */
+test('an added item round-trips and is not doubled by a second apply', () => {
+  const entry = {
+    added: true, group: 'pastas', template: 'penne',
+    name: 'Gemelli', allergens: ['gluten'],
+  };
+  menu.applyMenuOverrides({ cw_gem: entry });
+
+  const back = menu.menuOverrides().cw_gem;
+  assert.ok(back && back.added, 'the item did not survive being read back');
+  assert.deepStrictEqual(back.allergens, ['gluten']);
+  assert.strictEqual(back.group, 'pastas');
+
+  menu.applyMenuOverrides({ cw_gem: back });
+  assert.strictEqual(
+    menu.catalog().pastas.filter((x) => x.id === 'cw_gem').length, 1,
+    'applying twice left two of it on the menu',
+  );
+  menu.applyMenuOverrides({});
+  assert.ok(!menu.find('pastas', 'cw_gem'),
+    'clearing the overrides left the added item behind');
+});
+
+/**
+ * The save path sanitises every entry, and it used to do that by asking the
+ * catalog whether the item existed. A brand new one does not exist yet, so it
+ * was dropped - and the screen still said "Menu saved. Every screen has it."
+ */
+test('the save path keeps an added item rather than quietly dropping it', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = /export async function saveMenuOverrides[\s\S]*?\n}/.exec(src);
+  assert.ok(fn, 'saveMenuOverrides not found in db.js');
+  const body = fn[0];
+
+  const added = body.indexOf('o.added === true');
+  const gate = body.indexOf('!menu.editableItem(id)');
+  assert.ok(added !== -1, 'nothing in the save path handles an added item');
+  assert.ok(gate !== -1, 'the editableItem gate has moved - check added items still pass it');
+  assert.ok(added < gate,
+    'the editableItem gate runs first, so a new item is dropped before it is written');
+  assert.ok(/allergens/.test(body.slice(added, gate)),
+    'the saved shape drops the allergens, which is the one field that must survive');
+});
+
 // -------------------------------------------------- ticket layout
 
 test('a dish reads as rows, and every choice appears in one', () => {

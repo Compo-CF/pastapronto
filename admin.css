@@ -248,7 +248,7 @@
   .tent-wordmark em { font-style: normal; color: var(--tomato); }
 
   .tent-event {
-    font-family: var(--font-display);
+    font-family: var(--font);
     font-size: 30pt; font-weight: 700; letter-spacing: -0.01em;
     color: var(--tomato);
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
@@ -437,3 +437,63 @@
   padding: 0 10px;
   white-space: nowrap;
 }
+
+/* ------------------------------------------- adding an item to the menu */
+
+.medit-add {
+  margin: 2px 0 10px;
+  padding: 0 12px;
+  min-height: 34px;
+  font-size: 14px;
+}
+
+/* A new item is a block rather than a row: it asks three questions and the
+   allergen one needs room to be read rather than skimmed past. */
+.medit-row.is-new {
+  display: block;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-left: 4px solid #2f7d4f;
+  border-radius: 10px;
+  background: #fbfaf7;
+}
+/* The editor sits in narrow columns, so the three controls wrap rather than
+   squeezing the name box down to four characters. */
+.medit-newtop { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.medit-newtop .medit-name { flex: 1 1 140px; min-width: 120px; }
+.medit-like {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: var(--ink-soft, #6b6058);
+}
+.medit-like select { min-height: 38px; padding: 0 8px; font-size: 14px; }
+
+.medit-ask { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.medit-asklabel { font-size: 13px; font-weight: 700; color: var(--ink-soft, #6b6058); margin-right: 2px; }
+
+/* Unanswered is the state worth seeing from across the room: an item saved
+   with no allergens on it reads to a member as an item with no allergens. */
+.medit-ask.is-unanswered { }
+.medit-ask.is-unanswered .medit-asklabel { color: #a3341f; }
+
+.medit-chip {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.medit-chip:hover { border-color: var(--tomato, #d33f30); }
+.medit-chip.is-on {
+  background: var(--tomato, #d33f30);
+  border-color: var(--tomato, #d33f30);
+  color: #fff;
+}
+.medit-ask.is-unanswered .medit-chip { border-color: #e0b3a8; }

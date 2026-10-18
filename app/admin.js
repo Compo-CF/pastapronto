@@ -727,6 +727,55 @@ const CATALOG = menu.catalog();
    * rather than something the kitchen stocks. They are shown greyed rather
    * than hidden, so nobody hunts for the row that is missing.
    */
+  /**
+   * One item the club is adding.
+   *
+   * Three questions, and the allergen one has no default on purpose. An
+   * unanswered allergen list and "no allergens" would look the same once
+   * saved, and the difference is the only thing standing between a member who
+   * asked about nuts and a screen that tells them there are none. So nothing
+   * is pre-ticked, and Save stays disabled until somebody says.
+   */
+  function newItemRow(id, entry, group) {
+    var answered = Array.isArray(entry.allergens);
+    var chosen = answered ? entry.allergens : [];
+    var none = answered && chosen.length === 0;
+
+    var chip = function (aid, text, on) {
+      return '<button type="button" class="medit-chip ' + (on ? 'is-on' : '') + '"'
+        + ' data-menuallergen="' + id + ':' + aid + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
+        + escapeHtml(text) + '</button>';
+    };
+
+    var chips = [chip('none', 'No allergens', none)].concat(
+      (CATALOG.allergens || []).map(function (a) {
+        return chip(a.id, a.name, chosen.indexOf(a.id) !== -1);
+      }),
+    ).join('');
+
+    var options = menu.templatesFor(group).map(function (x) {
+      return '<option value="' + x.id + '"' + (x.id === entry.template ? ' selected' : '') + '>'
+        + escapeHtml(x.name) + '</option>';
+    }).join('');
+
+    return html`<div class="medit-row is-new">
+      <div class="medit-newtop">
+        <input class="input medit-name" type="text" maxlength="40" placeholder="New item name"
+          value="${entry.name || ''}" data-menuname="${id}" aria-label="Name for the new item">
+        <label class="medit-like">like
+          <select class="input" data-menutpl="${id}" aria-label="Model the new item on">
+            ${raw(options)}
+          </select>
+        </label>
+        <button class="btn btn-ghost medit-go" type="button" data-menudrop="${id}">Discard</button>
+      </div>
+      <div class="medit-ask ${answered ? '' : 'is-unanswered'}">
+        <span class="medit-asklabel">${answered ? 'Contains' : 'What does it contain?'}</span>
+        ${raw(chips)}
+      </div>
+    </div>`;
+  }
+
   function menuEditorHtml() {
     var draft = state.menuDraft || {};
     var problems = menu.overrideProblems(draft);
@@ -752,16 +801,30 @@ const CATALOG = menu.catalog();
         </div>`;
       }).join('');
 
+      // Items the club is adding, which live only in the draft until saved.
+      var fresh = Object.keys(draft).filter(function (id) {
+        var o = draft[id];
+        return o && o.added === true && o.group === key;
+      }).map(function (id) {
+        return newItemRow(id, draft[id], key);
+      }).join('');
+
+      var canAdd = menu.templatesFor(key).length > 0;
+
       return html`<div class="medit-group">
         <h4 class="medit-head">${label}</h4>
         ${raw(rows)}
+        ${raw(fresh)}
+        ${raw(canAdd
+          ? '<button class="btn btn-ghost medit-add" type="button" data-menuadd="' + key + '">'
+            + '+ Add an item</button>'
+          : '')}
       </div>`;
     }).join('');
 
     return html`
-      ${raw(problems.length
-        ? '<div class="notice notice-bad" style="margin:0 0 12px">' + escapeHtml(problems[0]) + '</div>'
-        : '')}
+      <div class="notice notice-bad" id="menuProblem" style="margin:0 0 12px"
+        ${raw(problems.length ? '' : 'hidden')}>${problems.length ? problems[0] : ''}</div>
       <div class="meditgrid">${raw(groups)}</div>
       <div class="row" style="flex-wrap:wrap;margin-top:14px">
         <button class="btn btn-primary" type="button" data-menusave="1"
@@ -771,6 +834,43 @@ const CATALOG = menu.catalog();
         <span class="grow"></span>
         <span class="muted" style="font-size:14px">${Object.keys(draft).length} change${Object.keys(draft).length === 1 ? '' : 's'}</span>
       </div>`;
+  }
+
+  /**
+   * Update the warning and the Save button without redrawing the editor.
+   *
+   * Typing a name must not re-render: it would take the caret out of the box
+   * on every keystroke. So the two things that depend on what was typed are
+   * moved by hand, and nothing else is touched.
+   */
+  function refreshMenuProblems() {
+    var problems = menu.overrideProblems(state.menuDraft || {});
+    var note = document.getElementById('menuProblem');
+    if (note) {
+      note.textContent = problems.length ? problems[0] : '';
+      note.hidden = !problems.length;
+    }
+    var save = document.querySelector('[data-menusave]');
+    if (save) save.disabled = Boolean(state.menuSaving || problems.length);
+  }
+
+  /**
+   * Give anything still carrying a placeholder id one that reads like its
+   * name, so the stored menu, the cost sheet and the close-out all name the
+   * same thing. Done once at save, not while typing, or the id would churn
+   * with every keystroke.
+   */
+  function settleNewItemIds(draft) {
+    var out = {};
+    Object.keys(draft).forEach(function (id) {
+      var entry = draft[id];
+      if (!entry || !entry.added || !entry.name) { out[id] = entry; return; }
+      var wanted = menu.newItemId(entry.name, function (x) {
+        return Boolean(out[x]) || (x !== id && Boolean(draft[x])) || Boolean(menu.findAnywhere(x));
+      });
+      out[wanted] = entry;
+    });
+    return out;
   }
 
   function renderMenuEditor() {
@@ -792,19 +892,88 @@ const CATALOG = menu.catalog();
     var box = ev.target.closest('[data-menuname]');
     if (!box) return;
     var id = box.dataset.menuname;
-    var hit = menu.editableItem(id);
-    if (!hit) return;
     var draft = state.menuDraft || (state.menuDraft = {});
     var typed = box.value.trim();
+
+    // An item the club is adding has no original to differ from - what they
+    // type is the whole of its name, blank included, which is what keeps Save
+    // disabled until they name it.
+    if (draft[id] && draft[id].added) {
+      draft[id].name = typed;
+      return refreshMenuProblems();
+    }
+
+    var hit = menu.editableItem(id);
+    if (!hit) return;
     var entry = draft[id] || (draft[id] = {});
     // Typing the original name back is not a change, so it stops being one.
     if (typed && typed !== hit.original.name) entry.name = typed; else delete entry.name;
     if (!Object.keys(entry).length) delete draft[id];
   });
 
+  document.getElementById('panel-menu').addEventListener('change', function (ev) {
+    var sel = ev.target.closest('[data-menutpl]');
+    if (!sel) return;
+    var entry = (state.menuDraft || {})[sel.dataset.menutpl];
+    if (!entry || !entry.added) return;
+    entry.template = sel.value;
+  });
+
+  /*
+   * Every menu button this panel handles. Derived into the selector below
+   * rather than written twice: a branch with no matching selector entry is a
+   * button that looks right, does nothing, and leaves nothing to debug. That
+   * exact mismatch has shipped twice on the orders panel.
+   */
+  var MENU_ACTIONS = [
+    'menuretire', 'menusave', 'menureset', 'menuadd', 'menudrop', 'menuallergen',
+  ];
+  var MENU_ACTION_SELECTOR = MENU_ACTIONS.map(function (a) {
+    return '[data-' + a + ']';
+  }).join(',');
+
   document.getElementById('panel-menu').addEventListener('click', async function (ev) {
-    var t = ev.target.closest('[data-menuretire],[data-menusave],[data-menureset]');
+    var t = ev.target.closest(MENU_ACTION_SELECTOR);
     if (!t) return;
+
+    if (t.dataset.menuadd) {
+      var group = t.dataset.menuadd;
+      var draft = state.menuDraft || (state.menuDraft = {});
+      var tpl = menu.templatesFor(group)[0];
+      if (!tpl) return;
+      // A placeholder id until it is named; renamed on save so the stored id
+      // reads like the item rather than like a counter.
+      var fresh = menu.newItemId('item', function (x) { return Boolean(draft[x]); });
+      draft[fresh] = { added: true, group: group, template: tpl.id, name: '' };
+      return renderMenuEditor();
+    }
+
+    if (t.dataset.menudrop) {
+      delete (state.menuDraft || {})[t.dataset.menudrop];
+      return renderMenuEditor();
+    }
+
+    if (t.dataset.menuallergen) {
+      var parts = t.dataset.menuallergen.split(':');
+      var row = (state.menuDraft || {})[parts[0]];
+      if (!row || !row.added) return;
+      var which = parts[1];
+
+      if (which === 'none') {
+        // Not a toggle. "No allergens" is a statement, and there is no reason
+        // to let somebody un-say it back into silence.
+        row.allergens = [];
+      } else {
+        var list = Array.isArray(row.allergens) ? row.allergens.slice() : [];
+        var at = list.indexOf(which);
+        if (at === -1) list.push(which); else list.splice(at, 1);
+        // Taking off the only allergen is not the same as declaring there are
+        // none - it is changing your mind halfway. Back to unanswered, so the
+        // question gets asked again rather than answered by a side effect.
+        if (list.length) row.allergens = list; else delete row.allergens;
+      }
+      return renderMenuEditor();
+    }
 
     if (t.dataset.menuretire) {
       var id = t.dataset.menuretire;
@@ -822,6 +991,7 @@ const CATALOG = menu.catalog();
 
     if (t.dataset.menusave) {
       state.menuSaving = true;
+      state.menuDraft = settleNewItemIds(state.menuDraft || {});
       renderMenuEditor();
       try {
         await db.saveMenuOverrides(state.menuDraft || {});

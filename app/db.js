@@ -668,8 +668,36 @@ export async function saveMenuOverrides(map) {
 
   const clean = {};
   Object.keys(map || {}).forEach((id) => {
+    const o = map[id] || {};
+
+    /*
+     * An item the club added is not in the catalog yet, so editableItem()
+     * cannot vouch for it - it has to carry its own shape instead. Letting it
+     * fall through the check below is what made a save report success and
+     * store nothing: the entry was dropped here, quietly, and the chef was
+     * told "Menu saved. Every screen has it."
+     *
+     * allergens is written even when empty, because an empty list is the
+     * answer "none" and absence is the answer nobody gave. overrideProblems()
+     * above has already refused the second one.
+     */
+    if (o.added === true) {
+      if (typeof o.name !== 'string' || !o.name.trim()) return;
+      if (!Array.isArray(o.allergens)) return;
+      const keep = {
+        added: true,
+        group: o.group,
+        template: o.template,
+        name: o.name.trim().slice(0, 40),
+        allergens: o.allergens.slice(0, 20),
+      };
+      if (typeof o.es === 'string' && o.es.trim()) keep.es = o.es.trim().slice(0, 40);
+      if (o.retired === true) keep.retired = true;
+      clean[id] = keep;
+      return;
+    }
+
     if (!menu.editableItem(id)) return;
-    const o = map[id];
     const keep = {};
     if (typeof o.name === 'string' && o.name.trim()) keep.name = o.name.trim().slice(0, 40);
     if (typeof o.es === 'string' && o.es.trim()) keep.es = o.es.trim().slice(0, 40);
