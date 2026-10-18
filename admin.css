@@ -517,3 +517,56 @@
   background: #f3efe7;
 }
 .orow-time.is-late { color: #8c2b1d; background: #fbe6e1; }
+
+/* ------------------------------------------- the add-an-item form itself */
+
+/* A form, not a row: an item still being typed is not on the menu yet, and
+   one that looks like a row invites somebody to walk away mid-answer. */
+.medit-form {
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--basil, #2f7d4f);
+  border-radius: 10px;
+  background: #fbfaf7;
+}
+.medit-formgo { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.medit-formgo .btn { min-height: 36px; padding: 0 14px; }
+.medit-blocking { font-size: 13px; }
+
+/* Added to the list, not yet saved to the menu. */
+.medit-row.is-pending {
+  display: block;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border: 1px dashed var(--line-strong, #d6c8b3);
+  border-radius: 10px;
+  background: #fbfaf7;
+}
+.medit-newchip {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--basil-wash, #e8f5ed);
+  color: var(--basil, #2f7d4f);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.medit-contains {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ink-soft, #6b6058);
+}
+.medit-linkish {
+  margin-left: 6px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tomato, #d33f30);
+  text-decoration: underline;
+  cursor: pointer;
+}

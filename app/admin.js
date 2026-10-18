@@ -37,7 +37,7 @@ const CATALOG = menu.catalog();
     composing: false, compose: null, busy: false,
     // The menu editor. `draft` is a working copy of the overrides; nothing
     // reaches the other screens until Save.
-    menuOpen: false, menuDraft: null, menuSaving: false,
+    menuOpen: false, menuDraft: null, menuSaving: false, menuNew: {},
     orderQuery: '',
   };
 
@@ -737,42 +737,91 @@ const CATALOG = menu.catalog();
    * asked about nuts and a screen that tells them there are none. So nothing
    * is pre-ticked, and Save stays disabled until somebody says.
    */
-  function newItemRow(id, entry, group) {
-    var answered = Array.isArray(entry.allergens);
-    var chosen = answered ? entry.allergens : [];
-    var none = answered && chosen.length === 0;
+  /**
+   * The form for an item being added.
+   *
+   * It is a form rather than a row because an item that is still being typed
+   * is not on the menu yet, and sitting in the list looking like one invites
+   * somebody to walk away mid-answer. "Add to the list" is what moves it, and
+   * it stays disabled until the item has a name and its allergens are
+   * answered - so the half-built state cannot survive the click.
+   */
+  function newItemForm(group) {
+    var f = (state.menuNew || {})[group];
+    var answered = Array.isArray(f.allergens);
+    var chosen = answered ? f.allergens : [];
+    var named = Boolean((f.name || '').trim());
 
     var chip = function (aid, text, on) {
       return '<button type="button" class="medit-chip ' + (on ? 'is-on' : '') + '"'
-        + ' data-menuallergen="' + id + ':' + aid + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
+        + ' data-menuallergen="' + group + ':' + aid + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
         + escapeHtml(text) + '</button>';
     };
-
-    var chips = [chip('none', 'No allergens', none)].concat(
+    var chips = [chip('none', 'No allergens', answered && !chosen.length)].concat(
       (CATALOG.allergens || []).map(function (a) {
         return chip(a.id, a.name, chosen.indexOf(a.id) !== -1);
       }),
     ).join('');
 
     var options = menu.templatesFor(group).map(function (x) {
-      return '<option value="' + x.id + '"' + (x.id === entry.template ? ' selected' : '') + '>'
+      return '<option value="' + x.id + '"' + (x.id === f.template ? ' selected' : '') + '>'
         + escapeHtml(x.name) + '</option>';
     }).join('');
 
-    return html`<div class="medit-row is-new">
+    // Said out loud rather than left to a greyed-out button, so somebody who
+    // cannot see why it will not go is told why.
+    var blocking = !named
+      ? 'Give it a name'
+      : (!answered ? 'Say what it contains' : '');
+
+    return html`<div class="medit-form">
       <div class="medit-newtop">
         <input class="input medit-name" type="text" maxlength="40" placeholder="New item name"
-          value="${entry.name || ''}" data-menuname="${id}" aria-label="Name for the new item">
+          value="${f.name || ''}" data-menunewname="${group}" aria-label="Name for the new item">
         <label class="medit-like">like
-          <select class="input" data-menutpl="${id}" aria-label="Model the new item on">
+          <select class="input" data-menutpl="${group}" aria-label="Model the new item on">
             ${raw(options)}
           </select>
         </label>
-        <button class="btn btn-ghost medit-go" type="button" data-menudrop="${id}">Discard</button>
       </div>
       <div class="medit-ask ${answered ? '' : 'is-unanswered'}">
         <span class="medit-asklabel">${answered ? 'Contains' : 'What does it contain?'}</span>
         ${raw(chips)}
+      </div>
+      <div class="medit-formgo">
+        <button class="btn btn-primary" type="button" data-menuaddgo="${group}"
+          ${raw(blocking ? 'disabled' : '')}>${f.editing ? 'Save the change' : 'Add to the list'}</button>
+        <button class="btn btn-ghost" type="button" data-menuaddcancel="${group}">Cancel</button>
+        <span class="muted medit-blocking">${blocking}</span>
+      </div>
+    </div>`;
+  }
+
+  /**
+   * An item that has been added to the list but not yet saved to the menu.
+   *
+   * It reads like every other row, because that is what it now is - with a
+   * New chip so nobody wonders why it is not on the member's phone yet, and
+   * its allergens on show, since that is the answer worth being able to check
+   * at a glance before the whole lot is saved.
+   */
+  function pendingRow(id, entry) {
+    var names = (entry.allergens || []).map(function (a) {
+      var hit = (CATALOG.allergens || []).filter(function (x) { return x.id === a; })[0];
+      return hit ? hit.name : a;
+    });
+    var contains = names.length ? names.join(', ') : 'No allergens';
+
+    return html`<div class="medit-row is-pending">
+      <div class="medit-newtop">
+        <input class="input medit-name" type="text" maxlength="40"
+          value="${entry.name || ''}" data-menuname="${id}" aria-label="Name for ${entry.name}">
+        <span class="medit-newchip">New</span>
+        <button class="btn btn-ghost medit-go" type="button" data-menudrop="${id}">Discard</button>
+      </div>
+      <div class="medit-contains">
+        ${contains}
+        <button type="button" class="medit-linkish" data-menuedit="${id}">Change</button>
       </div>
     </div>`;
   }
@@ -802,21 +851,35 @@ const CATALOG = menu.catalog();
         </div>`;
       }).join('');
 
-      // Items the club is adding, which live only in the draft until saved.
-      var fresh = Object.keys(draft).filter(function (id) {
+      /*
+       * Added but not yet saved. An added item that has already been saved is
+       * in the catalog, so it is drawn by the loop above like anything else -
+       * it is only pending while the menu has not heard of it yet. Without
+       * that check it appeared twice, once as itself and once as its own
+       * draft entry.
+       *
+       * The item a form is currently editing is in the form, not the list,
+       * for the same reason.
+       */
+      var editing = ((state.menuNew || {})[key] || {}).editing;
+      var pending = Object.keys(draft).filter(function (id) {
         var o = draft[id];
-        return o && o.added === true && o.group === key;
+        return o && o.added === true && o.group === key
+          && id !== editing
+          && !menu.find(key, id);
       }).map(function (id) {
-        return newItemRow(id, draft[id], key);
+        return pendingRow(id, draft[id]);
       }).join('');
 
+      var open = Boolean((state.menuNew || {})[key]);
       var canAdd = menu.templatesFor(key).length > 0;
 
       return html`<div class="medit-group">
         <h4 class="medit-head">${label}</h4>
         ${raw(rows)}
-        ${raw(fresh)}
-        ${raw(canAdd
+        ${raw(pending)}
+        ${raw(open ? newItemForm(key) : '')}
+        ${raw(!open && canAdd
           ? '<button class="btn btn-ghost medit-add" type="button" data-menuadd="' + key + '">'
             + '+ Add an item</button>'
           : '')}
@@ -844,6 +907,25 @@ const CATALOG = menu.catalog();
    * on every keystroke. So the two things that depend on what was typed are
    * moved by hand, and nothing else is touched.
    */
+  /**
+   * Move the Add button and its reason without redrawing the form, so typing
+   * a name does not take the caret out of the box on every keystroke.
+   */
+  function refreshNewItemForm(group) {
+    var f = (state.menuNew || {})[group];
+    if (!f) return;
+    var named = Boolean((f.name || '').trim());
+    var answered = Array.isArray(f.allergens);
+    var why = !named ? 'Give it a name' : (!answered ? 'Say what it contains' : '');
+
+    var go = document.querySelector('[data-menuaddgo="' + group + '"]');
+    if (go) go.disabled = Boolean(why);
+    var note = go && go.parentNode
+      ? go.parentNode.querySelector('.medit-blocking')
+      : null;
+    if (note) note.textContent = why;
+  }
+
   function refreshMenuProblems() {
     var problems = menu.overrideProblems(state.menuDraft || {});
     var note = document.getElementById('menuProblem');
@@ -890,6 +972,14 @@ const CATALOG = menu.catalog();
   });
 
   document.getElementById('panel-menu').addEventListener('input', function (ev) {
+    var fresh = ev.target.closest('[data-menunewname]');
+    if (fresh) {
+      var form = (state.menuNew || {})[fresh.dataset.menunewname];
+      if (!form) return;
+      form.name = fresh.value;
+      return refreshNewItemForm(fresh.dataset.menunewname);
+    }
+
     var box = ev.target.closest('[data-menuname]');
     if (!box) return;
     var id = box.dataset.menuname;
@@ -915,9 +1005,9 @@ const CATALOG = menu.catalog();
   document.getElementById('panel-menu').addEventListener('change', function (ev) {
     var sel = ev.target.closest('[data-menutpl]');
     if (!sel) return;
-    var entry = (state.menuDraft || {})[sel.dataset.menutpl];
-    if (!entry || !entry.added) return;
-    entry.template = sel.value;
+    var form = (state.menuNew || {})[sel.dataset.menutpl];
+    if (!form) return;
+    form.template = sel.value;
   });
 
   /*
@@ -927,7 +1017,8 @@ const CATALOG = menu.catalog();
    * exact mismatch has shipped twice on the orders panel.
    */
   var MENU_ACTIONS = [
-    'menuretire', 'menusave', 'menureset', 'menuadd', 'menudrop', 'menuallergen',
+    'menuretire', 'menusave', 'menureset', 'menuallergen',
+    'menuadd', 'menuaddgo', 'menuaddcancel', 'menuedit', 'menudrop',
   ];
   var MENU_ACTION_SELECTOR = MENU_ACTIONS.map(function (a) {
     return '[data-' + a + ']';
@@ -939,13 +1030,56 @@ const CATALOG = menu.catalog();
 
     if (t.dataset.menuadd) {
       var group = t.dataset.menuadd;
-      var draft = state.menuDraft || (state.menuDraft = {});
       var tpl = menu.templatesFor(group)[0];
       if (!tpl) return;
-      // A placeholder id until it is named; renamed on save so the stored id
-      // reads like the item rather than like a counter.
-      var fresh = menu.newItemId('item', function (x) { return Boolean(draft[x]); });
-      draft[fresh] = { added: true, group: group, template: tpl.id, name: '' };
+      state.menuNew = state.menuNew || {};
+      // Nothing is written to the draft yet. Until "Add to the list" is
+      // pressed this item does not exist anywhere, which is the point: a
+      // half-answered one cannot be left sitting in the list looking real.
+      state.menuNew[group] = { name: '', template: tpl.id };
+      return renderMenuEditor();
+    }
+
+    if (t.dataset.menuaddcancel) {
+      delete (state.menuNew || {})[t.dataset.menuaddcancel];
+      return renderMenuEditor();
+    }
+
+    if (t.dataset.menuaddgo) {
+      var g = t.dataset.menuaddgo;
+      var form = (state.menuNew || {})[g];
+      if (!form) return;
+      var name = (form.name || '').trim();
+      // The same two conditions the button is disabled on, checked again
+      // here: a disabled button is a hint, not a guarantee.
+      if (!name || !Array.isArray(form.allergens)) return;
+
+      var d = state.menuDraft || (state.menuDraft = {});
+      var id = form.editing || menu.newItemId(name, function (x) {
+        return Boolean(d[x]) || Boolean(menu.findAnywhere(x));
+      });
+      d[id] = {
+        added: true,
+        group: g,
+        template: form.template,
+        name: name,
+        allergens: form.allergens.slice(),
+      };
+      delete state.menuNew[g];
+      return renderMenuEditor();
+    }
+
+    if (t.dataset.menuedit) {
+      var eid = t.dataset.menuedit;
+      var was = (state.menuDraft || {})[eid];
+      if (!was) return;
+      state.menuNew = state.menuNew || {};
+      state.menuNew[was.group] = {
+        name: was.name,
+        template: was.template,
+        allergens: (was.allergens || []).slice(),
+        editing: eid,
+      };
       return renderMenuEditor();
     }
 
@@ -956,8 +1090,8 @@ const CATALOG = menu.catalog();
 
     if (t.dataset.menuallergen) {
       var parts = t.dataset.menuallergen.split(':');
-      var row = (state.menuDraft || {})[parts[0]];
-      if (!row || !row.added) return;
+      var row = (state.menuNew || {})[parts[0]];
+      if (!row) return;
       var which = parts[1];
 
       if (which === 'none') {

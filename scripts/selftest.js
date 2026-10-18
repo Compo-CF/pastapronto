@@ -3139,6 +3139,34 @@ test("reopening is the manager's call, not the rail's", () => {
 test('every manager button the panel handles is one it listens for', () => {
   const src = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
 
+  // Both delegated panels, held to the same rule. The menu panel grew four
+  // actions when the club got an Add form, and it is the same shape of
+  // mistake waiting in exactly the same place.
+  [['ORDER_ACTIONS', 'ORDER_ACTION_SELECTOR'], ['MENU_ACTIONS', 'MENU_ACTION_SELECTOR']]
+    .forEach(([listName, selName]) => {
+      const open = src.indexOf('var ' + listName + ' = [');
+      assert.ok(open > 0, listName + ' not found in admin.js');
+      const close = src.indexOf('];', open);
+      const list = [src.slice(open, close)];
+      const names = [...list[0].matchAll(/'([a-z]+)'/g)].map((m) => m[1])
+        .filter((n) => n !== listName.toLowerCase());
+      assert.ok(names.length >= 4, listName + ' has ' + names.length + ' entries - scan broken');
+
+      const from = src.indexOf(selName, src.indexOf('var ' + selName) + 1);
+      assert.ok(from > 0, selName + ' is never used - the selector is not derived');
+      const handler = src.slice(from);
+      const branched = [...handler.matchAll(/if \(t\.dataset\.([a-z]+)\)/g)].map((m) => m[1])
+        .filter((b) => b.startsWith(listName === 'MENU_ACTIONS' ? 'menu' : ''));
+
+      [...new Set(branched)].forEach((b) => {
+        if (listName === 'ORDER_ACTIONS' && b.startsWith('menu')) return;
+        assert.ok(
+          names.includes(b),
+          b + ' is handled but not in ' + listName + ', so the button does nothing',
+        );
+      });
+    });
+
   const listed = /var ORDER_ACTIONS = \[([\s\S]*?)\];/.exec(src);
   assert.ok(listed, 'ORDER_ACTIONS not found in admin.js');
   const names = [...listed[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
