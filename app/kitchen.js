@@ -302,6 +302,7 @@ const CATALOG = menu.catalog();
    * @param {object} line
    * @param {string} orderLang
    * @param {Set<string>} changed  lineIds a manager edited since this ticket
+   * @param {Set<string>} added    the subset of those that are new lines
    *                               was placed, empty when nothing was
    */
   /**
@@ -314,7 +315,7 @@ const CATALOG = menu.catalog();
    * what the rows are, so a chit and the expo screen cannot end up describing
    * the same bowl differently.
    */
-  function renderLine(line, orderLang, changed) {
+  function renderLine(line, orderLang, changed, added) {
     var rows = menu.ingredientList(line, t.lang);
 
     // Allergens stay out of the rows and keep their own line: they are a
@@ -325,8 +326,11 @@ const CATALOG = menu.catalog();
     }
 
     var isChanged = changed && changed.has(line.lineId);
+    var isAdded = added && added.has(line.lineId);
     return html`<li class="cline ${isChanged ? 'is-changed' : ''}">
-      ${raw(isChanged ? '<span class="cline-changed">Changed</span>' : '')}
+      ${raw(isChanged
+        ? '<span class="cline-changed">' + (isAdded ? 'Added' : 'Changed') + '</span>'
+        : '')}
       <span class="cline-art">${raw(art(lineGlyph(line)))}</span>
       <div class="grow">
         <div class="cline-who">${line.guestLabel}</div>
@@ -355,6 +359,7 @@ const CATALOG = menu.catalog();
     // whole chit mid-service.
     var wasEdited = orderLib.isEdited(order);
     var changedLines = new Set(wasEdited ? (order.editedLineIds || []) : []);
+    var addedLines = new Set(wasEdited ? (order.addedLineIds || []) : []);
     // The server used to attach allowedActions to every chit. The state machine
     // now runs on the device, so ask it directly.
     var allowed = orderLib.allowedActions(order, config.sla);
@@ -425,7 +430,7 @@ const CATALOG = menu.catalog();
       </div>
       <div class="chit-badges">${raw(badges.join(''))}</div>
       ${raw(alert)}
-      <ul class="chit-lines">${order.lines.map(function (l) { return renderLine(l, order.lang, changedLines); })}</ul>
+      <ul class="chit-lines">${order.lines.map(function (l) { return renderLine(l, order.lang, changedLines, addedLines); })}</ul>
       ${raw(noteHtml(order.notes, 'chit-note', order.lang))}
       <div class="chit-actions">${buttons}</div>
     </article>`;

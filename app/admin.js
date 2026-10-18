@@ -38,6 +38,7 @@ const CATALOG = menu.catalog();
     // The menu editor. `draft` is a working copy of the overrides; nothing
     // reaches the other screens until Save.
     menuOpen: false, menuDraft: null, menuSaving: false,
+    orderQuery: '',
   };
 
   var el = {
@@ -1237,6 +1238,31 @@ const CATALOG = menu.catalog();
     }).join(' \u00b7 ');
   }
 
+  /**
+   * How long a finished ticket actually took, sent to table.
+   *
+   * Only on a ticket that finished: a live one would be counting up, and a
+   * number that moves while a manager reads down the list is noise rather
+   * than information. The same two stamps the close-out averages, so a
+   * manager checking one order and the night's figures sees the same clock.
+   */
+  function ticketTime(o) {
+    if (o.status !== 'delivered' || !o.submittedAt || !o.deliveredAt) return '';
+    var secs = (new Date(o.deliveredAt).getTime() - new Date(o.submittedAt).getTime()) / 1000;
+    if (!(secs >= 0)) return '';
+    // Late against the promise this ticket actually carried, rather than a
+    // flat number: a table of eight was always going to take longer than a
+    // single bowl, and judging both by one figure would flag the kitchen for
+    // the size of the party.
+    var promised = o.promisedReadyAt
+      ? (new Date(o.promisedReadyAt).getTime() - new Date(o.submittedAt).getTime()) / 1000
+      : null;
+    var late = promised != null && secs > promised;
+    return '<span class="orow-time ' + (late ? 'is-late' : '') + '"'
+      + ' title="Sent to table' + (promised != null ? ', promised ' + mmss(promised) : '')
+      + '">' + mmss(secs) + '</span>';
+  }
+
   function orderRow(o) {
     var editable = o.status !== 'delivered' && o.status !== 'voided';
     var isOpen = state.editing === o.id;
@@ -1248,6 +1274,7 @@ const CATALOG = menu.catalog();
       <span class="orow-where">${o.tagLabel}</span>
       <span class="muted">${o.memberName || 'Member ' + o.memberNumber} \u00b7 ${o.guestCount} guests</span>
       ${raw(edited ? '<span class="orow-edited">Changed</span>' : '')}
+      ${raw(ticketTime(o))}
       <span class="grow"></span>
       ${raw(editable
         ? '<button class="btn btn-ghost" type="button" data-openorder="' + o.id + '">'
@@ -1299,6 +1326,37 @@ const CATALOG = menu.catalog();
     </div>`;
   }
 
+  /**
+   * Everything about a ticket somebody might type into the search box.
+   *
+   * Built from the ticket rather than from a list of fields kept here: a
+   * manager hunting for "the shrimp one on the patio" is searching for what
+   * is on the screen, and anything printed on the row should find it.
+   */
+  function orderHaystack(o) {
+    return [
+      '#' + o.ticketNo,
+      o.ticketNo,
+      o.status,
+      o.tagLabel,
+      o.memberName,
+      o.memberNumber,
+      orderSummary(o),
+    ].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function matchingOrders(orders) {
+    var q = (state.orderQuery || '').trim().toLowerCase();
+    if (!q) return orders;
+    // Every word has to appear somewhere, so "patio shrimp" narrows rather
+    // than widens - which is how anyone expects a search box to behave.
+    var words = q.split(/\s+/);
+    return orders.filter(function (o) {
+      var hay = orderHaystack(o);
+      return words.every(function (w) { return hay.indexOf(w) !== -1; });
+    });
+  }
+
   function renderOrders() {
     var orders = (state.orders || []).slice().sort(function (a, b) {
       return (b.ticketNo || 0) - (a.ticketNo || 0);
@@ -1310,9 +1368,19 @@ const CATALOG = menu.catalog();
     el.badgeOrders.hidden = live === 0;
     el.badgeOrders.textContent = String(live);
 
-    el.orderList.innerHTML = orders.length
-      ? orders.map(orderRow).join('')
-      : '<div class="card muted">Nothing has been ordered yet tonight.</div>';
+    var shown = matchingOrders(orders);
+    var note = document.getElementById('orderSearchCount');
+    if (note) {
+      note.textContent = state.orderQuery && state.orderQuery.trim()
+        ? shown.length + ' of ' + orders.length
+        : '';
+    }
+
+    el.orderList.innerHTML = shown.length
+      ? shown.map(orderRow).join('')
+      : '<div class="card muted">' + (orders.length
+        ? 'No ticket here matches that.'
+        : 'Nothing has been ordered yet tonight.') + '</div>';
 
     el.composeWrap.innerHTML = state.composing ? composePanel() : '';
   }
@@ -1542,6 +1610,11 @@ const CATALOG = menu.catalog();
   }
 
   // --------------------------------------------------------------- wiring
+
+  document.getElementById('orderSearch').addEventListener('input', function (ev) {
+    state.orderQuery = ev.target.value;
+    renderOrders();
+  });
 
   document.getElementById('newOrderBtn').addEventListener('click', function () {
     state.composing = !state.composing;

@@ -497,3 +497,23 @@
   color: #fff;
 }
 .medit-ask.is-unanswered .medit-chip { border-color: #e0b3a8; }
+
+/* --------------------------------------- finding a ticket, and how long it took */
+
+.orow-search { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.orow-search .input { flex: 1 1 auto; min-width: 0; }
+.orow-search .muted { flex: 0 0 auto; font-size: 13px; }
+
+/* Sent to table, on a ticket that finished. Tabular figures so a column of
+   them lines up when a manager scans down the list. */
+.orow-time {
+  flex: 0 0 auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft, #6b6058);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3efe7;
+}
+.orow-time.is-late { color: #8c2b1d; background: #fbe6e1; }

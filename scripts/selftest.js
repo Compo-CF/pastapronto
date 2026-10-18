@@ -2356,6 +2356,39 @@ test('a station is only offered the roles somebody there actually fills', () => 
  * panel, so ticking "Gluten" looked like it had not registered. On the one
  * control in this app where that matters most.
  */
+/**
+ * A stylesheet whose braces do not balance still loads: the browser recovers
+ * and carries on, so nothing anywhere says a thing.
+ *
+ * kitchen.css had a @media (max-width: 720px) block that was never closed. It
+ * swallowed the rest of the file - the Spanish note styling, the boot-failure
+ * card, the Unclaimed chip, and the whole changed-ticket highlight the club
+ * asked for. All of it applied only on a phone, so on the rail it did nothing
+ * at all, which is why the kitchen asked for a changed ticket to stand out:
+ * from where they were standing it never had.
+ */
+test('no stylesheet is mis-nested', () => {
+  ['shared', 'admin', 'guest', 'kitchen', 'expo', 'report'].forEach((name) => {
+    const src = readFileSync(fileURLToPath(new URL('../' + name + '.css', import.meta.url)), 'utf8');
+
+    let depth = 0;
+    let line = 1;
+    for (const ch of src) {
+      if (ch === '\n') line += 1;
+      else if (ch === '{') depth += 1;
+      else if (ch === '}') {
+        depth -= 1;
+        assert.ok(depth >= 0, name + '.css:' + line + ' closes a block that was never opened');
+      }
+    }
+    assert.strictEqual(
+      depth, 0,
+      name + '.css has ' + depth + ' block(s) left open at the end of the file, so '
+      + 'everything after the one that was missed is trapped inside it',
+    );
+  });
+});
+
 test('every CSS variable a stylesheet uses is one some stylesheet defines', () => {
   const sheets = ['shared', 'admin', 'guest', 'kitchen', 'expo', 'report'];
   const read = (n) => readFileSync(fileURLToPath(new URL('../' + n + '.css', import.meta.url)), 'utf8');

@@ -188,7 +188,7 @@ function deliveredHistory(count = 7) {
     const cook = Math.round(o.cookEstimateSec * (0.8 + (i % 5) * 0.12));
     const runner = 25 + (i % 3) * 30;
 
-    o.submittedAt = minutesAgo(age);
+    backdateTo(o, minutesAgo(age));
     o.acceptedAt = new Date(new Date(o.submittedAt).getTime() + queueWait * 1000).toISOString();
     o.readyAt = new Date(new Date(o.acceptedAt).getTime() + cook * 1000).toISOString();
     o.deliveredAt = new Date(new Date(o.readyAt).getTime() + runner * 1000).toISOString();
@@ -207,6 +207,29 @@ function deliveredHistory(count = 7) {
   return out;
 }
 
+/**
+ * Send a seeded order back in time, promise and all.
+ *
+ * buildOrder() stamps promisedReadyAt relative to now, and the seed then
+ * backdates submittedAt to spread the evening out. Moving one without the
+ * other left every demo ticket promising to be ready an hour and a half
+ * after it was ordered, which never showed until the manager screen started
+ * printing the gap.
+ *
+ * The promise is shifted rather than recalculated, so it stays the number
+ * cooktime.promiseSec() actually produced - queue drag, runner and all.
+ * Recomputing it from the cook time alone under-promises every ticket and
+ * paints the whole night red.
+ */
+function backdateTo(o, iso) {
+  const shift = new Date(iso).getTime() - new Date(o.submittedAt).getTime();
+  o.submittedAt = iso;
+  if (o.promisedReadyAt) {
+    o.promisedReadyAt = new Date(new Date(o.promisedReadyAt).getTime() + shift).toISOString();
+  }
+  return o;
+}
+
 /** The full demo set: closed-out history plus a live rail. */
 export function buildDemoOrders() {
   ticket = 0;
@@ -214,7 +237,7 @@ export function buildDemoOrders() {
 
   DRAFTS.forEach((spec, i) => {
     const o = build(spec);
-    o.submittedAt = minutesAgo(spec._age);
+    backdateTo(o, minutesAgo(spec._age));
     o.events[0].at = o.submittedAt;
 
     if (spec._state === 'cooking' || spec._state === 'ready') {

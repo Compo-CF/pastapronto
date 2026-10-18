@@ -671,6 +671,7 @@ export function editPatch(current, changes = {}, ctx = {}) {
   const patch = {};
   const what = [];
   let editedLineIds = [];
+  let addedLineIds = [];
 
   if (Array.isArray(changes.lines)) {
     if (!changes.lines.length) {
@@ -683,6 +684,13 @@ export function editPatch(current, changes = {}, ctx = {}) {
 
     editedLineIds = rebuilt
       .filter((l) => was.get(l.lineId) !== lineFingerprint(l))
+      .map((l) => l.lineId);
+
+    // A line the ticket did not have before is new, not altered. Worth
+    // telling apart on the rail: a cook who has already started reads
+    // "Changed" as "check what moved" and "Added" as "there is one more".
+    addedLineIds = rebuilt
+      .filter((l) => !was.has(l.lineId))
       .map((l) => l.lineId);
 
     const countChanged = rebuilt.length !== (current.lines || []).length;
@@ -729,6 +737,7 @@ export function editPatch(current, changes = {}, ctx = {}) {
   // "what changed just now", not every line ever touched - a second edit that
   // kept the first one lit would point them at food that is already right.
   patch.editedLineIds = editedLineIds;
+  patch.addedLineIds = addedLineIds;
   patch.editCount = (current.editCount || 0) + 1;
   patch.events = [
     ...(current.events || []),

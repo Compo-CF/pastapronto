@@ -244,7 +244,6 @@
 }
 
 
-}
 
 /* A parked ticket stays visible but visibly inactive. */
 .chit.is-held { opacity: 0.62; border-left-color: var(--kmuted); }
@@ -371,6 +370,7 @@
   .lanes { grid-template-columns: 1fr; overflow-y: auto; }
   .lane[data-lane="ready"] { grid-column: span 1; }
   .kfoot { display: none; }
+}
 
 /* A note the guest wrote in Spanish. The English gloss leads, the original
    sits under it in the guest's own words - a cook acting on a half-understood
@@ -436,10 +436,32 @@
   border-color: var(--kwarn);
   box-shadow: 0 0 0 2px rgba(255, 197, 66, 0.35);
 }
+/* The club asked for this to stand out more. Louder, but still amber: red on
+   this screen means late, and a cook who cannot tell "this one is behind"
+   from "this one moved" will end up treating both as neither. So the volume
+   comes from size, weight and a short pulse on arrival rather than from
+   borrowing a colour that already means something else. */
 .badge-edited {
   background: var(--kwarn);
   color: #1b1200;
-  font-weight: 800;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  box-shadow: 0 0 0 2px rgba(255, 197, 66, 0.4);
+  animation: edited-pulse 1.1s ease-out 3;
+}
+
+/* Three pulses and then it stops: something that blinks all service becomes
+   wallpaper, and the chit still carries the amber edge afterwards. */
+@keyframes edited-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 197, 66, 0.4); }
+  50%      { box-shadow: 0 0 0 7px rgba(255, 197, 66, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge-edited { animation: none; }
 }
 
 .cline.is-changed {
