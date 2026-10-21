@@ -2676,6 +2676,50 @@ test('the floor guide covers what the manager screen can actually do', () => {
   });
 });
 
+/**
+ * A new item starts holding the allergens of whatever it was modelled on.
+ *
+ * The club added Fried Ravioli, modelled on Garlic Bread, and declared it
+ * allergen-free: ravioli is pasta dough, usually cheese-filled, and the bread
+ * it was cloned from carries gluten and dairy. A bowl of gluten-free fusilli
+ * with it on the side would have reached the kitchen saying no gluten.
+ *
+ * Starting blank made "No allergens" the one click that got you past the
+ * gate. Starting from the template flips the direction of a mistake towards
+ * over-declaring, which is merely annoying. Carried over is still not the
+ * same as answered, so the commit waits for somebody to say so.
+ */
+test('a new item inherits its template allergens and still waits to be checked', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+
+  const opens = /state\.menuNew\[group\] = \{([\s\S]*?)\};/.exec(src);
+  assert.ok(opens, 'the add form no longer sets up its own state');
+  assert.ok(
+    /allergens:\s*\(tpl\.allergens/.test(opens[1]),
+    'the form opens without carrying the template allergens over',
+  );
+  assert.ok(
+    /checked:\s*false/.test(opens[1]),
+    'the form opens already counted as checked, so nobody has to look',
+  );
+
+  // Picking a different template is a different starting point.
+  const swap = /form\.template = sel\.value;([\s\S]*?)renderMenuEditor\(\);/.exec(src);
+  assert.ok(swap, 'the template picker no longer updates the form');
+  assert.ok(
+    /form\.allergens =/.test(swap[1]) && /form\.checked = false/.test(swap[1]),
+    'changing the template leaves the old allergens behind and still counted as checked',
+  );
+
+  // And nothing commits until somebody has looked.
+  const commit = /if \(t\.dataset\.menuaddgo\)([\s\S]*?)return renderMenuEditor\(\);/.exec(src);
+  assert.ok(commit, 'the Add button handler is gone');
+  assert.ok(
+    /!form\.checked/.test(commit[1]),
+    'an item can be added without its allergens being looked at',
+  );
+});
+
 // -------------------------------------------------- ticket layout
 
 test('a dish reads as rows, and every choice appears in one', () => {

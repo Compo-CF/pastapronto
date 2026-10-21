@@ -222,15 +222,32 @@
   body { background: #fff; }
   .admin { padding: 0; gap: 0; }
   .tents { display: block; }
+  /* Two to a sheet, so one sheet of card makes two tents. The cut is a single
+     straight line across the short way of the page - no trimming to size, no
+     offcuts, and a guillotine does a stack of them in one pass. */
   .tent {
-    page-break-after: always;
-    break-after: page;
-    height: 250mm;
+    height: 125mm;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 9mm;
+    gap: 2.5mm;
     text-align: center;
+    break-inside: avoid; page-break-inside: avoid;
   }
-  .tent svg { width: 100mm; height: 100mm; }
+  /* The page turns after the second one, not after every one. */
+  .tent:nth-of-type(2n) { page-break-after: always; break-after: page; }
+
+  /* Where to cut, drawn between the pair rather than around them, so the
+     outer edges stay the edge of the sheet and only one cut is needed. */
+  .tent:nth-of-type(2n-1)::after {
+    content: '';
+    display: block;
+    width: 100%;
+    margin-top: 2.5mm;
+    border-top: 1px dashed #999;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .tent svg { width: 46mm; height: 46mm; }
 
   /* The band behind a venue's logo. Only drawn when a brand supplies one -
      Carlton Woods' mark is white on transparent and would print as an empty
@@ -238,36 +255,36 @@
      page insists, and a tent with no band is the whole point missed. */
   .tent.has-crown .tent-crown {
     width: 100%;
-    padding: 8mm;
+    padding: 4mm;
     background: var(--tomato);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .tent-logo { height: 15mm; width: auto; max-width: 120mm; object-fit: contain; }
-  .tent-wordmark { font-size: 34pt; font-weight: 800; letter-spacing: -0.03em; }
+  .tent-logo { height: 9mm; width: auto; max-width: 110mm; object-fit: contain; }
+  .tent-wordmark { font-size: 20pt; font-weight: 800; letter-spacing: -0.03em; }
   .tent-wordmark em { font-style: normal; color: var(--tomato); }
 
   .tent-event {
     font-family: var(--font);
-    font-size: 30pt; font-weight: 700; letter-spacing: -0.01em;
+    font-size: 17pt; font-weight: 700; letter-spacing: -0.01em;
     color: var(--tomato);
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .tent-tagline {
-    margin-top: -6mm;
-    font-size: 12pt; font-weight: 600; letter-spacing: .1em;
+    margin-top: -1.5mm;
+    font-size: 8pt; font-weight: 600; letter-spacing: .1em;
     text-transform: uppercase; color: #6b6b6b;
   }
   .tent-rule {
-    width: 40mm; height: 2pt; margin: -4mm 0;
+    width: 28mm; height: 1.5pt; margin: -0.5mm 0;
     background: var(--basil);
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
-  .tent-where { font-size: 26pt; font-weight: 800; }
-  .tent-how { font-size: 13pt; color: #444; max-width: 120mm; line-height: 1.5; }
-  .tent-url { font-family: var(--mono); font-size: 9pt; color: #888; }
-  .tent-fold { width: 100%; border-top: 1px dashed #bbb; margin-top: 8mm; }
+  .tent-where { font-size: 19pt; font-weight: 800; }
+  .tent-how { font-size: 8.5pt; color: #444; max-width: 110mm; line-height: 1.4; }
+  .tent-url { font-family: var(--mono); font-size: 7pt; color: #888; }
+  .tent-fold { display: none; }
 }
 
 /* --------------------------------------------------------------- 86 switch
@@ -569,4 +586,11 @@
   color: var(--tomato, #d33f30);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* Where a new item's allergens came from, and the nudge to check them. */
+.medit-carried {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #8a4a1f;
 }

@@ -748,16 +748,16 @@ const CATALOG = menu.catalog();
    */
   function newItemForm(group) {
     var f = (state.menuNew || {})[group];
-    var answered = Array.isArray(f.allergens);
-    var chosen = answered ? f.allergens : [];
+    var chosen = Array.isArray(f.allergens) ? f.allergens : [];
     var named = Boolean((f.name || '').trim());
+    var tpl = menu.find(group, f.template);
 
     var chip = function (aid, text, on) {
       return '<button type="button" class="medit-chip ' + (on ? 'is-on' : '') + '"'
         + ' data-menuallergen="' + group + ':' + aid + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
         + escapeHtml(text) + '</button>';
     };
-    var chips = [chip('none', 'No allergens', answered && !chosen.length)].concat(
+    var chips = [chip('none', 'No allergens', !chosen.length)].concat(
       (CATALOG.allergens || []).map(function (a) {
         return chip(a.id, a.name, chosen.indexOf(a.id) !== -1);
       }),
@@ -768,11 +768,21 @@ const CATALOG = menu.catalog();
         + escapeHtml(x.name) + '</option>';
     }).join('');
 
-    // Said out loud rather than left to a greyed-out button, so somebody who
-    // cannot see why it will not go is told why.
+    /*
+     * The allergens arrive carried over from the template, because the
+     * dangerous direction is under-declaring: somebody adding Fried Ravioli
+     * modelled on Garlic Bread should start holding gluten and dairy and have
+     * to take them off, rather than start empty and have "No allergens" be the
+     * one click that gets them past the gate. Being wrong the other way is
+     * merely annoying.
+     *
+     * Carried over is not the same as answered, though, so the button still
+     * waits: either change something, or say the inherited set is right.
+     * Pre-ticking without that would mean nobody had looked at all.
+     */
     var blocking = !named
       ? 'Give it a name'
-      : (!answered ? 'Say what it contains' : '');
+      : (!f.checked ? 'Check what it contains' : '');
 
     return html`<div class="medit-form">
       <div class="medit-newtop">
@@ -784,10 +794,15 @@ const CATALOG = menu.catalog();
           </select>
         </label>
       </div>
-      <div class="medit-ask ${answered ? '' : 'is-unanswered'}">
-        <span class="medit-asklabel">${answered ? 'Contains' : 'What does it contain?'}</span>
+      <div class="medit-ask ${f.checked ? '' : 'is-unanswered'}">
+        <span class="medit-asklabel">Contains</span>
         ${raw(chips)}
       </div>
+      ${raw(f.checked ? '' : '<div class="medit-carried">'
+        + 'Carried over from ' + escapeHtml(tpl ? tpl.name : 'the item above')
+        + '. Change anything that is wrong, or '
+        + '<button type="button" class="medit-linkish" data-menuallergenok="' + group + '">'
+        + 'confirm it is right</button>.</div>')}
       <div class="medit-formgo">
         <button class="btn btn-primary" type="button" data-menuaddgo="${group}"
           ${raw(blocking ? 'disabled' : '')}>${f.editing ? 'Save the change' : 'Add to the list'}</button>
@@ -915,8 +930,7 @@ const CATALOG = menu.catalog();
     var f = (state.menuNew || {})[group];
     if (!f) return;
     var named = Boolean((f.name || '').trim());
-    var answered = Array.isArray(f.allergens);
-    var why = !named ? 'Give it a name' : (!answered ? 'Say what it contains' : '');
+    var why = !named ? 'Give it a name' : (!f.checked ? 'Check what it contains' : '');
 
     var go = document.querySelector('[data-menuaddgo="' + group + '"]');
     if (go) go.disabled = Boolean(why);
@@ -1008,6 +1022,12 @@ const CATALOG = menu.catalog();
     var form = (state.menuNew || {})[sel.dataset.menutpl];
     if (!form) return;
     form.template = sel.value;
+    // A different template is a different starting point, so the allergens
+    // come across again and have to be looked at again.
+    var picked = menu.find(sel.dataset.menutpl, sel.value);
+    form.allergens = ((picked && picked.allergens) || []).slice();
+    form.checked = false;
+    renderMenuEditor();
   });
 
   /*
@@ -1018,7 +1038,7 @@ const CATALOG = menu.catalog();
    */
   var MENU_ACTIONS = [
     'menuretire', 'menusave', 'menureset', 'menuallergen',
-    'menuadd', 'menuaddgo', 'menuaddcancel', 'menuedit', 'menudrop',
+    'menuadd', 'menuaddgo', 'menuaddcancel', 'menuedit', 'menudrop', 'menuallergenok',
   ];
   var MENU_ACTION_SELECTOR = MENU_ACTIONS.map(function (a) {
     return '[data-' + a + ']';
@@ -1036,7 +1056,12 @@ const CATALOG = menu.catalog();
       // Nothing is written to the draft yet. Until "Add to the list" is
       // pressed this item does not exist anywhere, which is the point: a
       // half-answered one cannot be left sitting in the list looking real.
-      state.menuNew[group] = { name: '', template: tpl.id };
+      state.menuNew[group] = {
+        name: '',
+        template: tpl.id,
+        allergens: (tpl.allergens || []).slice(),
+        checked: false,
+      };
       return renderMenuEditor();
     }
 
@@ -1052,7 +1077,7 @@ const CATALOG = menu.catalog();
       var name = (form.name || '').trim();
       // The same two conditions the button is disabled on, checked again
       // here: a disabled button is a hint, not a guarantee.
-      if (!name || !Array.isArray(form.allergens)) return;
+      if (!name || !form.checked || !Array.isArray(form.allergens)) return;
 
       var d = state.menuDraft || (state.menuDraft = {});
       var id = form.editing || menu.newItemId(name, function (x) {
@@ -1078,6 +1103,8 @@ const CATALOG = menu.catalog();
         name: was.name,
         template: was.template,
         allergens: (was.allergens || []).slice(),
+        // Already answered once, by a person, so it is not asked again.
+        checked: true,
         editing: eid,
       };
       return renderMenuEditor();
@@ -1088,10 +1115,19 @@ const CATALOG = menu.catalog();
       return renderMenuEditor();
     }
 
+    if (t.dataset.menuallergenok) {
+      var okForm = (state.menuNew || {})[t.dataset.menuallergenok];
+      if (!okForm) return;
+      okForm.checked = true;
+      return renderMenuEditor();
+    }
+
     if (t.dataset.menuallergen) {
       var parts = t.dataset.menuallergen.split(':');
       var row = (state.menuNew || {})[parts[0]];
       if (!row) return;
+      // Touching the list at all is looking at it.
+      row.checked = true;
       var which = parts[1];
 
       if (which === 'none') {
