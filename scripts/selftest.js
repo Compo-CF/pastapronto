@@ -2564,6 +2564,118 @@ test('the save path keeps an added item rather than quietly dropping it', () => 
     'the saved shape drops the allergens, which is the one field that must survive');
 });
 
+// ------------------------------------------------- the printed floor guide
+
+/**
+ * The guide is printed, handed to staff, and then not looked at again for
+ * weeks. Its numbers cannot drift - the generator reads every threshold from
+ * config.js - but its prose can, and did: five rounds of changes left it
+ * promising members a claim code that no longer exists and a progress bar
+ * with a stop that was deliberately removed.
+ *
+ * Nothing catches that by reading the PDF, so this reads the generator and
+ * holds it against the code rather than against a list of phrases kept here.
+ */
+const guideSource = () => readFileSync(
+  fileURLToPath(new URL('../scripts/guide-pdf.js', import.meta.url)), 'utf8',
+);
+
+test('the floor guide does not describe things the app no longer has', () => {
+  const guide = guideSource().toLowerCase();
+  const app = ['order', 'guest', 'menu', 'db'].map((n) => readFileSync(
+    fileURLToPath(new URL('../app/' + n + '.js', import.meta.url)), 'utf8',
+  )).join('\n');
+
+  // Each pair is: a thing the code may or may not have, and what the guide
+  // calls it. If the code has dropped it, the guide may not still promise it.
+  [
+    ['claimCode', 'claim code'],
+    ['spice', 'spice level'],
+  ].forEach(([inCode, inGuide]) => {
+    if (app.includes(inCode)) return;
+    assert.ok(
+      !guide.includes(inGuide),
+      'the guide still tells staff about "' + inGuide + '", which the app no longer has',
+    );
+  });
+});
+
+/**
+ * The member's progress bar, held to what guest.js actually draws. The guide
+ * printed the old four stops for a week after the bar became three.
+ */
+test('the floor guide names the stages a member actually sees', () => {
+  const guide = guideSource();
+  const src = guestSource();
+
+  const block = /var TRACK_ALL = \[([\s\S]*?)\n  \];/.exec(src);
+  assert.ok(block, 'TRACK_ALL not found in guest.js');
+  const keys = [...block[1].matchAll(/key: '([\w.]+)'/g)].map((m) => m[1]);
+  assert.ok(keys.length >= 3, 'found ' + keys.length + ' stages - the scan is broken');
+
+  const labels = [...new Set(keys.map((k) => STRINGS.en[k]))].filter(Boolean);
+
+  /*
+   * Checked where the guide actually draws the bar, not merely somewhere in
+   * the document. "On its way" also appears in the runner's steps, so a
+   * presence check passed happily while the bar itself still read the old
+   * four stops - which is the exact fault this is here to catch.
+   *
+   * The prose is stitched back together from the generator's string literals
+   * first, because a sentence that long is written as a concatenation.
+   */
+  const prose = guide.replace(/'\s*\+\s*'/g, '').replace(/\s+/g, ' ');
+  const bar = /stops:\s*(.*?)\./.exec(prose);
+  assert.ok(bar, 'the guide no longer lists the stops on the member bar');
+
+  labels.forEach((label) => {
+    assert.ok(
+      bar[1].includes(label),
+      'the member bar has a stop called "' + label + '" and the guide draws ' + JSON.stringify(bar[1]),
+    );
+  });
+
+  // And nothing the member never sees may be drawn as a stop.
+  ['guest.track.ready', 'guest.track.enjoy'].forEach((k) => {
+    const gone = STRINGS.en[k];
+    if (!gone) return;
+    assert.ok(
+      !bar[1].includes(gone),
+      'the guide draws "' + gone + '" as a stop the member sees, and it is not one',
+    );
+  });
+});
+
+/**
+ * The guide is what a new starter is handed, so a screen they are expected to
+ * run has to be in it. Menu editing was absent for a week after the club was
+ * given it - the one thing the Sous Chef said gated live testing, and the
+ * printed instructions said nothing about it at all.
+ *
+ * Each entry pairs a thing the manager screen can do with a phrase the guide
+ * uses for it, so adding an ability and forgetting the paperwork fails here.
+ */
+test('the floor guide covers what the manager screen can actually do', () => {
+  const guide = guideSource();
+  const admin = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+
+  [
+    ['the menu editor', 'menuEditToggle', 'Edit the menu'],
+    ['adding an item', 'menuaddgo', 'add an item'],
+    ['the allergen answer', 'menuallergen', 'what it contains'],
+    ['taking an order', 'placeorder', 'take an order from the bar'],
+    ['the order search', 'orderQuery', 'search for a ticket'],
+    ['reopening a ticket', 'reopenOrder', 'reopen one closed by mistake'],
+    ['the close-out', 'report.html', 'Close-out'],
+  ].forEach(([what, inCode, inGuide]) => {
+    if (!admin.includes(inCode)) return;
+    assert.ok(
+      guide.includes(inGuide),
+      'the manager screen does ' + what + ' and the guide never tells anyone',
+    );
+  });
+});
+
 // -------------------------------------------------- ticket layout
 
 test('a dish reads as rows, and every choice appears in one', () => {

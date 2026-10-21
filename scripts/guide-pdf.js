@@ -408,8 +408,8 @@ const memberSteps = [
   ['Build each plate', 'One tile grid per person. Anything 86\'d is greyed out and marked sold out - visible rather than hidden. Allergens show on each ingredient as they build.'],
   ['Review and send', 'A note box for anything the tiles do not cover. They get a '
     + 'ticket number, about 15-20 minutes, and a bar with three stops: Sent, Cooking, '
-    + 'On its way. They are never told the food is ready - only that it is coming, '
-    + 'once a runner has it.'],
+    + 'On its way - Building rather than Cooking while a pizza is on the bench. They '
+    + 'are never told the food is ready, only that it is coming, once a runner has it.'],
   ['Another round', 'Start another order goes back to pasta-or-pizza, not the keypad. Same party, same table, and under all you can eat it adds nothing to their bill.'],
 ];
 
@@ -590,11 +590,17 @@ let my = y + 8;
 [
   ['Before service', 'Print the tents from the QR codes tab. Codes are drawn on the device, so this works with the internet unplugged.'],
   ['Before service', 'Check the 86 list. An ingredient switched off greys out on every phone within a second, and the count rides on the tab.'],
-  ['During service', 'Today at a glance: covers, what is open now, accept, cook and runner times, and on-time percentage.'],
+  ['Any time', 'Edit the menu. Rename anything, take something off, or add an item of your own. A new item copies a real cooking time and a picture from one already on the list; you name it and say what it contains, and it will not save until you do.'],
+  ['During service', 'Today at a glance: covers, open now, accept, cook and runner times, on-time percentage. Also take an order from the bar, search for a ticket, move a table, or reopen one closed by mistake.'],
   ['After service', 'Close-out leads with who to charge, sorted by member number so it reconciles line by line against the club\'s billing.'],
 ].forEach((s) => {
+  // The close-out panel sits to the right of the first few of these and ends
+  // at y + 176. Anything starting below that has the whole column to itself,
+  // and squeezing it into half the width for the sake of symmetry wasted a
+  // third of the page and pushed the last panel off the bottom of it.
+  const clear = my > y + 180;
   doc.text(s[0].toUpperCase(), { x: M, y: my, size: 7, font: 'monoBold', color: BRAND });
-  my = para(s[1], my + 12, { x: M, width: COL - 190, size: 9, lead: 11.5 }) + 14;
+  my = para(s[1], my + 12, { x: M, width: clear ? COL : COL - 190, size: 9, lead: 11.5 }) + 12;
 });
 
 // the close-out running order, beside the steps
