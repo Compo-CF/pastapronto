@@ -231,8 +231,8 @@ eyebrow('One ticket, four hands', y + 34);
 const stages = [
   ['QUEUED', 'Member sends', 'Lands on the kitchen rail', 'under New orders', QUEUED],
   ['COOKING', 'Kitchen accepts', 'Cook presses Accept.', 'The cook clock starts here', COOKING],
-  ['READY', 'Kitchen calls it', 'Food Up - Call Runner.', 'Appears on the expo board', READY],
-  ['DELIVERED', 'Runner drops it', 'Delivered to (table).', 'Phone says Buon appetito', READY],
+  ['READY', 'Food comes up', 'Pasta: the cook. Pizza: the window.', 'Lands on Run These Now', READY],
+  ['DELIVERED', 'Runner takes it', 'Deliver to (table).', 'Now the phone is told', READY],
 ];
 
 const sw = (COL - 3 * 14) / 4;
@@ -317,11 +317,12 @@ const passX = M + colW + 26;
 panel(passX, bandY, colW, bandH, { accent: READY });
 doc.text('THE PASS', { x: passX + 12, y: bandY + 22, size: 7.5, font: 'monoBold', color: READY });
 doc.text('Expo', { x: passX + 12, y: bandY + 42, size: 13, font: 'bold', color: INK });
-para('Everything the kitchen calls up lands here on one board, oldest first, whatever station cooked it.',
+para('Everything the kitchen calls up lands here, oldest first. Pick a pass at the top - '
+  + 'Pizza, Pasta or Every pass - so two iPads can sit side by side on different food.',
   bandY + 62, { x: passX + 12, width: colW - 24, size: 8.5, lead: 11 });
 panel(passX + 12, bandY + 108, colW - 24, 46, { fill: WASH });
 doc.text('Run These Now', { x: passX + 22, y: bandY + 128, size: 10, font: 'bold', color: INK });
-doc.text('one button per ticket', { x: passX + 22, y: bandY + 142, size: 8, color: SOFT });
+doc.text('the count is plates, not tickets', { x: passX + 22, y: bandY + 142, size: 8, color: SOFT });
 panel(passX + 12, bandY + 164, colW - 24, 46);
 doc.text('Coming Up', { x: passX + 22, y: bandY + 184, size: 10, font: 'bold', color: INK });
 doc.text('what is still cooking', { x: passX + 22, y: bandY + 198, size: 8, color: SOFT });
@@ -405,7 +406,10 @@ const memberSteps = [
   ['Pasta or pizza', 'One tap. The next screen greets them by name.'],
   ['How many at the table', 'Up to ' + config.order.maxGuests + '. This is the number that becomes covers at close-out.'],
   ['Build each plate', 'One tile grid per person. Anything 86\'d is greyed out and marked sold out - visible rather than hidden. Allergens show on each ingredient as they build.'],
-  ['Review and send', 'A note box for anything the tiles do not cover. They get a ticket number, a 4-character claim code, and a live bar: Sent, Cooking, Ready, Enjoy.'],
+  ['Review and send', 'A note box for anything the tiles do not cover. They get a '
+    + 'ticket number, about 15-20 minutes, and a bar with three stops: Sent, Cooking, '
+    + 'On its way. They are never told the food is ready - only that it is coming, '
+    + 'once a runner has it.'],
   ['Another round', 'Start another order goes back to pasta-or-pizza, not the keypad. Same party, same table, and under all you can eat it adds nothing to their bill.'],
 ];
 
@@ -444,7 +448,6 @@ const limits = [
   ['Toppings', 'chef suggests ' + config.order.toppingAdvice],
   ['Sides', capLabel(config.order.maxSidesPerBowl)],
   ['Cheeses, pizza', capLabel(config.order.maxCheesesPerPizza)],
-  ['Claim code', '4 chars'],
 ];
 let liy = cardY + 40;
 limits.forEach(([k, v]) => {
@@ -548,8 +551,8 @@ y += 6;
   ['Work the Run These Now cards', 'Oldest first. Each card is one ticket with its destination written large.'],
   ['Watch the runner clock', 'Starts when the kitchen calls food up. Amber at ' + fmt(config.sla.runnerWarnSec) + ', red and nudging at ' + fmt(config.sla.runnerLateSec) + '. That clock is food sitting under a lamp.'],
   ['Confirm allergies at the table', 'Allergy orders repeat their warning on the expo card on purpose, so it gets said out loud as the plate goes down.'],
-  ['Press Delivered', 'One button, and it names the table. The member\'s phone updates as you walk away. Undo is there for ' + fmt(config.sla.undoWindowSec) + '.'],
-  ['Use Coming Up to get ahead', 'The sidebar counts down what is still cooking and flips red when the kitchen is behind - the cue to warn a table before it complains.'],
+  ['Press Deliver to (table)', 'One button, and it names the table. This is when the member is told anything at all - their phone says On its way. Undo is there for ' + fmt(config.sla.undoWindowSec) + '.'],
+  ['Coming Up, and the oven', 'Counts down what is still cooking, red when the kitchen is behind. Tap a card to read the ticket. A pizza waiting there has one button, Out of the oven: the window calls a pizza up, not the pizza station.'],
 ].forEach((s, i, all) => {
   doc.rect(M, y - 9, 20, 20, BRAND);
   monoMid(String(i + 1), M + 10, y + 5, 10, PAPER);
