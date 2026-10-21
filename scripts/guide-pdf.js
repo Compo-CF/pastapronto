@@ -37,7 +37,28 @@ const SHOTS = {
   kitchen: shot('04-kitchen.jpeg'),
   expo: shot('05-expo.jpeg'),
   cost: shot('06-food-cost.jpeg'),
+  menu: shot('07-menu-editor.jpeg'),
 };
+
+/**
+ * How much a station holds, in its own units.
+ *
+ * Written as a lookup rather than pans-or-decks, because the menu has three
+ * kinds and that expression knew about two: the grill carries patties, so the
+ * printed guide told staff it had "undefined decks". Exactly the mistake the
+ * close-out made with burgers. A station with a capacity nobody listed here
+ * prints nothing rather than the word undefined.
+ */
+const CAPACITY = [
+  ['pans', 'pans'],
+  ['decks', 'decks'],
+  ['patties', 'patties'],
+];
+
+function stationCapacity(st) {
+  const hit = CAPACITY.find(([field]) => typeof st[field] === 'number');
+  return hit ? st[hit[0]] + ' ' + hit[1] : '';
+}
 
 const OUT = (() => {
   const i = process.argv.indexOf('--out');
@@ -305,7 +326,7 @@ cookAreas.forEach((g) => {
     const by = sty + 8 + i * 30;
     panel(M + 12, by, colW - 24, 24, { fill: WASH });
     doc.text(s.label, { x: M + 20, y: by + 16, size: 9.5, font: 'bold', color: INK });
-    const sub = s.pans ? s.pans + ' pans' : s.decks + ' decks';
+    const sub = stationCapacity(s);
     doc.text(sub, { x: M + colW - 24 - pdf.monoWidth(sub, 8) - 8, y: by + 16, size: 8, font: 'mono', color: SOFT });
   });
   sty += 8 + g.items.length * 30 + 18;
@@ -628,9 +649,48 @@ para('Keep staff links inside the team. Clear today deletes the whole service da
 footer(6, 'Manager');
 
 // ================================================================== page 7
+// The menu gets its own page. The club runs this one themselves between
+// services, and it was the thing they named as the gate on live testing - a
+// line buried in the manager's step list was not going to teach anybody.
 
 doc.addPage();
-eyebrow('05 - When it goes wrong', 62);
+eyebrow('05 - The menu', 62);
+heading('Changing it yourselves', 88);
+y = para('Manager, then the Menu, allergens and 86 tab, then Edit the menu. Nothing here needs us, '
+  + 'and nothing lands until you press Save.', 112, { width: COL - 40 });
+
+y = screenshot(SHOTS.menu, 330,
+  'Adding a side. The allergens arrive carried over from whatever the new item is modelled on, '
+  + 'and Add to the list stays greyed out until somebody has looked at them.', y + 16, 178);
+
+y += 6;
+[
+  ['Rename anything', 'Type over the name. The old one is kept, so Undo my changes puts it back.'],
+  ['Take something off', 'Remove greys it out everywhere within a second. Put back undoes it. A list cannot be emptied entirely - the app refuses rather than leaving a guest a step with no tiles on it.'],
+  ['Add an item of your own', 'Name it, say which item it is like, check the allergens, then Add to the list. What it is like is how it gets a real cooking time and a picture, so a new pasta boils for a proper length of time instead of none.'],
+  ['Check the allergens', 'They come across from the item you modelled it on - a new side like Garlic Bread arrives holding gluten and dairy. Change what is wrong or confirm it is right; it will not save until you do.'],
+  ['Save menu changes', 'Every screen takes it at once - the phones, the rail, the pass and the cost sheet. Undo my changes throws away anything not yet saved.'],
+].forEach((t, i, all) => {
+  doc.rect(M, y - 9, 20, 20, BRAND);
+  monoMid(String(i + 1), M + 10, y + 5, 10, PAPER);
+  doc.text(t[0], { x: M + 32, y: y + 5, size: 11, font: 'bold', color: INK });
+  const end = para(t[1], y + 21, { x: M + 32, width: COL - 32, size: 9, lead: 11.5 });
+  if (i < all.length - 1) doc.line(M + 10, y + 14, M + 10, end + 3, { color: RULE, width: 0.8 });
+  y = end + 14;
+});
+
+panel(M, y, COL, 50, { fill: WASH, accent: LATE, border: null });
+doc.text('An allergen nobody checked reads as an allergen that is not there.', { x: M + 14, y: y + 21, size: 9.5, font: 'bold', color: INK });
+para('That is the one thing on this page worth slowing down for. Everything else here is undoable; '
+  + 'this is the one that reaches a member.',
+  y + 35, { x: M + 14, width: COL - 28, size: 9, lead: 11 });
+
+footer(7, 'The menu');
+
+// ================================================================== page 8
+
+doc.addPage();
+eyebrow('06 - When it goes wrong', 62);
 heading('Everything below is reversible', 88);
 y = para('And everything below is recorded. No step silently overwrites another: an undo is its own '
   + 'entry in the ticket\'s history, so a mis-tap in a rush leaves an honest trail.',
@@ -688,7 +748,7 @@ let ty = y + 64;
   para(t[1], ty + 36, { x, width: tw, size: 8.5, lead: 11 });
 });
 
-footer(7, 'When it goes wrong');
+footer(8, 'When it goes wrong');
 
 // ------------------------------------------------------------------ write
 

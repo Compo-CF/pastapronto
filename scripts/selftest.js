@@ -2720,6 +2720,44 @@ test('a new item inherits its template allergens and still waits to be checked',
   );
 });
 
+/**
+ * Every station on the floor plan has to state its capacity in its own units.
+ *
+ * The guide said "pans, or else decks", which knew about two kinds when the
+ * menu has three: the grill carries patties, so a printed document handed to
+ * staff announced that Grill 1 had "undefined decks". The close-out made the
+ * same mistake with burgers, which is why this walks config rather than
+ * naming the fields it expects to find.
+ */
+test('the floor guide can say how big every station is', () => {
+  const guide = guideSource();
+  const block = /const CAPACITY = \[([\s\S]*?)\];/.exec(guide);
+  assert.ok(block, 'the guide no longer has a capacity table');
+
+  const known = [...block[1].matchAll(/\['(\w+)'/g)].map((m) => m[1]);
+  assert.ok(known.length >= 2, 'found ' + known.length + ' capacity units - the scan is broken');
+
+  // The table being right is no use if the page does not read it. Reverting
+  // to "pans, or else decks" leaves this table untouched and still prints
+  // "undefined decks" on the sheet.
+  const defined = guide.indexOf('function stationCapacity');
+  assert.ok(defined > 0, 'the capacity helper is gone');
+  const after = guide.slice(guide.indexOf('}', defined));
+  assert.ok(
+    after.includes('stationCapacity('),
+    'the floor plan works out capacity by hand instead of using the table',
+  );
+
+  config.kitchen.stations.forEach((st) => {
+    const has = known.filter((f) => typeof st[f] === 'number');
+    assert.ok(
+      has.length,
+      st.label + ' has no capacity the guide knows how to print, so it prints nothing - '
+      + 'it carries ' + JSON.stringify(Object.keys(st).filter((k) => typeof st[k] === 'number')),
+    );
+  });
+});
+
 // -------------------------------------------------- ticket layout
 
 test('a dish reads as rows, and every choice appears in one', () => {
