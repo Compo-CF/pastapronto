@@ -1,14 +1,29 @@
 {
-  "name": "PastaPresto!",
-  "short_name": "PastaPresto",
-  "description": "Build your bowl. We cook it now.",
+  "name": "Neapolitan Night",
+  "short_name": "Neapolitan",
+  "description": "Pasta and pizza ordering for The Club at Carlton Woods.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#fdf8f0",
-  "theme_color": "#d33f30",
+  "theme_color": "#530000",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "icons/order-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/order-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
   ]
 }

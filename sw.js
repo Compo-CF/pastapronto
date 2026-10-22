@@ -9,7 +9,7 @@
  * Only same-origin GETs are touched. Firestore traffic is left alone - it has
  * its own IndexedDB persistence and its own retry logic.
  */
-const CACHE = 'pastapresto-v1';
+const CACHE = 'pastapresto-v2';
 
 const SHELL = [
   './',
@@ -22,7 +22,17 @@ const SHELL = [
   './kitchen.css',
   './expo.css',
   './admin.css',
+  './report.html',
+  './report.css',
   './icon.svg',
+  // The home-screen icons. An iPad launching from the dock with no connection
+  // asks for these before anything else, and a missing one shows as a blank
+  // square rather than falling back to anything.
+  './icons/order-180.png',
+  './icons/kitchen-180.png',
+  './icons/expo-180.png',
+  './icons/manager-180.png',
+  './icons/closeout-180.png',
 ];
 
 self.addEventListener('install', (event) => {

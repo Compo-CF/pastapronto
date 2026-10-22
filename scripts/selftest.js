@@ -6,7 +6,7 @@
  * Firebase-free, so this runs with no emulator, no network and no credentials.
  */
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { STRINGS } from '../app/i18n.js';
 import { config, kindsForNight, nightById } from '../app/config.js';
@@ -2755,6 +2755,58 @@ test('the floor guide can say how big every station is', () => {
       st.label + ' has no capacity the guide knows how to print, so it prints nothing - '
       + 'it carries ' + JSON.stringify(Object.keys(st).filter((k) => typeof st[k] === 'number')),
     );
+  });
+});
+
+// ------------------------------------------- icons on the iPad home screen
+
+/**
+ * Each screen is added to an iPad's home screen as its own button, so each
+ * needs its own icon and its own name.
+ *
+ * Both have a silent failure mode. iOS ignores SVG for a home-screen icon and
+ * quietly substitutes a screenshot of the page, which on a dark rail is a
+ * black square; and every screen shipped the same apple-mobile-web-app-title,
+ * so five buttons would all have read "PastaPresto" and been impossible to
+ * tell apart on a dock.
+ */
+test('every screen has its own home-screen icon and name', () => {
+  const pages = ['index', 'kitchen', 'expo', 'admin', 'report'];
+  const names = new Set();
+  const icons = new Set();
+
+  pages.forEach((name) => {
+    const html = readFileSync(fileURLToPath(new URL('../' + name + '.html', import.meta.url)), 'utf8');
+
+    const title = /apple-mobile-web-app-title"\s+content="([^"]+)"/.exec(html);
+    assert.ok(title, name + '.html has no home-screen name, so iOS uses the page title');
+    assert.ok(!names.has(title[1]),
+      name + '.html is called "' + title[1] + '" on the home screen, and so is another screen');
+    names.add(title[1]);
+
+    // Without this the button opens in Safari with its chrome, which on a
+    // rail costs a third of the screen and puts a URL bar in a kitchen.
+    assert.ok(
+      /apple-mobile-web-app-capable"\s+content="yes"/.test(html),
+      name + '.html opens in Safari rather than as its own app',
+    );
+
+    const icon = /apple-touch-icon"[^>]*href="([^"]+)"/.exec(html);
+    assert.ok(icon, name + '.html has no apple-touch-icon, so iOS uses a screenshot of the page');
+    assert.ok(/\.png$/.test(icon[1]),
+      name + '.html points its home-screen icon at ' + icon[1] + ' - iOS ignores anything but PNG');
+    assert.ok(!icons.has(icon[1]),
+      name + '.html shares its icon with another screen');
+    icons.add(icon[1]);
+
+    const file = fileURLToPath(new URL('../' + icon[1], import.meta.url));
+    assert.ok(existsSync(file), icon[1] + ' is linked by ' + name + '.html but is not in the repo');
+
+    // A home-screen launch with no connection asks for the icon first, and a
+    // miss shows as a blank square.
+    const sw = readFileSync(fileURLToPath(new URL('../sw.js', import.meta.url)), 'utf8');
+    assert.ok(sw.includes(icon[1]),
+      icon[1] + ' is not in the service worker shell, so it is blank offline');
   });
 });
 
