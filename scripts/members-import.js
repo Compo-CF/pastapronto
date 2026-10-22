@@ -4,6 +4,7 @@
  *   node scripts/members-import.js            what it would do, and nothing else
  *   node scripts/members-import.js --commit   actually write it
  *   node scripts/members-import.js --demo     the 30 invented members, for a demo
+ *   node scripts/members-import.js --force    allow a run that keeps none of them
  *
  * firestore.rules refuses every client write to members/, because the
  * collection holds real families and the only identity a browser has is
@@ -13,11 +14,16 @@
  *
  * It prunes: a member who is no longer on the roster is deleted, not left
  * behind. Otherwise a renumbered account resolves to its old family forever.
- * That is also why it refuses to run on an empty read - a listing that failed
- * for the wrong reason would look exactly like "the club dropped everyone".
+ *
+ * Two things sit in front of that prune. A run that would keep none of what is
+ * already there needs --force, because that is right exactly once - when the
+ * demo members give way to the real roster - and otherwise means the source was
+ * wrong. And whatever was there is copied into private/ before anything is
+ * written, since the roster is the one thing here we cannot rebuild from the
+ * repo.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as roster from './roster.js';
 import { MEMBERS } from '../app/seed.js';
@@ -52,18 +58,18 @@ async function call(url, init = {}) {
   return body ? JSON.parse(body) : {};
 }
 
-/** Every member id currently in Firestore. Ids only - no names come back. */
-async function existingIds() {
-  const ids = [];
+/** Every member document currently in Firestore. */
+async function existing() {
+  const docs = [];
   let pageToken = '';
   do {
-    const url = API + '/members?pageSize=300&mask.fieldPaths=__name__'
+    const url = API + '/members?pageSize=300'
       + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
     const page = await call(url);
-    (page.documents || []).forEach((d) => ids.push(d.name.split('/').pop()));
+    (page.documents || []).forEach((d) => docs.push({ id: d.name.split('/').pop(), fields: d.fields || {} }));
     pageToken = page.nextPageToken || '';
   } while (pageToken);
-  return ids;
+  return docs;
 }
 
 const upsert = (m) => ({
@@ -88,6 +94,7 @@ async function commit(writes) {
 async function main() {
   const demo = process.argv.includes('--demo');
   const live = process.argv.includes('--commit');
+  const force = process.argv.includes('--force');
 
   let members;
   if (demo) {
@@ -105,34 +112,45 @@ async function main() {
 
   console.log('Project: ' + PROJECT + '\n');
 
-  const before = await existingIds();
+  const before = await existing();
   const keep = new Set(members.map((m) => m.memberNumber));
-  const stale = before.filter((id) => !keep.has(id));
-
-  // A read that came back empty when the directory is not empty would make
-  // every member look new and nothing look stale. Harmless here - but the same
-  // failure on the prune side is what deletes a roster, so refuse the shape.
-  if (!before.length && stale.length) throw new Error('unreachable');
-  if (before.length && stale.length === before.length && members.length) {
-    console.log('WARNING: this would delete every one of the ' + before.length
-      + ' members already there. That is right when swapping demo data for the '
-      + 'real roster, and wrong almost any other time.\n');
-  }
+  const stale = before.filter((d) => !keep.has(d.id));
 
   console.log(members.length + ' to write, ' + stale.length + ' to delete, '
     + before.length + ' there now');
-  if (stale.length) console.log('  deleting: ' + stale.slice(0, 20).join(', ')
-    + (stale.length > 20 ? ' ...and ' + (stale.length - 20) + ' more' : ''));
+  if (stale.length) {
+    console.log('  deleting: ' + stale.slice(0, 20).map((d) => d.id).join(', ')
+      + (stale.length > 20 ? ' ...and ' + (stale.length - 20) + ' more' : ''));
+  }
+
+  // Replacing the directory wholesale is right exactly once - when the demo
+  // members give way to the real roster. Every other time it means the source
+  // was wrong, and the prune is about to delete 700 real families to prove it.
+  const wipes = before.length > 0 && stale.length === before.length;
+  if (wipes && !force) {
+    throw new Error('This would delete all ' + before.length + ' members already there '
+      + 'and keep none of them.\nIf that is what you want - swapping demo data for the '
+      + 'real roster, or back - add --force.\nA copy is written to private/ first either way.');
+  }
 
   if (!live) {
     console.log('\nDry run. Nothing was written. Add --commit to do it.');
     return;
   }
 
+  // Taken before anything is touched. The roster is the one thing here we
+  // cannot rebuild from the repo.
+  if (before.length) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const path = fileURLToPath(new URL('../private/members-before-' + stamp + '.json', import.meta.url));
+    writeFileSync(path, JSON.stringify(before, null, 1));
+    console.log('\nBacked up ' + before.length + ' members to ' + path);
+  }
+
   console.log('\nWriting...');
   await commit(members.map(upsert));
   if (stale.length) {
-    await commit(stale.map((id) => ({ delete: ROOT + '/members/' + id })));
+    await commit(stale.map((d) => ({ delete: ROOT + '/members/' + d.id })));
   }
   console.log('\nDone. ' + members.length + ' members, ' + stale.length + ' removed.');
 }

@@ -3738,6 +3738,26 @@ test('seeding the demo leaves the member directory alone', () => {
   });
 });
 
+test('no demo chit puts an invented surname on a real member number', () => {
+  // A demo chit carries its own member number and name. If one of those numbers
+  // belonged to a real family, the rail would show their account against a name
+  // that is not theirs - and in close-out, against a bill they did not run up.
+  // The demo numbers are all above the roster's range today; this is what keeps
+  // that true when the club sends a longer roster.
+  if (!existsSync(fileURLToPath(new URL('../private/members.csv', import.meta.url)))) return;
+  const real = new Map(roster.load().members.map((m) => [m.memberNumber, m]));
+
+  const offences = [];
+  seed.buildDemoOrders().forEach((o) => {
+    const hit = real.get(o.memberNumber);
+    if (!hit) return;
+    offences.push('chit ' + o.ticketNo + ' calls member ' + o.memberNumber
+      + ' "' + (o.memberName || '(unverified)') + '", but that is the ' + hit.name + ' family');
+  });
+
+  assert.deepStrictEqual(offences, [], 'pick demo numbers the roster does not use');
+});
+
 test('the member roster never reaches git or the web', () => {
   // private/ holds 700-odd real families and their account numbers. Two
   // separate mechanisms keep it out: .gitignore, and the hosting ignore list -
