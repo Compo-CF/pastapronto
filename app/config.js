@@ -44,6 +44,18 @@ export const config = {
     // a guest who guesses the URL does not land on the rail - NOT hard security.
     // See firestore.rules for what actually protects the data.
     staffPasscode: '2468',
+    // A second, higher code for the manager and close-out screens.
+    //
+    // The line code above is shared with everyone working the night. These two
+    // screens are a different thing: one can delete the whole service day and
+    // shows what the food cost, the other lists which members to charge. A
+    // cook has no reason to reach either, and sharing one code with the floor
+    // means they can.
+    //
+    // Neither is security - both ship in this file and anyone can read them.
+    // What protects the data is firestore.rules. This is about what a tapping
+    // finger lands on, not about who can get at the database.
+    managerPasscode: '8135',
   },
 
   sla: {

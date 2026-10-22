@@ -1894,7 +1894,7 @@ const CATALOG = menu.catalog();
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Manager');
 
-    if (!(await requireStaff())) {
+    if (!(await requireStaff('manager'))) {
       throw new Error('Staff passcode required.');
     }
 

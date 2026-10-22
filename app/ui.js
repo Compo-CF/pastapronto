@@ -219,10 +219,20 @@ export async function keepScreenAwake() {
 // -------------------------------------------------------------- staff gate
 
 /**
- * Convenience lock on the kitchen, expo and manager screens so a guest who
- * guesses the URL does not land on the rail. It is NOT security - the passcode
- * ships in config.js and anyone can read it. What actually protects the data is
+ * Convenience lock on the staff screens so a guest who guesses the URL does
+ * not land on the rail. It is NOT security - both passcodes ship in config.js
+ * and anyone can read them. What actually protects the data is
  * firestore.rules; see the security note in README.md.
+ *
+ * Two levels, because they guard different things. The line code opens the
+ * kitchen and the window and is shared with everyone working the night. The
+ * manager code opens the manager and close-out screens, which between them can
+ * delete the service day, show what the food cost and name the members to
+ * charge - a cook has no reason to reach any of that.
+ *
+ * The manager code also opens the line screens, so somebody running the floor
+ * carries one code rather than two. The line code does not open the manager
+ * screens.
  *
  * Rendered as an in-page overlay rather than window.prompt(). prompt() is
  * blocked outright in sandboxed frames and several in-app webviews - exactly
@@ -230,20 +240,24 @@ export async function keepScreenAwake() {
  * there it throws, leaving a dead screen. This also gives a numeric keypad and
  * a target big enough for a cook with wet hands.
  *
+ * @param {'staff'|'manager'} level  which screens this one is
  * @returns {Promise<boolean>} resolves true once unlocked
  */
-export function requireStaff() {
-  if (recall('staff', false) === true) return Promise.resolve(true);
+export function requireStaff(level = 'staff') {
+  const manager = level === 'manager';
+  if (recall(manager ? 'manager' : 'staff', false) === true) return Promise.resolve(true);
 
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'gate';
     overlay.innerHTML = [
       '<form class="gate-card" autocomplete="off">',
-      '  <h1 class="gate-title">Staff screen</h1>',
-      '  <p class="gate-sub">Ask a manager for the passcode.</p>',
+      '  <h1 class="gate-title">' + (manager ? 'Manager screen' : 'Staff screen') + '</h1>',
+      '  <p class="gate-sub">' + (manager
+        ? 'This one needs the manager code, not the kitchen one.'
+        : 'Ask a manager for the passcode.') + '</p>',
       '  <input class="gate-input" type="password" inputmode="numeric" ',
-      '         autocomplete="off" aria-label="Staff passcode" placeholder="Passcode">',
+      '         autocomplete="off" aria-label="Passcode" placeholder="Passcode">',
       '  <p class="gate-error" role="alert" hidden>That passcode is not right.</p>',
       '  <button class="gate-go" type="submit">Unlock</button>',
       '</form>',
@@ -255,7 +269,13 @@ export function requireStaff() {
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      if (input.value.trim() === config.kitchen.staffPasscode) {
+      const typed = input.value.trim();
+      const isManager = typed === config.kitchen.managerPasscode;
+      // The manager code satisfies both levels; the line code only its own.
+      const ok = isManager || (!manager && typed === config.kitchen.staffPasscode);
+
+      if (ok) {
+        if (isManager) remember('manager', true);
         remember('staff', true);
         overlay.remove();
         resolve(true);

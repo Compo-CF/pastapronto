@@ -2810,6 +2810,58 @@ test('every screen has its own home-screen icon and name', () => {
   });
 });
 
+// ------------------------------------------------------- the two passcodes
+
+/**
+ * The manager and close-out screens sit behind a higher code than the rail.
+ *
+ * Not security - both codes ship in config.js. It is about what a tapping
+ * finger lands on: between them those two screens delete the service day,
+ * show what the food cost, and name the members to charge, and the line code
+ * is shared with everyone working the night.
+ */
+test('the manager screens ask for a different code than the rail', () => {
+  const read = (p) => readFileSync(fileURLToPath(new URL('../app/' + p, import.meta.url)), 'utf8');
+
+  assert.ok(config.kitchen.managerPasscode, 'there is no manager passcode');
+  assert.notStrictEqual(
+    config.kitchen.managerPasscode, config.kitchen.staffPasscode,
+    'the manager code is the same as the line code, so it guards nothing',
+  );
+
+  // Who asks for which level, read from the screens themselves.
+  const LEVELS = [
+    ['admin.js', 'manager'],
+    ['report.js', 'manager'],
+    ['kitchen.js', 'staff'],
+    ['expo.js', 'staff'],
+  ];
+  LEVELS.forEach(([file, want]) => {
+    const call = /requireStaff\(([^)]*)\)/.exec(read(file));
+    assert.ok(call, file + ' no longer gates itself at all');
+    const asked = /'manager'/.test(call[1]) ? 'manager' : 'staff';
+    assert.strictEqual(asked, want, file + ' asks for the ' + asked + ' code, expected ' + want);
+  });
+
+  // A manager carries one code, not two: theirs opens the rail as well.
+  const ui = read('ui.js');
+  assert.ok(
+    /isManager \|\|/.test(ui),
+    'the manager code does not satisfy the line gate, so a manager needs both',
+  );
+  // And the line code must not open the manager screens.
+  assert.ok(
+    /!manager && typed === config\.kitchen\.staffPasscode/.test(ui),
+    'the line code opens the manager screens, which is the thing this prevents',
+  );
+
+  // Unlocking the rail must not quietly unlock the manager screens.
+  assert.ok(
+    /recall\(manager \? 'manager' : 'staff'/.test(ui),
+    'both levels share one remembered unlock, so opening the rail opens everything',
+  );
+});
+
 // -------------------------------------------------- ticket layout
 
 test('a dish reads as rows, and every choice appears in one', () => {

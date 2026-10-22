@@ -685,7 +685,7 @@ async function boot() {
   if (!db.isConfigured) {
     throw new Error('Firebase is not configured yet - see app/firebase-config.js.');
   }
-  if (!(await requireStaff())) {
+  if (!(await requireStaff('manager'))) {
     throw new Error('Staff passcode required.');
   }
 
