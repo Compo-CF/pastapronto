@@ -33,3 +33,8 @@ desktop.ini
 # Generated deliverables, never source.
 neapolitan-night-floor-guide.pdf
 table-tents.html
+
+# Club member roster: 700+ real families and their account numbers. The repo is
+# public and everything under the served root is public with it, so the roster
+# lives here, outside both. scripts/roster.js reads it; nothing ships it.
+private/

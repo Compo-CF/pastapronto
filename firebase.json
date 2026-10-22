@@ -24,6 +24,7 @@
         "public/**",
         "server.js",
         "data/**",
+        "private/**",
         "*.log",
         "shots/**",
         "*.pdf"
@@ -61,6 +62,7 @@
         "public/**",
         "server.js",
         "data/**",
+        "private/**",
         "*.log",
         "shots/**",
         "*.pdf"

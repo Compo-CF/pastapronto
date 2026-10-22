@@ -7,6 +7,7 @@
  */
 import assert from 'node:assert';
 import { readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { STRINGS } from '../app/i18n.js';
 import { config, kindsForNight, nightById } from '../app/config.js';
@@ -17,6 +18,7 @@ import * as menu from '../app/menu.js';
 import * as costing from '../app/costing.js';
 import * as stack from '../app/burgerstack.js';
 import * as seed from '../app/seed.js';
+import * as roster from './roster.js';
 import { art, has as hasArt } from '../app/art.js';
 import * as pdf from '../app/pdf.js';
 import { buildReportPdf } from '../app/report-pdf.js';
@@ -3666,5 +3668,59 @@ test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.unitMoney(0.004), '$0.004');
   assert.strictEqual(costing.unitMoney(2.5), '$2.50');
 });
+
+test('the member roster never reaches git or the web', () => {
+  // private/ holds 700-odd real families and their account numbers. Two
+  // separate mechanisms keep it out: .gitignore, and the hosting ignore list -
+  // a different list that Firebase reads on its own, so .gitignore alone would
+  // still have published it at /private/members.csv on the next deploy.
+  const root = (rel) => fileURLToPath(new URL(rel, import.meta.url));
+
+  const tracked = execFileSync('git', ['ls-files', '--', 'private'], {
+    cwd: root('../'), encoding: 'utf8',
+  }).trim();
+  assert.strictEqual(
+    tracked, '',
+    'the roster is tracked by git and this repo is public: ' + tracked,
+  );
+
+  const hosting = JSON.parse(readFileSync(root('../firebase.json'), 'utf8')).hosting;
+  assert.ok(hosting.length >= 1, 'no hosting targets to check');
+  hosting.forEach((target) => {
+    assert.ok(
+      target.ignore.includes('private/**'),
+      'hosting target ' + target.site + ' would upload private/ - its root is "'
+      + target.public + '"',
+    );
+  });
+});
+
+test('the roster reader agrees with the keypad about what a number means', () => {
+  // The roster stores "0001"; the guest types whatever they like. If these two
+  // ever normalised differently, every padded number on the roster would
+  // resolve to nobody - so the reader imports the keypad's own function rather
+  // than keeping a copy of the rule.
+  const src = readFileSync(fileURLToPath(new URL('../scripts/roster.js', import.meta.url)), 'utf8');
+  assert.ok(
+    src.includes('order.normalizeMemberNumber('),
+    'scripts/roster.js must normalise through app/order.js, not its own copy',
+  );
+
+  // The roster itself is deliberately absent from a fresh clone.
+  if (!existsSync(fileURLToPath(new URL('../private/members.csv', import.meta.url)))) return;
+  const { members } = roster.load();
+  assert.ok(members.length > 0, 'the roster loaded empty');
+  members.forEach((m) => {
+    assert.strictEqual(
+      m.memberNumber, order.normalizeMemberNumber(m.raw),
+      'member on line ' + m.line + ' normalises differently from the keypad',
+    );
+    assert.ok(
+      config.order.memberNumberPattern.test(m.memberNumber),
+      'member ' + m.memberNumber + ' would be refused by the app',
+    );
+  });
+});
+
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');
