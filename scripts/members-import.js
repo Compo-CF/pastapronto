@@ -22,7 +22,7 @@
  * written, since the roster is the one thing here we cannot rebuild from the
  * repo.
  */
-import { execFileSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as roster from './roster.js';
@@ -36,16 +36,44 @@ const ROOT = `projects/${PROJECT}/databases/(default)/documents`;
 const API = `https://firestore.googleapis.com/v1/${ROOT}`;
 const BATCH = 500; // Firestore's limit on writes in one commit.
 
+/**
+ * An access token for the Firestore REST API, from whoever is logged into
+ * gcloud. Admin credentials, so this bypasses firestore.rules - which is the
+ * point, since those rules refuse every client write to members/.
+ *
+ * It goes through a shell because on Windows gcloud is a .cmd wrapper: Node
+ * will not resolve it (ENOENT) and, since v20, will not spawn it directly
+ * either (EINVAL). The command is a constant, so there is nothing to inject.
+ */
 function token() {
   if (process.env.FIRESTORE_TOKEN) return process.env.FIRESTORE_TOKEN;
+
+  let out;
   try {
-    return execFileSync('gcloud', ['auth', 'print-access-token'], {
+    // One string, not a command plus arguments: with a shell in play Node
+    // only concatenates them anyway, and says so loudly.
+    out = execSync('gcloud auth print-access-token', {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
-  } catch {
-    throw new Error('No credentials. Run `gcloud auth login` and '
-      + '`gcloud config set project ' + PROJECT + '`, or set FIRESTORE_TOKEN.');
+  } catch (err) {
+    const said = String(err.stderr || err.message);
+    // gcloud can ask you to re-prove who you are, and it can only ask a
+    // terminal. Run this script yourself rather than through something that
+    // cannot answer - that is the whole of the fix, not a missing login.
+    if (/non-interactive|[Rr]eauthentication/.test(said)) {
+      throw new Error('gcloud needs you to re-authenticate, and it can only ask '
+        + 'an interactive terminal.\nRun this script from your own PowerShell '
+        + 'window and answer the prompt.');
+    }
+    if (/ENOENT|not recognized|not found/.test(said)) {
+      throw new Error('gcloud is not on PATH for this shell. Open a new terminal '
+        + 'after installing it, or set FIRESTORE_TOKEN.');
+    }
+    throw new Error('Could not get a token from gcloud:\n' + said.trim().split('\n').slice(0, 4).join('\n'));
   }
+
+  if (!out) throw new Error('gcloud returned an empty token. Run `gcloud auth login`.');
+  return out;
 }
 
 async function call(url, init = {}) {
