@@ -21,7 +21,7 @@ import * as i18n from './i18n.js';
 import { glossNote } from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
-  remember, recall, chime, unlockAudio, toast, requireStaff, keepScreenAwake,
+  remember, recall, chime, unlockAudio, toast, keepScreenAwake,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
@@ -791,17 +791,15 @@ const CATALOG = menu.catalog();
     if (!db.isConfigured) {
       throw new Error('Firebase is not configured yet - see app/firebase-config.js');
     }
-    if (!(await requireStaff())) {
-      throw new Error('Staff passcode required.');
-    }
-
     fillStations(config.defaultNight);
     el.roleFilter.value = state.role;
     setSound(state.sound);
 
     // The rail is mounted on a wall and read from across the pass; it must not
-    // dim. Asked for after the passcode, so the unlock tap counts as the user
-    // gesture Safari wants.
+    // dim. There is no passcode here any more to serve as the user gesture
+    // Safari wants before it grants a wake lock, so the first refusal is
+    // expected: keepScreenAwake() retries on every pointerdown, and the first
+    // touch of the morning takes the lock.
     keepScreenAwake();
 
     await db.ready();

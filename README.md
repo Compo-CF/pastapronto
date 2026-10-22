@@ -34,9 +34,13 @@ table tent printed before the rename keeps working. The Firebase **project id**
 cannot be renamed, which is why it still reads `pastapronto`; likewise the
 GitHub repo name is unchanged on purpose.
 
-The kitchen, expo and manager screens sit behind a staff passcode
-(`config.kitchen.staffPasscode`, default `2468`). That is a convenience lock,
-not security - see **Security posture** below.
+The manager and close-out screens sit behind a code
+(`config.kitchen.managerPasscode`, default `2468`). The kitchen and expo
+screens have none: they are mounted in the kitchen and tapped with wet hands,
+and everything on them a cook is already standing in front of. The two that
+are locked can delete the service day, show what the food cost and name the
+members to charge. It is a convenience lock either way, not security - see
+**Security posture** below.
 
 ## First-time setup
 

@@ -2810,55 +2810,67 @@ test('every screen has its own home-screen icon and name', () => {
   });
 });
 
-// ------------------------------------------------------- the two passcodes
+// ----------------------------------------------------------- the manager code
 
 /**
- * The manager and close-out screens sit behind a higher code than the rail.
+ * Only the manager and close-out screens are locked.
  *
- * Not security - both codes ship in config.js. It is about what a tapping
- * finger lands on: between them those two screens delete the service day,
- * show what the food cost, and name the members to charge, and the line code
- * is shared with everyone working the night.
+ * The rail and the window are mounted in the kitchen and tapped with wet
+ * hands; a code there is friction with nothing behind it, because everything
+ * a cook can reach on those screens they are already standing in front of.
+ * The other two delete the service day, show what the food cost and name the
+ * members to charge, so those stay locked.
+ *
+ * Not security either way - the code ships in config.js. firestore.rules is
+ * what protects the data.
  */
-test('the manager screens ask for a different code than the rail', () => {
+test('the manager screens are locked and the rail is not', () => {
   const read = (p) => readFileSync(fileURLToPath(new URL('../app/' + p, import.meta.url)), 'utf8');
 
-  assert.ok(config.kitchen.managerPasscode, 'there is no manager passcode');
-  assert.notStrictEqual(
-    config.kitchen.managerPasscode, config.kitchen.staffPasscode,
-    'the manager code is the same as the line code, so it guards nothing',
+  assert.ok(config.kitchen.managerPasscode, 'there is no manager code');
+  assert.strictEqual(
+    config.kitchen.staffPasscode, undefined,
+    'a second passcode is back in config, and only one of them is wired up',
   );
 
-  // Who asks for which level, read from the screens themselves.
-  const LEVELS = [
-    ['admin.js', 'manager'],
-    ['report.js', 'manager'],
-    ['kitchen.js', 'staff'],
-    ['expo.js', 'staff'],
-  ];
-  LEVELS.forEach(([file, want]) => {
-    const call = /requireStaff\(([^)]*)\)/.exec(read(file));
-    assert.ok(call, file + ' no longer gates itself at all');
-    const asked = /'manager'/.test(call[1]) ? 'manager' : 'staff';
-    assert.strictEqual(asked, want, file + ' asks for the ' + asked + ' code, expected ' + want);
-  });
+  [['admin.js', true], ['report.js', true], ['kitchen.js', false], ['expo.js', false]]
+    .forEach(function (pair) {
+      const file = pair[0];
+      const locked = pair[1];
+      const gated = /requireManager\(/.test(read(file));
+      assert.strictEqual(
+        gated, locked,
+        file + (locked
+          ? ' no longer asks for the manager code'
+          : ' asks for a code, and the rail is meant to open straight into service'),
+      );
+    });
 
-  // A manager carries one code, not two: theirs opens the rail as well.
+  // One gate, one level. A second code or a second remembered unlock would be
+  // the thing the club asked to have taken out.
   const ui = read('ui.js');
-  assert.ok(
-    /isManager \|\|/.test(ui),
-    'the manager code does not satisfy the line gate, so a manager needs both',
+  assert.ok(!/requireStaff/.test(ui), 'the old two-level gate is still exported');
+  assert.strictEqual(
+    (ui.match(/config\.kitchen\.\w*[Pp]asscode/g) || []).length, 1,
+    'the gate compares against more than one code',
   );
-  // And the line code must not open the manager screens.
-  assert.ok(
-    /!manager && typed === config\.kitchen\.staffPasscode/.test(ui),
-    'the line code opens the manager screens, which is the thing this prevents',
-  );
+});
 
-  // Unlocking the rail must not quietly unlock the manager screens.
+/**
+ * The rail now asks for a wake lock with no gesture behind it, the passcode
+ * having been the thing that supplied one. So it has to be the kind that
+ * retries - keeping iPad screens awake was the first thing the club ever
+ * asked for, and a lock refused once and never asked for again is a rail that
+ * dims in the middle of service.
+ */
+test('the rail can still take a wake lock without a tap to earn it', () => {
+  const ui = readFileSync(fileURLToPath(new URL('../app/ui.js', import.meta.url)), 'utf8');
+  const fn = /export async function keepScreenAwake[\s\S]*?\n}/.exec(ui);
+  assert.ok(fn, 'keepScreenAwake is gone');
   assert.ok(
-    /recall\(manager \? 'manager' : 'staff'/.test(ui),
-    'both levels share one remembered unlock, so opening the rail opens everything',
+    /pointerdown/.test(fn[0]),
+    'the wake lock is asked for once and never retried, so a refusal for want '
+    + 'of a gesture is permanent',
   );
 });
 

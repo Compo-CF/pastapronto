@@ -17,7 +17,7 @@ import { mastheadHtml, pageTitle } from './brand.js';
 import * as i18n from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
-  remember, recall, chime, unlockAudio, toast, requireStaff, keepScreenAwake,
+  remember, recall, chime, unlockAudio, toast, keepScreenAwake,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
@@ -381,10 +381,6 @@ const CATALOG = menu.catalog();
     if (!db.isConfigured) {
       throw new Error('Firebase is not configured yet - see app/firebase-config.js');
     }
-    if (!(await requireStaff())) {
-      throw new Error('Staff passcode required.');
-    }
-
     setSound(state.sound);
 
     // The expo board is read at a glance while someone's hands are full; a

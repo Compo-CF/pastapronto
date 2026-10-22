@@ -18,7 +18,7 @@ import { art } from './art.js';
 import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
 import * as QR from './qr.js';
 import {
-  html, raw, mmss, escapeHtml, remember, recall, toast, requireStaff,
+  html, raw, mmss, escapeHtml, remember, recall, toast, requireManager,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
@@ -1894,8 +1894,8 @@ const CATALOG = menu.catalog();
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Manager');
 
-    if (!(await requireStaff('manager'))) {
-      throw new Error('Staff passcode required.');
+    if (!(await requireManager())) {
+      throw new Error('Manager code required.');
     }
 
     // Whichever section this manager was last working in. A cost sheet takes

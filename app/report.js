@@ -16,7 +16,7 @@ import { art } from './art.js';
 import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
 import * as i18n from './i18n.js';
 import { buildReportPdf } from './report-pdf.js';
-import { html, raw, mmss, escapeHtml, toast, requireStaff } from './ui.js';
+import { html, raw, mmss, escapeHtml, toast, requireManager } from './ui.js';
 
 const el = {
   body: document.getElementById('reportBody'),
@@ -685,8 +685,8 @@ async function boot() {
   if (!db.isConfigured) {
     throw new Error('Firebase is not configured yet - see app/firebase-config.js.');
   }
-  if (!(await requireStaff('manager'))) {
-    throw new Error('Staff passcode required.');
+  if (!(await requireManager())) {
+    throw new Error('Manager code required.');
   }
 
   el.datePick.max = serviceDate();

@@ -216,49 +216,43 @@ export async function keepScreenAwake() {
   return wakeLock !== null;
 }
 
-// -------------------------------------------------------------- staff gate
+// ------------------------------------------------------------ manager gate
 
 /**
- * Convenience lock on the staff screens so a guest who guesses the URL does
- * not land on the rail. It is NOT security - both passcodes ship in config.js
- * and anyone can read them. What actually protects the data is
- * firestore.rules; see the security note in README.md.
+ * A lock on the manager and close-out screens.
  *
- * Two levels, because they guard different things. The line code opens the
- * kitchen and the window and is shared with everyone working the night. The
- * manager code opens the manager and close-out screens, which between them can
- * delete the service day, show what the food cost and name the members to
- * charge - a cook has no reason to reach any of that.
+ * Only those two. The rail and the window are mounted in the kitchen, read
+ * across the pass and tapped with wet hands - a code there is friction with
+ * nothing behind it, since everything a cook can reach on those screens they
+ * are already standing in front of. These two are a different thing: between
+ * them they delete the service day, show what the food cost, and name the
+ * members to charge.
  *
- * The manager code also opens the line screens, so somebody running the floor
- * carries one code rather than two. The line code does not open the manager
- * screens.
+ * It is NOT security - the code ships in config.js and anyone can read it.
+ * What actually protects the data is firestore.rules; see the security note
+ * in README.md.
  *
  * Rendered as an in-page overlay rather than window.prompt(). prompt() is
  * blocked outright in sandboxed frames and several in-app webviews - exactly
- * what a kitchen tablet or a link opened from a chat app tends to be - and
- * there it throws, leaving a dead screen. This also gives a numeric keypad and
- * a target big enough for a cook with wet hands.
+ * what a tablet or a link opened from a chat app tends to be - and there it
+ * throws, leaving a dead screen. This also gives a numeric keypad and a
+ * target big enough for somebody in a hurry.
  *
- * @param {'staff'|'manager'} level  which screens this one is
  * @returns {Promise<boolean>} resolves true once unlocked
  */
-export function requireStaff(level = 'staff') {
-  const manager = level === 'manager';
-  if (recall(manager ? 'manager' : 'staff', false) === true) return Promise.resolve(true);
+export function requireManager() {
+  if (recall('manager', false) === true) return Promise.resolve(true);
 
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'gate';
     overlay.innerHTML = [
       '<form class="gate-card" autocomplete="off">',
-      '  <h1 class="gate-title">' + (manager ? 'Manager screen' : 'Staff screen') + '</h1>',
-      '  <p class="gate-sub">' + (manager
-        ? 'This one needs the manager code, not the kitchen one.'
-        : 'Ask a manager for the passcode.') + '</p>',
+      '  <h1 class="gate-title">Manager screen</h1>',
+      '  <p class="gate-sub">Ask a manager for the code.</p>',
       '  <input class="gate-input" type="password" inputmode="numeric" ',
-      '         autocomplete="off" aria-label="Passcode" placeholder="Passcode">',
-      '  <p class="gate-error" role="alert" hidden>That passcode is not right.</p>',
+      '         autocomplete="off" aria-label="Manager code" placeholder="Code">',
+      '  <p class="gate-error" role="alert" hidden>That code is not right.</p>',
       '  <button class="gate-go" type="submit">Unlock</button>',
       '</form>',
     ].join('');
@@ -269,14 +263,8 @@ export function requireStaff(level = 'staff') {
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      const typed = input.value.trim();
-      const isManager = typed === config.kitchen.managerPasscode;
-      // The manager code satisfies both levels; the line code only its own.
-      const ok = isManager || (!manager && typed === config.kitchen.staffPasscode);
-
-      if (ok) {
-        if (isManager) remember('manager', true);
-        remember('staff', true);
+      if (input.value.trim() === config.kitchen.managerPasscode) {
+        remember('manager', true);
         overlay.remove();
         resolve(true);
         return;
@@ -290,3 +278,4 @@ export function requireStaff(level = 'staff') {
     input.focus();
   });
 }
+
