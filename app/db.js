@@ -831,35 +831,14 @@ export async function getDay(date = serviceDate()) {
 
 // --------------------------------------------------------------- admin tools
 
-/**
- * Replace the member directory with this list. Idempotent - safe to run
- * repeatedly.
- *
- * It deletes rows that are no longer in the list, not just writes the ones
- * that are. Otherwise renumbering a member leaves the old number resolving to
- * the same name forever, and a manager typing a stale number gets a party
- * that is not on the roster.
- *
- * @returns {Promise<{written: number, removed: number}>}
+/*
+ * There is no seedMembers() any more, and no other writer of members/.
+ * firestore.rules refuses every client write to that collection, because it
+ * holds real families: the roster goes in through scripts/members-import.js
+ * on admin credentials. The seeder that used to live here replaced the whole
+ * directory and pruned whatever was not in the list it was handed, which with
+ * a real roster loaded meant one tap on Demo controls deleted all 736.
  */
-export async function seedMembers(members) {
-  await ready();
-  const keep = new Set(members.map((m) => m.memberNumber));
-
-  const existing = await firstSnapshot(query(collection(db, 'members')));
-  const stale = existing.map((d) => d.id).filter((id) => !keep.has(id));
-
-  await Promise.all([
-    ...members.map((m) => setDoc(doc(db, 'members', m.memberNumber), {
-      name: m.name,
-      dietaryNotes: m.dietaryNotes || '',
-      defaultGuests: m.defaultGuests || 2,
-    })),
-    ...stale.map((id) => deleteDoc(doc(db, 'members', id))),
-  ]);
-
-  return { written: members.length, removed: stale.length };
-}
 
 /**
  * Write the demo rail.

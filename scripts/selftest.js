@@ -3669,6 +3669,75 @@ test('money renders a missing figure as a dash, never as zero', () => {
   assert.strictEqual(costing.unitMoney(2.5), '$2.50');
 });
 
+test('the member directory can be looked up but not listed or written', () => {
+  // The collection holds real families and the only identity a browser has is
+  // anonymous, so `allow read` was the whole roster for one request from any
+  // phone that loaded the page. Split: the keypad's single get stays, listing
+  // and writing do not.
+  const rules = rulesSource();
+  const block = rules.slice(rules.indexOf('match /members/'));
+  // Cut at the end of the block, not at the first brace - the path itself
+  // carries one, in {memberNumber}.
+  const body = block.slice(block.indexOf(String.fromCharCode(10)), block.indexOf(String.fromCharCode(10) + '    }'));
+
+  const allow = Object.fromEntries(
+    [...body.matchAll(/allow\s+(\w+)\s*:\s*if\s+([^;]+);/g)].map((m) => [m[1], m[2].trim()]),
+  );
+
+  assert.deepStrictEqual(
+    Object.keys(allow).sort(), ['get', 'list', 'write'],
+    'members must spell out get, list and write - a bare `read` grants listing',
+  );
+  assert.strictEqual(allow.get, 'signedIn()', 'the guest keypad has to be able to get one member');
+  assert.strictEqual(allow.list, 'false', 'listing members hands over the whole roster');
+  assert.strictEqual(allow.write, 'false', 'no browser should be able to rename or delete a member');
+});
+
+test('nothing in the app writes to the member directory', () => {
+  // Not belt and braces: the rules refuse it, so a writer left behind would
+  // not corrupt anything - it would fail in front of a manager mid-service
+  // with a permission error and no explanation. The import script is the way
+  // in, and it is deliberately not loaded by any page.
+  const WRITERS = /\b(setDoc|updateDoc|deleteDoc|addDoc|writeBatch)\s*\(/;
+  const offences = [];
+
+  ['../app/db.js', '../app/admin.js', '../app/seed.js', '../app/guest.js'].forEach((rel) => {
+    const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+    src.split('\n').forEach((line, i) => {
+      if (!line.includes("'members'")) return;
+      if (!WRITERS.test(line)) return;
+      offences.push(rel.replace('../', '') + ':' + (i + 1) + '  ' + line.trim());
+    });
+  });
+
+  assert.deepStrictEqual(offences, [], 'members/ is read-only to the client');
+});
+
+test('seeding the demo leaves the member directory alone', () => {
+  // The demo seeder used to replace the directory and prune anything not in
+  // its list of 30 invented families. With the real roster loaded that was one
+  // tap from deleting all 736. It can go entirely, because a demo chit already
+  // carries the member number and name it needs.
+  const admin = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+  const btn = admin.slice(admin.indexOf("getElementById('seedBtn')"));
+  const handler = btn.slice(0, btn.indexOf('});'));
+
+  assert.ok(!/seedMembers|MEMBERS/.test(handler), 'the demo button touches the directory again');
+  assert.ok(handler.includes('seedOrders('), 'the demo button should still write demo chits');
+
+  // And what makes that safe: every demo chit names its own member.
+  const drafted = seed.buildDemoOrders();
+  assert.ok(drafted.length > 0, 'no demo orders built');
+  drafted.forEach((o) => {
+    // One chit is deliberately nameless: member 7890 is the guest who typed a
+    // number the directory does not hold, and the app lets them eat anyway.
+    // The rail falls back to "Member 7890". Everyone else must carry a name,
+    // or they would read as unverified on the pass when they are not.
+    assert.ok(o.memberName || o.memberStatus === 'unverified',
+      'chit ' + o.ticketNo + ' has no name and is not flagged unverified');
+  });
+});
+
 test('the member roster never reaches git or the web', () => {
   // private/ holds 700-odd real families and their account numbers. Two
   // separate mechanisms keep it out: .gitignore, and the hosting ignore list -

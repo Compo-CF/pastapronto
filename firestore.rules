@@ -38,10 +38,28 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Member directory: looked up by the guest keypad, seeded by the manager.
+    // Member directory: 700-odd real families, keyed by club account number.
+    //
+    // `read` is split, because the two halves are not the same request. The
+    // keypad asks for one document it already knows the id of - that is `get`,
+    // and the guest standing at the table has to be able to make it. `list` is
+    // "give me the directory", which nothing in the app has ever needed and
+    // which, under anonymous auth, any phone that loads the page could have
+    // made. One request, the whole roster.
+    //
+    // This raises the bar rather than closing the door: a determined client
+    // can still walk 1..9999 one `get` at a time. Closing that needs App Check
+    // so the token has to come from the real app, which is a separate job.
+    //
+    // `write` is shut to every client. The roster arrives from the club as a
+    // spreadsheet and goes in through scripts/members-import.js, which carries
+    // admin credentials and bypasses these rules. Nothing in a browser should
+    // be able to rename a member - and when the directory held real families,
+    // the demo seeder was one tap away from deleting all of them.
     match /members/{memberNumber} {
-      allow read: if signedIn();
-      allow write: if signedIn();
+      allow get: if signedIn();
+      allow list: if false;
+      allow write: if false;
     }
 
     // Shared service configuration: the 86 list and the food-cost sheet.

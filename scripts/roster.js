@@ -80,7 +80,11 @@ export function load(path = CSV) {
   return { members, refused };
 }
 
-/** What `db.seedMembers()` expects. Names only - no titles, no first names. */
+/**
+ * One Firestore members/ document per family, as members-import.js writes them.
+ * Names only - the directory greets a party, so it has no use for titles or
+ * first names, and holding less of the roster than we were given is the point.
+ */
 export function toFirestore(members) {
   return members.map((m) => ({
     memberNumber: m.memberNumber,

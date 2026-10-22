@@ -696,11 +696,12 @@ const CATALOG = menu.catalog();
 
   document.getElementById('seedBtn').addEventListener('click', async function () {
     try {
-      var dir = await db.seedMembers(seed.MEMBERS);
+      // Demo chits only. Each one carries its own member number and name, so
+      // the rail reads correctly without the directory existing at all - and
+      // the directory is the real roster now, which this button used to wipe.
       var built = seed.buildDemoOrders();
       var n = await db.seedOrders(built);
-      toast(n + ' demo chits written, ' + dir.written + ' members in the directory'
-        + (dir.removed ? ' (' + dir.removed + ' stale removed).' : '.'));
+      toast(n + ' demo chits written.');
     } catch (err) {
       toast(err.message, true);
     }
