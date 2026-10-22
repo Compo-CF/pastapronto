@@ -2862,6 +2862,96 @@ test('the manager screens ask for a different code than the rail', () => {
   );
 });
 
+// --------------------------------------------- nights the venue is running
+
+/**
+ * Burger night is switched off while the club rolls out Neapolitan night, and
+ * "off" has to mean nobody meets it: not in the night chooser, not as six
+ * lists of buns to scroll past in the menu editor, not as a grill on the
+ * printed floor plan.
+ *
+ * It is switched off, not deleted, so this also checks the machinery is still
+ * there - putting it back should be one word in config.
+ */
+test('a night that is switched off is not offered anywhere', () => {
+  const off = Object.keys(config.nights).filter((id) => !config.activeNights.includes(id));
+  assert.ok(off.length, 'no night is switched off - this test has nothing to check');
+
+  const offered = cfgTags.nightList().map((n) => n.id);
+  off.forEach((id) => {
+    assert.ok(!offered.includes(id), id + ' night is switched off but still in the chooser');
+  });
+
+  // The kinds only that night serves must not reach the editor or the floor.
+  const running = cfgTags.activeKinds();
+  const dormant = off.flatMap((id) => config.nights[id].kinds).filter((k) => !running.includes(k));
+  assert.ok(dormant.length, 'the switched-off night shares all its kinds with a running one');
+
+  const shown = menu.editableGroupsFor(running).map(([g]) => g);
+  dormant.forEach((kind) => {
+    Object.keys(menu.GROUP_KIND)
+      .filter((g) => menu.GROUP_KIND[g] === kind)
+      .forEach((g) => {
+        assert.ok(!shown.includes(g),
+          g + ' is still offered in the menu editor, and nobody can order from it');
+      });
+    assert.ok(
+      !config.kitchen.stations.some((st) => running.includes(st.kind) && st.kind === kind),
+      'a station for ' + kind + ' is still on a running night',
+    );
+  });
+
+  // And it is dormant, not gone.
+  off.forEach((id) => {
+    assert.ok(config.nights[id], id + ' has been deleted rather than switched off');
+    assert.ok(config.nights[id].kinds.length, id + ' no longer declares what it serves');
+  });
+});
+
+/**
+ * Every editable group has to be claimed by exactly one kind.
+ *
+ * The editor is built by asking which groups the running kinds own, so a group
+ * nobody claims does not appear at all - which is how Pasta shapes and Pasta
+ * sides fell off the screen the first time this was wired up.
+ */
+test('every editable group belongs to a kind, and every claim to a real group', () => {
+  const editable = menu.EDITABLE_GROUPS.map(([g]) => g);
+
+  editable.forEach((g) => {
+    assert.ok(menu.GROUP_KIND[g],
+      g + ' is editable but belongs to no kind, so it vanishes from the editor');
+  });
+
+  Object.keys(menu.GROUP_KIND).forEach((g) => {
+    assert.ok(editable.includes(g),
+      g + ' is claimed by a kind but is not an editable group any more');
+  });
+
+  /*
+   * And the two maps have to agree. GROUPS_FOR says which group a kind builds
+   * from; GROUP_KIND says which kind owns it. A group built by pizza but
+   * claimed by pasta would keep showing on a pasta night with burger night
+   * off - switched off in name only.
+   */
+  Object.keys(menu.GROUPS_FOR).forEach((kind) => {
+    Object.values(menu.GROUPS_FOR[kind]).forEach((group) => {
+      if (!menu.GROUP_KIND[group]) return;
+      assert.strictEqual(
+        menu.GROUP_KIND[group], kind,
+        group + ' is built by ' + kind + ' but claimed by ' + menu.GROUP_KIND[group],
+      );
+    });
+  });
+
+  // Nothing is lost when everything runs.
+  const all = [...new Set(Object.values(menu.GROUP_KIND))];
+  assert.strictEqual(
+    menu.editableGroupsFor(all).length, menu.EDITABLE_GROUPS.length,
+    'with every kind running, the editor should offer every editable group',
+  );
+});
+
 // -------------------------------------------------- ticket layout
 
 test('a dish reads as rows, and every choice appears in one', () => {

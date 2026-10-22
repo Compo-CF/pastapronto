@@ -499,6 +499,55 @@ export const EDITABLE_GROUPS = [
 ];
 
 /**
+ * Which kind each editable group belongs to.
+ *
+ * GROUPS_FOR is the build-step map - which slot a kind fills from which group
+ * - and it leaves out the pasta shape and the sides, because neither is
+ * toggled the way a sauce or a topping is. Deriving the editor from it
+ * therefore dropped Pasta shapes and Pasta sides off the screen entirely,
+ * which is the editor's whole point.
+ *
+ * So the ownership is stated here instead, and the test holds it to
+ * EDITABLE_GROUPS in both directions: a group nobody claims would quietly
+ * disappear from the editor, and a claim for a group that no longer exists
+ * would sit here looking like it did something.
+ */
+export const GROUP_KIND = {
+  pastas: 'pasta',
+  sauces: 'pasta',
+  proteins: 'pasta',
+  toppings: 'pasta',
+  sides: 'pasta',
+
+  pizzaCrusts: 'pizza',
+  pizzaSauces: 'pizza',
+  pizzaCheeses: 'pizza',
+  pizzaProteins: 'pizza',
+  pizzaToppings: 'pizza',
+
+  burgerBuns: 'burger',
+  burgerPatties: 'burger',
+  burgerCheeses: 'burger',
+  burgerToppings: 'burger',
+  burgerSauces: 'burger',
+  burgerSides: 'burger',
+};
+
+/**
+ * The groups a manager is offered in the menu editor: only the ones a running
+ * night can serve.
+ *
+ * With burger night switched off, five lists of buns and patties were still
+ * there to scroll past on the way to the pasta. Turning the night back on
+ * brings its groups back with it, because this reads the kinds rather than a
+ * second list of what to hide.
+ */
+export function editableGroupsFor(kinds) {
+  const running = new Set(kinds || []);
+  return EDITABLE_GROUPS.filter(([group]) => running.has(GROUP_KIND[group]));
+}
+
+/**
  * What an item said before anybody renamed it.
  *
  * Captured once, at load, from the arrays themselves - so clearing an

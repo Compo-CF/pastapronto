@@ -6,7 +6,7 @@
  * service ever sees the venue's URLs, and it works with the wifi unplugged.
  */
 import {
-  config, serviceDate, nightList, nightById,
+  config, serviceDate, nightList, nightById, activeKinds,
   allTags, customTagList, tagIdFor, kindsForNight,
 } from './config.js';
 import * as menu from './menu.js';
@@ -845,7 +845,7 @@ const CATALOG = menu.catalog();
     var draft = state.menuDraft || {};
     var problems = menu.overrideProblems(draft);
 
-    var groups = menu.EDITABLE_GROUPS.map(function (pair) {
+    var groups = menu.editableGroupsFor(activeKinds()).map(function (pair) {
       var key = pair[0];
       var label = pair[1];
       var items = CATALOG[key] || [];

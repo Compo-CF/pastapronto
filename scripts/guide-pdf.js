@@ -12,7 +12,7 @@
  */
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import * as pdf from '../app/pdf.js';
-import { config } from '../app/config.js';
+import { config, activeKinds } from '../app/config.js';
 import { capLabel } from '../app/menu.js';
 
 /**
@@ -317,7 +317,12 @@ const groupBy = (rows, key, value) => rows.reduce((acc, r) => {
   return acc;
 }, []);
 
-const cookAreas = groupBy(config.kitchen.stations, 'area', (s) => s);
+// Only the stations a running night actually uses. With burger night off, the
+// guide was still drawing the grill and telling staff about a bench nobody
+// would be standing at.
+const runningStations = config.kitchen.stations
+  .filter((st) => activeKinds().includes(st.kind));
+const cookAreas = groupBy(runningStations, 'area', (s) => s);
 
 let sty = bandY + 64;
 cookAreas.forEach((g) => {

@@ -141,6 +141,21 @@ export const config = {
     },
   },
 
+  /*
+   * Which of those nights this venue is actually running.
+   *
+   * Burger night is built, tested and intact above - it is simply switched
+   * off. The club asked for it out of the way while they roll Neapolitan
+   * night out, because a manager meeting the app for the first time should
+   * not be choosing between two nights when only one of them is real to them,
+   * and a chef editing the menu should not be scrolling past burger buns.
+   *
+   * Turning it back on is adding 'burger' to this list. Nothing else has to
+   * change: the menu groups, the cook times, the grill station and the close-
+   * out all key off the kinds a night declares, so they come back with it.
+   */
+  activeNights: ['neapolitan'],
+
   // What the app runs as until someone says otherwise, and what it falls back
   // to when the setting cannot be read.
   defaultNight: 'neapolitan',
@@ -269,11 +284,25 @@ export function kindsForNight(id) {
   return nightById(id).kinds.slice();
 }
 
-/** Every night, for a chooser. */
+/** Every night a manager may choose - the ones this venue is running. */
 export function nightList() {
-  return Object.values(config.nights).map((n) => ({
-    id: n.id, label: n.label, kinds: n.kinds.slice(),
-  }));
+  return config.activeNights
+    .map((id) => config.nights[id])
+    .filter(Boolean)
+    .map((n) => ({ id: n.id, label: n.label, kinds: n.kinds.slice() }));
+}
+
+/**
+ * Every kind any running night serves.
+ *
+ * What the menu editor offers and what the floor guide draws are both this,
+ * rather than everything the app can cook: a group nobody can order from is
+ * only ever a thing to scroll past.
+ */
+export function activeKinds() {
+  const out = new Set();
+  nightList().forEach((n) => n.kinds.forEach((k) => out.add(k)));
+  return [...out];
 }
 
 /** Service date string (YYYY-MM-DD) honouring the 4am roll. */
