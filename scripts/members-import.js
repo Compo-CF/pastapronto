@@ -53,23 +53,23 @@ function token() {
     // One string, not a command plus arguments: with a shell in play Node
     // only concatenates them anyway, and says so loudly.
     out = execSync('gcloud auth print-access-token', {
-      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      // stdin and stderr are the terminal's, not ours. gcloud periodically
+      // asks you to re-prove who you are, and it asks on stderr and listens
+      // on stdin - capture either and it cannot ask, so it fails instead with
+      // 'cannot prompt during non-interactive execution' even though you are
+      // sitting right there. Only stdout is ours, because that is the token.
+      stdio: ['inherit', 'pipe', 'inherit'],
     }).trim();
-  } catch (err) {
-    const said = String(err.stderr || err.message);
-    // gcloud can ask you to re-prove who you are, and it can only ask a
-    // terminal. Run this script yourself rather than through something that
-    // cannot answer - that is the whole of the fix, not a missing login.
-    if (/non-interactive|[Rr]eauthentication/.test(said)) {
-      throw new Error('gcloud needs you to re-authenticate, and it can only ask '
-        + 'an interactive terminal.\nRun this script from your own PowerShell '
-        + 'window and answer the prompt.');
-    }
-    if (/ENOENT|not recognized|not found/.test(said)) {
-      throw new Error('gcloud is not on PATH for this shell. Open a new terminal '
-        + 'after installing it, or set FIRESTORE_TOKEN.');
-    }
-    throw new Error('Could not get a token from gcloud:\n' + said.trim().split('\n').slice(0, 4).join('\n'));
+  } catch {
+    // gcloud has already printed its own reason above - we gave it the
+    // terminal precisely so it could. Repeating a guess at it here, from a
+    // stderr we deliberately no longer capture, is how this script spent two
+    // rounds telling you to run a login you had already run.
+    throw new Error('gcloud would not give us a token; its reason is printed above.\n'
+      + 'If it asked you to re-authenticate, run this in the same window and '
+      + 'answer it:\n\n  gcloud auth print-access-token\n\n'
+      + 'then try again. Or set FIRESTORE_TOKEN if you have a token already.');
   }
 
   if (!out) throw new Error('gcloud returned an empty token. Run `gcloud auth login`.');
