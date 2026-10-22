@@ -680,5 +680,90 @@ function flows() {
 if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('cover-scenarios.js')) {
   if (CSV) csv();
   else if (process.argv.includes('--simulate')) simulate();
-  else { report(); simulate(); flows(); }
+  else if (!process.argv.includes('--report-json')) { report(); simulate(); flows(); }
+}
+/**
+ * Everything the written report quotes, in one object. The report embeds this
+ * rather than restating numbers, so a figure on the page and a figure from a
+ * run cannot drift apart.
+ */
+function reportData() {
+  const MIXES = [
+    { key: 'careful', label: 'Careful room', split: 0.10, share: 0.03 },
+    { key: 'typical', label: 'Typical room', split: 0.25, share: 0.08 },
+    { key: 'loose', label: 'Loose room', split: 0.45, share: 0.15 },
+  ];
+  const PASSES = [
+    { key: 'exact', label: 'Always written the same way', typoRate: 0, names: true },
+    { key: 'typo15', label: '15% written differently', typoRate: 0.15, names: true },
+    { key: 'typo35', label: '35% written differently', typoRate: 0.35, names: true },
+    { key: 'none', label: 'Nobody types a name', typoRate: 0, names: false },
+  ];
+  const RUNS = 400;
+
+  const score = (mix, build) => {
+    let wrong = 0; let total = 0; let got = 0; let want = 0;
+    for (let i = 0; i < RUNS; i += 1) {
+      const n = night(i + 1, { splitRate: mix.split, shareRate: mix.share,
+        names: mix.names !== false, typoRate: mix.typoRate || 0 });
+      const charged = build(n);
+      n.memberTruth.forEach((w, id) => {
+        const h = charged.get(id) || 0;
+        total += 1; if (h !== w) wrong += 1;
+        got += h; want += w;
+      });
+    }
+    return {
+      wrongPct: Math.round((wrong / total) * 1000) / 10,
+      netPct: Math.round(((got - want) / want) * 1000) / 10,
+    };
+  };
+
+  const models = {};
+  PASSES.forEach((pass) => {
+    models[pass.key] = { label: pass.label, byMix: {} };
+    MIXES.forEach((mix) => {
+      const m = { ...mix, names: pass.names, typoRate: pass.typoRate };
+      models[pass.key].byMix[mix.key] = Object.fromEntries(
+        Object.keys(PER_MEMBER).map((k) => [k, score(m, (n) => PER_MEMBER[k](n.orders))]),
+      );
+    });
+  });
+
+  const FLOWCOLS = {
+    today: (n) => FLOWS.today(n),
+    askOnce: (n) => FLOWS.askOnce(n),
+    tableAware70: (n) => FLOWS.askOnceTableAware(n, 0.7),
+    tableAware95: (n) => FLOWS.askOnceTableAware(n, 0.95),
+  };
+  const flowsOut = {};
+  MIXES.forEach((mix) => {
+    flowsOut[mix.key] = Object.fromEntries(
+      Object.entries(FLOWCOLS).map(([k, fn]) => [k, score({ ...mix, names: true }, fn)]),
+    );
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    runsPerMix: RUNS,
+    mixes: MIXES,
+    scenarios: results.map((r) => ({
+      id: r.id, title: r.title, story: r.story, truth: r.truth,
+      orders: r.orders, liveOrders: r.liveOrders, items: r.items,
+      members: r.members, covers: r.covers, variance: r.variance,
+      models: r.models,
+      acts: r.acts.map((a) => ({
+        member: a.member, guests: a.guests, tag: a.tag || null,
+        kind: a.kind || 'pasta', plates: (a.lines || []).length,
+        status: a.status || 'live',
+      })),
+      rows: r.rows,
+    })),
+    models,
+    flows: flowsOut,
+  };
+}
+
+if (process.argv.includes('--report-json')) {
+  console.log(JSON.stringify(reportData(), null, 1));
 }
