@@ -914,7 +914,7 @@ function runShipped(scenario, opts) {
     let party = declares[a.member];
     if (party == null) party = a.guests;
     if (shared && ((i * 2654435761) % 1000) / 1000 < misread) party = tableTotal;
-    party = Math.min(party, config.order.maxGuests);
+    party = Math.min(party, config.order.maxPartySize);
     return place(Object.assign({}, a, { party }), a.at == null ? idx * 2 : a.at);
   });
 }

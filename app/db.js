@@ -462,8 +462,8 @@ export async function setParty(memberNumber, partySize, date) {
   const n = order.normalizeMemberNumber(memberNumber);
   const size = Number(partySize);
   if (!n) throw new Error('A party needs a member number.');
-  if (!Number.isFinite(size) || size < 1 || size > config.order.maxGuests) {
-    throw new Error('A party is 1 to ' + config.order.maxGuests + ' people.');
+  if (!Number.isFinite(size) || size < 1 || size > config.order.maxPartySize) {
+    throw new Error('A party is 1 to ' + config.order.maxPartySize + ' people.');
   }
   await ready();
   const on = date || serviceDate();

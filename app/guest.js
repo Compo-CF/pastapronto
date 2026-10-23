@@ -569,6 +569,22 @@ import {
       </button>`);
     }
 
+    // A private party is bigger than a ticket. The tiles stop at the number
+    // of plates one order can carry, because that is what they mean on a
+    // later trip - so a party over that gets a box of its own, and only on
+    // the trip where the question is about the party at all.
+    var bigParty = known ? '' : html`<div class="card stack bigparty">
+      <div>
+        <strong>${t('guest.party.big.title', { n: state.boot.limits.maxGuests })}</strong>
+        <p class="muted" style="margin:4px 0 8px">${t('guest.party.big.sub')}</p>
+      </div>
+      <input class="input" id="bigParty" type="number" inputmode="numeric"
+        min="${state.boot.limits.maxGuests + 1}" max="${state.boot.limits.maxPartySize}"
+        value="${state.partySize > state.boot.limits.maxGuests ? state.partySize : ''}"
+        placeholder="${t('guest.party.big.hint', { max: state.boot.limits.maxPartySize })}"
+        data-act="setBigParty" aria-label="${t('guest.party.big.title', { n: state.boot.limits.maxGuests })}">
+    </div>`;
+
     var allergenPanel = state.mode === 'pro' || state.avoid.length > 0
       ? html`<div class="card stack">
           <div>
@@ -613,6 +629,7 @@ import {
       <div class="stack">
         ${raw(party)}
         <div class="tiles tiles-sm">${counts}</div>
+        ${raw(bigParty)}
         ${raw(allergenPanel)}
       </div>`;
   }
@@ -1421,6 +1438,20 @@ import {
       i18n.setLang('guest', el.dataset.id);
     },
 
+    setBigParty: function (el) {
+      var max = state.boot.limits.maxPartySize;
+      var n = Math.floor(Number(el.value));
+      if (!Number.isFinite(n) || n <= state.boot.limits.maxGuests) {
+        // Cleared, or back inside what the tiles cover: let the tiles speak.
+        state.partySize = state.guestCount;
+        return;
+      }
+      state.partySize = Math.min(n, max);
+      // The order itself still carries only what the kitchen can build.
+      state.guestCount = Math.min(state.guestCount, state.boot.limits.maxGuests);
+      // No re-render: it would take the focus out of the box mid-type.
+    },
+
     togglePasta: function (el) {
       var bowl = currentBowl();
       var id = el.dataset.id;
@@ -1699,6 +1730,7 @@ import {
       },
       limits: {
         maxGuests: config.order.maxGuests,
+        maxPartySize: config.order.maxPartySize,
         maxSaucesPerBowl: config.order.maxSaucesPerBowl,
         maxProteinsPerItem: config.order.maxProteinsPerItem,
         maxSidesPerBowl: config.order.maxSidesPerBowl,

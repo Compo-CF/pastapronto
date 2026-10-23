@@ -182,6 +182,11 @@ export function validateDraft(draft, cfg, unavailable = []) {
   }
 
   const guestCount = Number(draft.guestCount);
+  const party = draft.partySize;
+  if (party != null && (!Number.isInteger(Number(party)) || Number(party) < 1
+    || Number(party) > cfg.order.maxPartySize)) {
+    errors.push(`A party is 1 to ${cfg.order.maxPartySize} people.`);
+  }
   if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > cfg.order.maxGuests) {
     errors.push(`Guest count must be between 1 and ${cfg.order.maxGuests}.`);
   }

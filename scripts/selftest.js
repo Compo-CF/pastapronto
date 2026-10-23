@@ -1911,7 +1911,12 @@ test('the rules agree with config about how big a party can be', () => {
 
   assert.ok(partyCaps.length >= 1, 'no partySize cap in firestore.rules - parties/ is unbounded');
   guestCaps.forEach((n) => assert.strictEqual(n, cap, 'a guestCount cap in firestore.rules'));
-  partyCaps.forEach((n) => assert.strictEqual(n, cap, 'a partySize cap in firestore.rules'));
+  // A party is bounded by the BILLING cap, not the plate cap. They were the
+  // same number until a party of fourteen billed as twelve.
+  partyCaps.forEach((n) => assert.strictEqual(n, config.order.maxPartySize,
+    'a partySize cap in firestore.rules'));
+  assert.ok(config.order.maxPartySize > config.order.maxGuests,
+    'the party cap must exceed the per-order cap, or it is not a separate limit');
   lineCaps.forEach((n) => assert.strictEqual(n, cap, 'a lines.size cap in firestore.rules'));
 });
 
@@ -4223,6 +4228,79 @@ test('signing in as a guest never overwrites a staff session', () => {
   assert.ok(grace < timeout,
     'the guest fallback (' + grace + 'ms) must fire before the auth timeout ('
     + timeout + 'ms), or a device with no session to restore never signs in');
+});
+
+test('a private party bills for everyone, not for one ticket', () => {
+  // S6: fourteen on one membership. An order carries twelve plates at most,
+  // so the party used to be billed as twelve - the cap meant for the pass
+  // was deciding the bill.
+  assert.ok(config.order.maxPartySize > config.order.maxGuests,
+    'the party cap must be its own number, or this is the same bug');
+
+  const trip = (plates, party, ticket) => order.buildOrder({
+    memberNumber: '1794', memberName: 'Compofelice', memberStatus: 'verified',
+    guestCount: plates, partySize: party,
+    lines: Array.from({ length: plates }, (_, i) => ({
+      guestLabel: 'G' + i, pasta: 'penne', sauces: ['marinara'],
+      proteins: [], toppings: [], sides: [], portion: 'regular', spice: 'mild',
+    })),
+  }, { ticketNo: ticket, station: 'pasta-1', queueDepth: 1, tag: null,
+    serviceDate: '2026-11-05', now: new Date('2026-11-05T18:00:00Z') });
+
+  // Fourteen people, served as two tickets of seven, on one account.
+  const a = trip(7, 14, 1);
+  const b = trip(7, 14, 2);
+  b.submittedAt = '2026-11-05T18:08:00.000Z';
+
+  assert.strictEqual(order.billableCovers([a, b]), 14, 'fourteen people, fourteen charges');
+  assert.strictEqual(order.memberRollup([a, b])[0].items, 14, 'and fourteen plates');
+});
+
+test('the party cap bounds the party, and the plate cap bounds the ticket', () => {
+  // Two limits that mean different things. Letting the billing one drift up
+  // to the kitchen one is how the bug happened; letting the kitchen one drift
+  // up to the billing one would put 60 plates on a single chit.
+  const draft = {
+    memberNumber: '1794', guestCount: 2, partySize: 14,
+    lines: [
+      { guestLabel: 'A', pasta: 'penne', sauces: ['marinara'], proteins: [], toppings: [], sides: [], portion: 'regular' },
+      { guestLabel: 'B', pasta: 'penne', sauces: ['marinara'], proteins: [], toppings: [], sides: [], portion: 'regular' },
+    ],
+  };
+  assert.deepStrictEqual(order.validateDraft(draft, config, []), [],
+    'a party larger than one ticket must be allowed');
+
+  const tooBig = order.validateDraft(
+    { ...draft, partySize: config.order.maxPartySize + 1 }, config, [],
+  );
+  assert.ok(tooBig.some((e) => /party is 1 to/i.test(e)),
+    'a party beyond the cap must be refused: ' + JSON.stringify(tooBig));
+
+  // And the plate cap is untouched by any of this.
+  const tooManyPlates = order.validateDraft(
+    { ...draft, guestCount: config.order.maxGuests + 1 }, config, [],
+  );
+  assert.ok(tooManyPlates.length > 0, 'the per-order plate cap must still bite');
+});
+
+test('a party bigger than a ticket has somewhere to be typed', () => {
+  // Raising the cap achieves nothing if the tiles stop at twelve and there is
+  // no other way in.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  assert.ok(/maxPartySize: config\.order\.maxPartySize/.test(src),
+    'the screen is never told the party cap');
+  assert.ok(src.includes('id="bigParty"'), 'there is no control for a large party');
+  assert.ok(src.includes('setBigParty: function (el) {'), 'and nothing handles it');
+
+  const handler = src.slice(src.indexOf('setBigParty: function (el) {'));
+  const body = handler.slice(0, handler.indexOf('\n    },'));
+  assert.ok(/maxPartySize/.test(body), 'the box is not bounded by the party cap');
+  assert.ok(/Math\.min\(state\.guestCount, state\.boot\.limits\.maxGuests\)/.test(body),
+    'a large party must not put more plates on one ticket than the pass can build');
+
+  ['guest.party.big.title', 'guest.party.big.sub', 'guest.party.big.hint'].forEach((k) => {
+    assert.ok(STRINGS.en[k] && STRINGS.es[k], k + ' is missing a language');
+  });
 });
 
 test('the member roster never reaches git or the web', () => {

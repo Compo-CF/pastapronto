@@ -73,7 +73,19 @@ export const config = {
   order: {
     // The club seats a maximum of 12 to a table, so a ticket can never be for
     // more. This is the number that becomes covers at close-out.
+    // How many plates one order may carry. A kitchen limit: it is what the
+    // pass can build and run as a single ticket.
     maxGuests: 12,
+
+    // How many people one membership may be CHARGED for in a night. A billing
+    // figure, not a kitchen one, which is why it is deliberately not the same
+    // number: a private party of fourteen eats across several tickets and
+    // settles on one account. While this shared maxGuests, a party over twelve
+    // billed as twelve and said nothing about the two it dropped.
+    //
+    // Bounded rather than open, because firestore.rules has to bound it and a
+    // party of four hundred is a typo or an attack, not a booking.
+    maxPartySize: 60,
     // Toppings have no hard cap. The club was explicit about this: a member who
     // wants everything on it should get everything on it, and being refused by
     // a screen is a worse experience than a crowded bowl. What is left is a

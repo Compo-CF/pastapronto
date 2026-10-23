@@ -106,7 +106,7 @@ service cloud.firestore {
       allow write: if signedIn()
         && request.resource.data.partySize is int
         && request.resource.data.partySize >= 1
-        && request.resource.data.partySize <= 12
+        && request.resource.data.partySize <= 60
         && request.resource.data.serviceDate is string
         && request.resource.data.memberNumber is string;
     }
