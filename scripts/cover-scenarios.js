@@ -735,6 +735,9 @@ function reportData() {
     askOnce: (n) => FLOWS.askOnce(n),
     tableAware70: (n) => FLOWS.askOnceTableAware(n, 0.7),
     tableAware95: (n) => FLOWS.askOnceTableAware(n, 0.95),
+    scoped30: (n) => FLOWS.askOnceAccountScoped(n, 0.30),
+    scoped15: (n) => FLOWS.askOnceAccountScoped(n, 0.15),
+    scoped05: (n) => FLOWS.askOnceAccountScoped(n, 0.05),
   };
   const flowsOut = {};
   MIXES.forEach((mix) => {
@@ -763,6 +766,84 @@ function reportData() {
     flows: flowsOut,
   };
 }
+
+
+/**
+ * A fifth flow, and the one that needs no idea of a seating.
+ *
+ * S4 happens because two memberships at one table both read "how many are
+ * eating" as a question about the TABLE. Detecting that in the app means
+ * knowing a table has turned over, which nothing here can do: an order carries
+ * a tag and two timestamps, and config records seats per area rather than per
+ * table, so even "more covers than chairs" is not computable.
+ *
+ * So scope the question to the account instead of the table - "how many people
+ * are you ordering for, whose meals go on your account" - and the double count
+ * cannot form. `misread` is the share who answer for the whole table anyway.
+ */
+FLOWS.askOnceAccountScoped = (n, misread) => {
+  const m = new Map();
+  let i = 0;
+  n.memberTruth.forEach((want, id) => {
+    i += 1;
+    if (!n.shared.has(id)) { m.set(id, want); return; }
+    const confused = ((i * 2654435761) % 1000) / 1000 < misread;
+    m.set(id, confused ? want * 2 : want);
+  });
+  return m;
+};
+
+function scoped() {
+  const MIXES = [
+    { key: 'careful', label: 'careful', split: 0.10, share: 0.03 },
+    { key: 'typical', label: 'typical', split: 0.25, share: 0.08 },
+    { key: 'loose', label: 'loose', split: 0.45, share: 0.15 },
+  ];
+  const RUNS = 400;
+  const pad = (s, w) => String(s).padEnd(w);
+  const num = (s, w) => String(s).padStart(w);
+
+  const COLS = [
+    ['today', (n) => FLOWS.today(n)],
+    ['ask once, table-worded', (n) => FLOWS.askOnce(n)],
+    ['account-worded, 30% misread', (n) => FLOWS.askOnceAccountScoped(n, 0.30)],
+    ['account-worded, 15% misread', (n) => FLOWS.askOnceAccountScoped(n, 0.15)],
+    ['account-worded, 5% misread', (n) => FLOWS.askOnceAccountScoped(n, 0.05)],
+  ];
+
+  console.log('');
+  console.log('  WORDING THE QUESTION BY ACCOUNT INSTEAD OF BY TABLE');
+  console.log('  no table state, no turnover detection, no seat counts');
+  console.log('');
+  console.log('  ' + pad('mix', 10) + COLS.map(([l]) => num(l, 30)).join(''));
+  console.log('  ' + '-'.repeat(160));
+  MIXES.forEach((mix) => {
+    const wrong = COLS.map(() => [0, 0]);
+    const net = COLS.map(() => [0, 0]);
+    for (let i = 0; i < RUNS; i += 1) {
+      const n = night(i + 1, { splitRate: mix.split, shareRate: mix.share, names: true });
+      COLS.forEach(([, fn], c) => {
+        const got = fn(n);
+        n.memberTruth.forEach((want, id) => {
+          const had = got.get(id) || 0;
+          wrong[c][1] += 1;
+          if (had !== want) wrong[c][0] += 1;
+          net[c][0] += had; net[c][1] += want;
+        });
+      });
+    }
+    console.log('  ' + pad(mix.label, 10) + COLS.map((col, c) => {
+      const p = Math.round((wrong[c][0] / wrong[c][1]) * 1000) / 10;
+      const d = net[c][0] - net[c][1];
+      const np = Math.round((d / net[c][1]) * 1000) / 10;
+      return num(p + '% (net ' + (d >= 0 ? '+' : '') + np + '%)', 30);
+    }).join(''));
+  });
+  console.log('');
+}
+
+if (process.argv.includes('--scoped')) scoped();
+
 
 if (process.argv.includes('--report-json')) {
   console.log(JSON.stringify(reportData(), null, 1));
