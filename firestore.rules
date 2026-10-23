@@ -38,6 +38,34 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    /**
+     * A real member of staff, as opposed to a phone at a table.
+     *
+     * Every visitor here is signed in - the guest app signs itself in
+     * anonymously on load - so signedIn() never distinguished the kitchen
+     * rail from a member who guessed the address. The passcode on the
+     * manager screen never could either: it is checked in the browser and
+     * it ships in config.js, in a public repo.
+     *
+     * So staff is an allow-list of auth uids. A device signs in with a real
+     * account, that account has a document here, and the rules can finally
+     * tell the two apart. Adding or removing a device is adding or removing
+     * one document, which is a thing a manager can be talked through.
+     */
+    function staff() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid));
+    }
+
+    // Who counts as staff. A device may read its own row to tell whether it
+    // is signed in as staff; nobody may list the collection, and nobody may
+    // write it from a browser at all - rows are added with admin
+    // credentials, which is the point of them.
+    match /staff/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+
     // Member directory: 700-odd real families, keyed by club account number.
     //
     // `read` is split, because the two halves are not the same request. The
@@ -90,8 +118,12 @@ service cloud.firestore {
     // loose enough to admit anything - which is how the 86 list would end up
     // writable as a map of prices.
     match /config/{docId} {
+      // Read by every phone in the room - this is the menu, the 86 list and
+      // which night is running. Written only by the screens behind a
+      // sign-in: a guest could otherwise 86 every ingredient in the
+      // building, or rename the menu, between courses.
       allow read: if signedIn();
-      allow write: if signedIn() && (
+      allow write: if staff() && (
         (docId == 'availability'
           && request.resource.data.unavailable is list
           && request.resource.data.unavailable.size() <= 100)
@@ -129,6 +161,14 @@ service cloud.firestore {
         // each entry's shape on the way out, because a rule that walked a
         // list of maps would be longer than the thing it protects and no
         // stricter where it matters.
+        // How many tickets are ahead of a new order. The guest screen used
+        // to count this by listing the whole service, which is the one read
+        // a table has no business making. The rail publishes it instead.
+        (docId == 'queue'
+          && request.resource.data.depth is int
+          && request.resource.data.depth >= 0
+          && request.resource.data.depth <= 500)
+        ||
         (docId == 'tags'
           && request.resource.data.custom is list
           && request.resource.data.custom.size() <= 60)
@@ -146,9 +186,18 @@ service cloud.firestore {
     // Ticket-number allocation, one document per service date.
     match /counters/{serviceDate} {
       allow read: if signedIn();
-      allow write: if signedIn()
+      // Placing an order takes the next ticket number, so a guest has to be
+      // able to move this - but only forwards, and only by one. Anything
+      // else (a reset to zero on "clear today") is staff work. Left open,
+      // a guest could set it back and collide every ticket after.
+      allow create: if (signedIn() || staff())
         && request.resource.data.lastTicket is int
-        && request.resource.data.lastTicket >= 0;
+        && request.resource.data.lastTicket == 1;
+      allow update: if staff()
+        ? request.resource.data.lastTicket is int
+          && request.resource.data.lastTicket >= 0
+        : request.resource.data.lastTicket is int
+          && request.resource.data.lastTicket == resource.data.lastTicket + 1;
     }
 
     match /orders/{orderId} {
@@ -219,7 +268,12 @@ service cloud.firestore {
           && after.events.size() >= resource.data.events.size();
       }
 
-      allow read: if signedIn();
+      // A guest tracks the ticket they just placed, whose id they hold and
+      // nobody else can guess. Listing is a different request: it is the
+      // whole service - every member number and name, what they ate, where
+      // they sat - and it is the rail that needs it, never a table.
+      allow get: if signedIn();
+      allow list: if staff();
       // A closed kitchen refuses food, not just on the guest's screen. The
       // screen check is a courtesy - it explains - but a phone that had the
       // page open when the kitchen closed would otherwise still send.
@@ -233,9 +287,11 @@ service cloud.firestore {
       }
 
       allow create: if signedIn() && validNewOrder() && kitchenOpen();
-      allow update: if signedIn() && validUpdate();
-      // Deletes are the manager's "clear today" button.
-      allow delete: if signedIn();
+      // Advancing a ticket is kitchen work. A guest must not be able to
+      // accept their own order, nor void someone else to the front.
+      allow update: if staff() && validUpdate();
+      // "Clear today" on the manager screen, and nothing else.
+      allow delete: if staff();
     }
   }
 }

@@ -974,15 +974,12 @@ import {
    * from Firestore is how deep the queue is right now.
    */
   async function refreshEstimate() {
-    var depth = 0;
-    try {
-      var day = await db.getDay();
-      depth = day.filter(function (o) {
-        return o.status === 'queued' || o.status === 'cooking';
-      }).length;
-    } catch (err) {
-      // Offline: quote the cook time alone rather than blocking the review.
-    }
+    // The rail publishes this. A phone at a table used to work it out by
+    // listing the whole service, which meant every member number and name
+    // in the room was readable from any guest screen. readQueueDepth()
+    // returns 0 when nobody is publishing, and the promise falls back to
+    // the cook time alone - same as it always did when offline.
+    var depth = await db.readQueueDepth();
     estimate = {
       queueDepth: depth,
       cookEstimateSec: cooktime.orderCookSec(state.bowls),

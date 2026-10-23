@@ -16,7 +16,7 @@ import { art } from './art.js';
 import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
 import * as i18n from './i18n.js';
 import { buildReportPdf } from './report-pdf.js';
-import { html, raw, mmss, escapeHtml, toast, requireManager } from './ui.js';
+import { html, raw, mmss, escapeHtml, toast, requireManager, requireStaffDevice } from './ui.js';
 
 const el = {
   body: document.getElementById('reportBody'),
@@ -729,6 +729,10 @@ async function boot() {
   if (!db.isConfigured) {
     throw new Error('Firebase is not configured yet - see app/firebase-config.js.');
   }
+  // The rules hand this screen nothing until the device proves it is
+  // staff, so prove it before asking anyone for a code.
+  await requireStaffDevice(db);
+
   if (!(await requireManager())) {
     throw new Error('Manager code required.');
   }

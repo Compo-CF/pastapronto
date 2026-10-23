@@ -219,6 +219,93 @@ export async function keepScreenAwake() {
 // ------------------------------------------------------------ manager gate
 
 /**
+ * Prove this device is a staff device, once, and then never again.
+ *
+ * This is not the manager code. That code is checked in the browser and ships
+ * in config.js in a public repo, so it keeps a member who guessed the address
+ * off the screen and nothing more - the database could never see it. This
+ * sign-in is a real account, and it is what firestore.rules looks for before
+ * it will hand over the service.
+ *
+ * Firebase remembers it per device, so an iPad is set up once at the start of
+ * a season and nobody is prompted again. That matters: a prompt on every wake
+ * is the one everybody learns to tap past.
+ *
+ * Resolves only when the device is staff. There is no "continue anyway",
+ * because continuing anyway means a screen that loads and then shows nothing,
+ * with nothing on it to say why.
+ */
+export function requireStaffDevice(db) {
+  return new Promise((resolve) => {
+    let overlay = null;
+
+    const show = () => {
+      if (overlay) return;
+      overlay = document.createElement('div');
+      overlay.className = 'gate';
+      overlay.innerHTML = [
+        '<form class="gate-card" autocomplete="on">',
+        '  <h1 class="gate-title">Set this device up</h1>',
+        '  <p class="gate-sub">Staff screens sign in once. This device stays',
+        '     signed in, so you should only see this when it is new or has',
+        '     been wiped.</p>',
+        '  <input class="gate-input" type="email" autocomplete="username"',
+        '         aria-label="Staff email" placeholder="Staff email">',
+        '  <input class="gate-input" type="password" autocomplete="current-password"',
+        '         aria-label="Password" placeholder="Password">',
+        '  <p class="gate-error" role="alert" hidden></p>',
+        '  <button class="gate-go" type="submit">Sign in</button>',
+        '</form>',
+      ].join('');
+
+      const form = overlay.querySelector('form');
+      const fields = overlay.querySelectorAll('.gate-input');
+      const email = fields[0];
+      const password = fields[1];
+      const error = overlay.querySelector('.gate-error');
+      const go = overlay.querySelector('.gate-go');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        error.hidden = true;
+        go.disabled = true;
+        go.textContent = 'Signing in...';
+        try {
+          await db.signInStaff(email.value, password.value);
+          overlay.remove();
+          overlay = null;
+          resolve(true);
+        } catch (err) {
+          // Firebase answers "auth/invalid-credential" for a wrong password
+          // and for an account that does not exist alike, so do not pretend
+          // to know which it was.
+          error.textContent = /not set up as a staff device/.test(err.message)
+            ? err.message
+            : 'That did not work. Check the address and the password.';
+          error.hidden = false;
+          password.value = '';
+          go.disabled = false;
+          go.textContent = 'Sign in';
+        }
+      });
+
+      document.body.appendChild(overlay);
+      email.focus();
+    };
+
+    db.watchStaffStatus((s) => {
+      if (!s.checked) return;
+      if (s.signedIn) {
+        if (overlay) { overlay.remove(); overlay = null; }
+        resolve(true);
+        return;
+      }
+      show();
+    });
+  });
+}
+
+/**
  * A lock on the manager and close-out screens.
  *
  * Only those two. The rail and the window are mounted in the kitchen, read

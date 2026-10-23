@@ -18,6 +18,8 @@
  *   config/service           { night, open, openFor } - the night, and whether
  *                            the kitchen is taking orders (openFor is the
  *                            service date that `open` applies to)
+ *   staff/{uid}              presence = this account may run a staff screen
+ *   config/queue             { depth, serviceDate, at } - published by the rail
  *   parties/{date}_{member}  { serviceDate, memberNumber, partySize } - how
  *                            many a membership is feeding tonight, asked once
  *
@@ -29,6 +31,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getAuth, signInAnonymously, onAuthStateChanged, connectAuthEmulator,
+  signInWithEmailAndPassword, signOut,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
@@ -278,6 +281,129 @@ export function watchServiceNight(cb, { onError } = {}) {
       if (onError) onError(err);
     },
   );
+}
+
+// ----------------------------------------------------------------- staff
+
+/**
+ * Whether this device is signed in as staff.
+ *
+ * Every screen signs in anonymously on load, so being signed in has never
+ * distinguished the kitchen rail from a member who guessed the address. A
+ * staff device signs in again, with a real account, and the rules look for
+ * that account in staff/{uid}.
+ *
+ * It is per device and it persists: a manager sets an iPad up once and nobody
+ * is asked again. That is deliberate - a prompt on every wake is the thing
+ * everybody learns to tap past.
+ */
+let staffState = { signedIn: false, email: '', checked: false };
+const staffWatchers = new Set();
+
+function tellStaffWatchers() {
+  staffWatchers.forEach((cb) => {
+    try { cb(staffState); } catch (err) { console.error('[db] staff watcher threw:', err); }
+  });
+}
+
+/** Does this uid have a row in staff/? One get, and it may legitimately fail. */
+async function readStaffRow(user) {
+  if (!user || user.isAnonymous) return false;
+  try {
+    const snap = await getDoc(doc(db, 'staff', user.uid));
+    return snap.exists();
+  } catch {
+    // Refused or offline. Treat as not-staff: a screen that cannot prove it is
+    // staff should say so rather than show an empty rail and no reason.
+    return false;
+  }
+}
+
+onAuthStateChanged(auth, async (user) => {
+  const signedIn = await readStaffRow(user);
+  staffState = {
+    signedIn,
+    email: user && !user.isAnonymous ? (user.email || '') : '',
+    checked: true,
+  };
+  tellStaffWatchers();
+});
+
+export function watchStaffStatus(cb) {
+  staffWatchers.add(cb);
+  if (staffState.checked) cb(staffState);
+  return () => staffWatchers.delete(cb);
+}
+
+export function staffStatus() {
+  return staffState;
+}
+
+/**
+ * Sign this device in as staff.
+ *
+ * The account is a real Firebase Auth user that a manager created, and its uid
+ * has to have been added to staff/ with admin credentials. Signing in with an
+ * account that is not on that list succeeds as far as Firebase is concerned
+ * and still cannot read the rail, so say so plainly rather than leaving
+ * somebody staring at an empty screen.
+ */
+export async function signInStaff(email, password) {
+  const cred = await signInWithEmailAndPassword(auth, String(email || '').trim(), password);
+  const ok = await readStaffRow(cred.user);
+  if (!ok) {
+    await signOut(auth);
+    throw new Error('That account is not set up as a staff device yet.');
+  }
+  return true;
+}
+
+/** Hand the device back. Drops to anonymous, which is what a guest is. */
+export async function signOutStaff() {
+  await signOut(auth);
+  await signInAnonymously(auth);
+}
+
+// ----------------------------------------------------------- queue depth
+
+const queueRef = doc(db, 'config', 'queue');
+
+/**
+ * How many tickets are ahead of a new order.
+ *
+ * The guest screen used to work this out by listing the whole service, which
+ * is the one read a phone at a table has no business making - it is every
+ * member number and name in the room. The rail already holds that list live,
+ * so it publishes the single number instead.
+ */
+export async function publishQueueDepth(depth) {
+  const n = Math.max(0, Math.min(500, Math.round(Number(depth) || 0)));
+  try {
+    await setDoc(queueRef, {
+      depth: n, serviceDate: serviceDate(), at: serverTimestamp(),
+    }, { merge: true });
+  } catch {
+    // A rail that cannot publish is not a reason to stop cooking. The guest
+    // falls back to quoting the cook time alone.
+  }
+  return n;
+}
+
+/** Today's depth, or 0 when nobody is publishing it. */
+export async function readQueueDepth() {
+  await ready();
+  try {
+    const snap = await getDoc(queueRef);
+    if (!snap.exists()) return 0;
+    const data = snap.data();
+    // Yesterday's depth would make tonight's first order quote a queue that
+    // went home hours ago.
+    if (data.serviceDate !== serviceDate()) return 0;
+    const n = Number(data.depth);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
 }
 
 // --------------------------------------------------------------- parties

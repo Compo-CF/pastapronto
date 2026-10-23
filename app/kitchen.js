@@ -22,6 +22,7 @@ import { glossNote } from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
   remember, recall, chime, unlockAudio, toast, keepScreenAwake,
+  requireStaffDevice,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
@@ -752,6 +753,14 @@ const CATALOG = menu.catalog();
     render();
     tick();
 
+    // The rail already holds the whole service, so it is the one screen
+    // that can say how long the queue is without anyone else reading it.
+    // A guest phone used to count this itself, which meant listing every
+    // ticket in the room from a table.
+    db.publishQueueDepth(orders.filter(function (o) {
+      return o.status === 'queued' || o.status === 'cooking';
+    }).length);
+
     if (!state.firstLoadDone) {
       state.firstLoadDone = true;
       return; // never chime through the backlog on first paint
@@ -780,6 +789,11 @@ const CATALOG = menu.catalog();
 
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
+
+    // Before anything else: the rules hand a screen nothing until the
+    // device can prove it is staff, so an unproven screen would load and
+    // then sit empty with no clue why.
+    await requireStaffDevice(db);
     // The lane headings live in the HTML so the rail paints before JS runs.
     [['queued', 'kitchen.lane.queued'], ['building', 'kitchen.lane.building'],
       ['cooking', 'kitchen.lane.cooking'], ['ready', 'kitchen.lane.ready']].forEach(function (pair) {

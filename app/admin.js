@@ -19,6 +19,7 @@ import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
 import * as QR from './qr.js';
 import {
   html, raw, mmss, escapeHtml, remember, recall, toast, requireManager,
+  requireStaffDevice,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
@@ -418,6 +419,18 @@ const CATALOG = menu.catalog();
       </div>`;
     }
     var gaps = rep.coverage.unpriced;
+
+    // Nothing priced at all is not a warning, it is a starting position. The
+    // part-priced note below exists to stop a nearly-complete figure being
+    // read as a whole one; at zero there is no figure to misread, and listing
+    // every ingredient that went out says only "you have not begun".
+    if (!rep.coverage.ingredientsPriced) {
+      return html`<div class="notice costcover">
+        No prices entered yet, so there is no food cost to show. Fill in the
+        sheet below and these figures fill in with it.
+      </div>`;
+    }
+
     var shown = gaps.slice(0, 8).map(function (g) { return g.name + ' (×' + g.uses + ')'; });
     if (gaps.length > shown.length) shown.push('and ' + (gaps.length - shown.length) + ' more');
     return html`<div class="notice notice-warn costcover">
@@ -1947,6 +1960,11 @@ const CATALOG = menu.catalog();
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
     document.title = pageTitle('Manager');
+
+    // Before anything else: the rules hand a screen nothing until the
+    // device can prove it is staff, so an unproven screen would load and
+    // then sit empty with no clue why.
+    await requireStaffDevice(db);
 
     if (!(await requireManager())) {
       throw new Error('Manager code required.');

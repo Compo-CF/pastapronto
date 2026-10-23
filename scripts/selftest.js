@@ -2852,10 +2852,18 @@ test('the manager screens are locked and the rail is not', () => {
       );
     });
 
-  // One gate, one level. A second code or a second remembered unlock would be
-  // the thing the club asked to have taken out.
+  // One CODE, one level. The club asked for the second passcode to go, and
+  // this is what stops it coming back - including under another name. The
+  // staff sign-in that arrived later is a different animal: a real account
+  // the rules can see, holding no passcode at all. So the test is that no
+  // gate compares a code except the one manager gate.
   const ui = read('ui.js');
-  assert.ok(!/requireStaff/.test(ui), 'the old two-level gate is still exported');
+  const staffGate = ui.slice(ui.indexOf('export function requireStaffDevice'));
+  const staffBody = staffGate.slice(0, staffGate.indexOf(String.fromCharCode(10) + 'export '));
+  assert.ok(
+    staffBody && !/[Pp]asscode/.test(staffBody),
+    'the staff sign-in has grown a passcode - it is meant to be a real account',
+  );
   assert.strictEqual(
     (ui.match(/config\.kitchen\.\w*[Pp]asscode/g) || []).length, 1,
     'the gate compares against more than one code',
@@ -3946,6 +3954,95 @@ test('close-out shows tables two memberships shared', () => {
   assert.ok(src.includes('sharedTablesPanel('), 'no panel on the close-out screen');
   assert.ok(src.includes('TABLES SHARED BY TWO MEMBERSHIPS'),
     'the CSV export must carry it too - a figure only on screen is not a record');
+});
+
+// ------------------------------------------------- staff, and what it gates
+
+/** Every `allow` inside one match block, as {verb: condition}. */
+function allowsFor(rules, path) {
+  const at = rules.indexOf('match /' + path);
+  assert.ok(at > -1, 'no match block for ' + path);
+  const block = rules.slice(at);
+  const body = block.slice(0, block.indexOf('\n    }'));
+  const out = {};
+  [...body.matchAll(/allow\s+([\w,\s]+?)\s*:\s*if\s+([\s\S]*?);/g)].forEach((m) => {
+    m[1].split(',').forEach((verb) => { out[verb.trim()] = m[2].replace(/\s+/g, ' ').trim(); });
+  });
+  return out;
+}
+
+test('only a signed-in staff device can read the whole service', () => {
+  // The exposure this closes: every visitor is signed in, because the guest
+  // app signs itself in anonymously, so `signedIn()` never told a phone at a
+  // table apart from the kitchen rail. Listing orders is the whole night -
+  // member numbers, names, what they ate, where they sat.
+  const a = allowsFor(rulesSource(), 'orders/{orderId}');
+
+  assert.ok(/staff\(\)/.test(a.list), 'orders may be listed without being staff');
+  assert.ok(/staff\(\)/.test(a.update), 'a guest can advance someone else\'s ticket');
+  assert.ok(/staff\(\)/.test(a.delete), 'a guest can delete orders');
+
+  // A guest must still place one, and still watch the one they placed.
+  assert.ok(/signedIn\(\)/.test(a.create) && !/staff\(\)/.test(a.create),
+    'a guest can no longer order');
+  assert.ok(/signedIn\(\)/.test(a.get), 'a guest can no longer track their ticket');
+});
+
+test('a guest cannot rewrite the menu or the 86 list', () => {
+  const a = allowsFor(rulesSource(), 'config/{docId}');
+  assert.ok(/staff\(\)/.test(a.write),
+    'config is writable without being staff - a guest could 86 the building');
+  assert.ok(/signedIn\(\)/.test(a.read) && !/staff\(\)/.test(a.read),
+    'guests need to read the menu');
+});
+
+test('a guest can take the next ticket number but not move it back', () => {
+  // Left open, a guest could reset the counter and collide every ticket after
+  // it. The order path needs to move it, so the bound is the shape of the move.
+  const a = allowsFor(rulesSource(), 'counters/{serviceDate}');
+  assert.ok(/lastTicket == resource.data.lastTicket \+ 1/.test(a.update),
+    'the counter can be moved by something other than one step forward');
+  assert.ok(/staff\(\)/.test(a.update), 'a reset to zero must still be possible for staff');
+});
+
+test('the staff list is not readable as a list, or writable at all', () => {
+  const a = allowsFor(rulesSource(), 'staff/{uid}');
+  assert.strictEqual(a.list, 'false', 'the staff roll can be enumerated');
+  assert.strictEqual(a.write, 'false',
+    'a browser can add itself to staff - rows are added with admin credentials');
+  assert.ok(/request.auth.uid == uid/.test(a.get),
+    'a device may check its own row and no one else\'s');
+});
+
+test('staff() asks the database, not the browser', () => {
+  const rules = rulesSource();
+  const fn = rules.slice(rules.indexOf('function staff()'));
+  const body = fn.slice(0, fn.indexOf('\n    }'));
+  assert.ok(/exists\(/.test(body) && /documents\/staff\//.test(body),
+    'staff() must be decided by a document, not by anything a client sends');
+  assert.ok(!/[Pp]asscode/.test(body), 'staff() must not rest on a shipped code');
+});
+
+test('every staff screen proves the device before it asks for anything', () => {
+  // Without the proof the rules hand the screen nothing, and it sits empty
+  // with no clue why - which is worse than being asked to sign in.
+  ['kitchen.js', 'expo.js', 'admin.js', 'report.js'].forEach((f) => {
+    const src = readFileSync(fileURLToPath(new URL('../app/' + f, import.meta.url)), 'utf8');
+    assert.ok(/await requireStaffDevice\(db\)/.test(src), f + ' does not prove the device');
+  });
+  // And the guest screen must NOT - a member is not staff.
+  const guest = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  assert.ok(!/requireStaffDevice/.test(guest), 'the guest screen asks members to sign in');
+});
+
+test('a phone at a table never lists the service to get a wait time', () => {
+  // The queue depth used to be counted by listing every order in the room.
+  const guest = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  assert.ok(!/db\.getDay\(/.test(guest), 'the guest screen still lists orders');
+  assert.ok(/db\.readQueueDepth\(/.test(guest), 'and has nothing to quote instead');
+
+  const rail = readFileSync(fileURLToPath(new URL('../app/kitchen.js', import.meta.url)), 'utf8');
+  assert.ok(/db\.publishQueueDepth\(/.test(rail), 'nothing publishes the depth');
 });
 
 test('the member roster never reaches git or the web', () => {

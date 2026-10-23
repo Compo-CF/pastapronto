@@ -18,6 +18,7 @@ import * as i18n from './i18n.js';
 import {
   html, raw, mmss, clockTime, secondsSince, escapeHtml,
   remember, recall, chime, unlockAudio, toast, keepScreenAwake,
+  requireStaffDevice,
 } from './ui.js';
 
 const CATALOG = menu.catalog();
@@ -376,6 +377,11 @@ const CATALOG = menu.catalog();
 
   async function boot() {
     document.getElementById('masthead').innerHTML = mastheadHtml(art('mark'));
+
+    // Before anything else: the rules hand a screen nothing until the
+    // device can prove it is staff, so an unproven screen would load and
+    // then sit empty with no clue why.
+    await requireStaffDevice(db);
     document.title = pageTitle('Expo & Runners');
 
     if (!db.isConfigured) {
