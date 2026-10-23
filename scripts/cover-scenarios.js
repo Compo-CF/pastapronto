@@ -396,7 +396,8 @@ const FIRST = ['Ann', 'Ben', 'Cal', 'Dee', 'Eve', 'Fay', 'Gus', 'Hal', 'Ivy', 'J
  * ordering under one membership; `shareRate` how often two memberships at one
  * table each claim the whole table.
  */
-function night(seed, { parties = 20, splitRate = 0.25, shareRate = 0.08, names = true, typoRate = 0 } = {}) {
+function night(seed, { parties = 20, splitRate = 0.25, shareRate = 0.08, names = true,
+  typoRate = 0, bigPartyRate = 0 } = {}) {
   const rand = rng(seed);
   const orders = [];
   const memberTruth = new Map();
@@ -408,7 +409,13 @@ function night(seed, { parties = 20, splitRate = 0.25, shareRate = 0.08, names =
 
   for (let p = 0; p < parties; p += 1) {
     member += 1 + Math.floor(rand() * 7);
-    const size = 1 + Math.floor(rand() * 6);
+    // Most tables are a handful. A club also books the odd private party,
+    // and those are the ones a per-ticket cap used to truncate - so they
+    // have to be in the mix, or the simulation cannot see the bug it is
+    // meant to measure.
+    const size = rand() < bigPartyRate
+      ? 13 + Math.floor(rand() * 18)   // 13 to 30: over one ticket, under the cap
+      : 1 + Math.floor(rand() * 6);
     const who = [];
     for (let i = 0; i < size; i += 1) who.push(FIRST[(p * 3 + i) % FIRST.length] + '-' + p);
     const tag = 'table-' + String(p % 14).padStart(2, '0');
@@ -438,9 +445,9 @@ function night(seed, { parties = 20, splitRate = 0.25, shareRate = 0.08, names =
       owe(member, a.length);
       owe(member + 500, b.length);
       for (let r = 0; r < rounds; r += 1) {
-        orders.push(place({ member: String(member), name: 'P' + p, guests: size, tag,
+        orders.push(place({ member: String(member), name: 'P' + p, guests: Math.min(size, config.order.maxGuests), tag,
           kind: r % 2 ? 'pizza' : 'pasta', lines: label(a) }, r * 20 + p));
-        orders.push(place({ member: String(member + 500), name: 'Q' + p, guests: size, tag,
+        orders.push(place({ member: String(member + 500), name: 'Q' + p, guests: Math.min(size, config.order.maxGuests), tag,
           kind: r % 2 ? 'pasta' : 'pizza', lines: label(b) }, r * 20 + p + 4));
       }
       continue;
@@ -453,14 +460,14 @@ function night(seed, { parties = 20, splitRate = 0.25, shareRate = 0.08, names =
         const cut = 1 + Math.floor(rand() * size);
         const slice = who.slice(0, cut);
         const rest = who.slice(cut);
-        orders.push(place({ member: String(member), name: 'P' + p, guests: slice.length,
+        orders.push(place({ member: String(member), name: 'P' + p, guests: Math.min(slice.length, config.order.maxGuests),
           tag, kind: rand() < 0.4 ? 'pizza' : 'pasta', lines: label(slice) }, r * 20 + p));
         if (rest.length) {
-          orders.push(place({ member: String(member), name: 'P' + p, guests: rest.length,
+          orders.push(place({ member: String(member), name: 'P' + p, guests: Math.min(rest.length, config.order.maxGuests),
             tag, kind: rand() < 0.4 ? 'pizza' : 'pasta', lines: label(rest) }, r * 20 + p + 5));
         }
       } else {
-        orders.push(place({ member: String(member), name: 'P' + p, guests: size, tag,
+        orders.push(place({ member: String(member), name: 'P' + p, guests: Math.min(size, config.order.maxGuests), tag,
           kind: rand() < 0.4 ? 'pizza' : 'pasta', lines: label(who) }, r * 20 + p));
       }
     }
@@ -1018,7 +1025,7 @@ function nightShipped(seed, opts) {
       party *= 2;
     }
     return Object.assign({}, ord, {
-      partySize: Math.min(party, config.order.maxGuests),
+      partySize: Math.min(party, config.order.maxPartySize),
     });
   });
   return { orders: declared, memberTruth: n.memberTruth };
@@ -1093,3 +1100,77 @@ if (process.argv.includes('--report-json')) {
 }
 
 if (process.argv.includes('--shipped-sim')) shippedSim();
+
+/**
+ * The same nights, with and without private parties in the mix.
+ *
+ * The first block is the original distribution - one to six a table, where no
+ * cap of any kind is reached, so it says whether anything regressed. The
+ * second puts a private party in roughly one booking in eight, which is where
+ * maxGuests used to truncate the charge and maxPartySize now does not.
+ */
+function capSim() {
+  const RUNS = 400;
+  const pad = (x, w) => String(x).padEnd(w);
+  const num = (x, w) => String(x).padStart(w);
+
+  const MIXES = [
+    { label: 'careful  (10% split, 3% share)', splitRate: 0.10, shareRate: 0.03 },
+    { label: 'typical  (25% split, 8% share)', splitRate: 0.25, shareRate: 0.08 },
+    { label: 'loose    (45% split, 15% share)', splitRate: 0.45, shareRate: 0.15 },
+  ];
+  const MISREADS = [0, 0.15, 0.30];
+
+  const score = (build) => {
+    let wrong = 0; let total = 0; let got = 0; let want = 0; let capped = 0;
+    for (let i = 0; i < RUNS; i += 1) {
+      const n = build(i + 1);
+      const rows = order.memberRollup(n.orders);
+      const by = new Map(rows.map((r) => [r.memberNumber, r.partySize]));
+      n.memberTruth.forEach((w, id) => {
+        const had = by.get(id) || 0;
+        total += 1;
+        if (had !== w) wrong += 1;
+        if (w > config.order.maxGuests) capped += 1;
+        got += had; want += w;
+      });
+    }
+    return {
+      wrong: Math.round((wrong / total) * 1000) / 10,
+      net: Math.round(((got - want) / want) * 1000) / 10,
+      big: Math.round((capped / total) * 1000) / 10,
+    };
+  };
+
+  [0, 0.12].forEach((bigPartyRate) => {
+    console.log('');
+    console.log('  ' + (bigPartyRate
+      ? 'WITH PRIVATE PARTIES - ' + Math.round(bigPartyRate * 100)
+        + '% of bookings are 13 to 30 people'
+      : 'ORIGINAL DISTRIBUTION - every party 1 to 6, no cap is ever reached'));
+    console.log('  ' + pad('mix', 32) + num('old rule', 20)
+      + MISREADS.map((m) => num('now, misread ' + Math.round(m * 100) + '%', 22)).join(''));
+    console.log('  ' + '-'.repeat(118));
+
+    MIXES.forEach((mix) => {
+      const opts = { splitRate: mix.splitRate, shareRate: mix.shareRate, bigPartyRate };
+      const cells = [];
+      const was = score((sd) => night(sd, opts));
+      cells.push(was.wrong + '% (' + (was.net >= 0 ? '+' : '') + was.net + '%)');
+      MISREADS.forEach((m) => {
+        const r = score((sd) => nightShipped(sd, Object.assign({}, opts, { misread: m })));
+        cells.push(r.wrong + '% (' + (r.net >= 0 ? '+' : '') + r.net + '%)');
+      });
+      console.log('  ' + pad(mix.label, 32) + num(cells[0], 20)
+        + cells.slice(1).map((c) => num(c, 22)).join(''));
+    });
+  });
+
+  const probe = score((sd) => night(sd, { splitRate: 0.25, shareRate: 0.08, bigPartyRate: 0.12 }));
+  console.log('');
+  console.log('  ' + probe.big + '% of memberships in the second block are over the '
+    + config.order.maxGuests + '-person ticket cap, and were truncated before.');
+  console.log('');
+}
+
+if (process.argv.includes('--cap-sim')) capSim();
