@@ -1,7 +1,7 @@
 /**
  * Let a device run the staff screens, or stop it.
  *
- *   node scripts/staff-add.js <uid> [label]   add
+ *   node scripts/staff-add.js <uid|email> [label]   add
  *   node scripts/staff-add.js --list          who is on the list
  *   node scripts/staff-add.js --remove <uid>  take one off
  *
@@ -9,9 +9,11 @@
  * the collection: a page that could add itself to the allow-list would not be
  * an allow-list. So rows go in from here, on an admin token.
  *
- * The uid comes from the Firebase console, Authentication, beside the account.
- * Passwords never come near this script - it never sees one and does not want
- * one.
+ * Takes the uid from the Firebase console, or just the email address - an
+ * address is what a person actually has to hand, and a 28-character uid
+ * copied by eye is a typo waiting to lock the rail out.
+ *
+ * Passwords never come near this script. It neither sees one nor wants one.
  */
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -41,8 +43,34 @@ async function call(url, init = {}) {
     headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
   });
   const body = await res.text();
-  if (!res.ok) throw new Error(res.status + ' ' + res.statusText + '\n' + body.slice(0, 500));
+  if (!res.ok) throw new Error(res.status + ' ' + res.statusText + String.fromCharCode(10) + body.slice(0, 400));
   return body ? JSON.parse(body) : {};
+}
+
+const IDP = 'https://identitytoolkit.googleapis.com/v1/projects/' + PROJECT;
+
+/** An email is not an identity to Firestore; the uid behind it is. */
+async function uidForEmail(email) {
+  const res = await fetch(IDP + '/accounts:lookup', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: [email] }),
+  });
+  const body = await res.text();
+  // A gcloud user token carries cloud-platform but not the Identity Toolkit
+  // scope this needs, so a 403 here is a missing permission rather than a
+  // missing account. The uid path needs none of that and always works.
+  if (!res.ok) {
+    throw new Error('Could not look that address up (' + res.status + ').'
+      + String.fromCharCode(10) + 'Pass the User UID instead - it is beside the account in the'
+      + ' Firebase console, Authentication, Users.');
+  }
+  const users = (JSON.parse(body).users || []);
+  if (!users.length) {
+    throw new Error('No account for ' + email + '. Create it first in the Firebase'
+      + ' console under Authentication, Users.');
+  }
+  return users[0].localId;
 }
 
 async function main() {
@@ -73,10 +101,12 @@ async function main() {
     return;
   }
 
-  const uid = argv[0];
-  if (!uid || uid.startsWith('--')) {
-    throw new Error('Usage: node scripts/staff-add.js <uid> [label]');
+  const who = argv[0];
+  if (!who || who.startsWith('--')) {
+    throw new Error('Usage: node scripts/staff-add.js <uid|email> [label]');
   }
+  const uid = who.includes('@') ? await uidForEmail(who) : who;
+  if (who.includes('@')) console.log(who + ' is ' + uid);
   const label = argv.slice(1).join(' ') || 'staff device';
 
   await call(API + '/staff/' + encodeURIComponent(uid), {
