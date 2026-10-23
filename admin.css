@@ -597,35 +597,53 @@
 
 /* The manager card reads its own state at a glance, so nobody has to
    work out which of two buttons is the pressed one from across a room. */
-#serviceCard.is-closed {
-  border-color: var(--tomato);
-  box-shadow: inset 4px 0 0 var(--tomato);
+
+/* Open is green and Closed is red - and deliberately NOT --basil and
+   --tomato, which is where these started. The Carlton Woods brand sheet
+   loads after this one and remaps those two to the club palette: --tomato
+   becomes the maroon #530000 and --basil an olive #6f7052. Correct for a
+   members screen, wrong here. This is a go/stop control that someone hits in
+   a hurry on a busy pass, and a maroon that reads as brown does not say stop.
+   So the two colours below are the control own, under names no brand sheet
+   remaps.
+
+   Colour is each button identity rather than its state, so you can aim before
+   reading either label; state is the fill, solid for the live one and an
+   outline for the other. The tick and the card stripe stay, because colour
+   alone is no use to anyone who cannot tell the two apart. */
+#serviceSwitch {
+  --svc-go: #15703c;
+  --svc-go-wash: #e9f4ed;
+  --svc-stop: #c62828;
+  --svc-stop-wash: #fdecea;
 }
 
-/* Open is green and Closed is red, always - the colour is the button identity
-   rather than its state, so you can aim for the right one before reading
-   either label. State is the fill: the live one is solid, the other an outline
-   in the same colour. The tick and the card stripe stay, because colour alone
-   is no use to anyone who cannot tell the two apart. */
 #serviceSwitch .nightopt[data-id="open"] {
-  border-color: var(--basil); color: var(--basil);
+  border-color: var(--svc-go); color: var(--svc-go);
 }
-#serviceSwitch .nightopt[data-id="open"]:hover { background: var(--basil-wash); }
-#serviceSwitch .nightopt[data-id="open"]:focus-visible { outline-color: var(--basil); }
+#serviceSwitch .nightopt[data-id="open"]:hover { background: var(--svc-go-wash); }
+#serviceSwitch .nightopt[data-id="open"]:focus-visible { outline-color: var(--svc-go); }
 #serviceSwitch .nightopt[data-id="open"][aria-pressed="true"] {
-  background: var(--basil); border-color: var(--basil); color: #fff;
+  background: var(--svc-go); border-color: var(--svc-go); color: #fff;
 }
 
 #serviceSwitch .nightopt[data-id="closed"] {
-  border-color: var(--tomato); color: var(--tomato);
+  border-color: var(--svc-stop); color: var(--svc-stop);
 }
-#serviceSwitch .nightopt[data-id="closed"]:hover { background: var(--tomato-wash); }
+#serviceSwitch .nightopt[data-id="closed"]:hover { background: var(--svc-stop-wash); }
+#serviceSwitch .nightopt[data-id="closed"]:focus-visible { outline-color: var(--svc-stop); }
 #serviceSwitch .nightopt[data-id="closed"][aria-pressed="true"] {
-  background: var(--tomato); border-color: var(--tomato); color: #fff;
+  background: var(--svc-stop); border-color: var(--svc-stop); color: #fff;
 }
 
 /* Or the sub-label stays grey on a solid button. */
 #serviceSwitch .nightopt .nightopt-sub { color: inherit; opacity: .74; }
 #serviceSwitch .nightopt[aria-pressed="true"] .nightopt-sub {
   color: rgba(255, 255, 255, 0.85); opacity: 1;
+}
+
+/* The closed card stripe is the same stop red, for the same reason. */
+#serviceCard.is-closed {
+  border-color: #c62828;
+  box-shadow: inset 4px 0 0 #c62828;
 }
