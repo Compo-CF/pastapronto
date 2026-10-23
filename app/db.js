@@ -150,6 +150,13 @@ const AUTH_TIMEOUT_MS = 12000;
  * on a timer if neither speaks. A readable error beats a dead screen, and all
  * three paths now produce one.
  */
+/**
+ * How long to let Firebase restore a persisted session before falling back to
+ * an anonymous one. Short enough that a guest phone does not wait on it, long
+ * enough that a staff iPad is not signed out of its own account.
+ */
+const RESTORE_GRACE_MS = 2500;
+
 let readyPromise = null;
 export function ready() {
   if (readyPromise) return readyPromise;
@@ -174,20 +181,34 @@ export function ready() {
       + 'club wifi and can reach the internet, then reload.',
     )), AUTH_TIMEOUT_MS);
 
+    // Becoming a guest is a LAST resort, not a first move. A staff device has
+    // a real account persisted from the last time it was set up, and
+    // signInAnonymously() would sign it straight back out - which is what it
+    // used to do, on every page load and every tap between screens.
+    let becameGuest = false;
+    const becomeGuest = () => {
+      if (becameGuest || settled) return;
+      becameGuest = true;
+      signInAnonymously(auth).then(
+        (cred) => { if (cred && cred.user) finish(resolve, cred.user); },
+        (err) => finish(reject, err),
+      );
+    };
+
+    // Fires once on load with whatever was restored, or with null when there
+    // was nothing to restore. Either way it is the answer.
     off = onAuthStateChanged(
       auth,
-      (user) => { if (user) finish(resolve, user); },
+      (user) => { if (user) finish(resolve, user); else becomeGuest(); },
       (err) => finish(reject, err),
     );
     if (settled && off) { try { off(); } catch { /* already torn down */ } }
 
-    // The second, independent path to the same answer. On a device where auth
-    // state cannot be persisted the listener may never fire, but the call that
-    // created the session still hands back the user.
-    signInAnonymously(auth).then(
-      (cred) => { if (cred && cred.user) finish(resolve, cred.user); },
-      (err) => finish(reject, err),
-    );
+    // The independent path the listener used to have. On a device where auth
+    // state cannot be persisted the listener may never fire at all, so after a
+    // moment's grace sign in as a guest anyway. The grace is the whole fix: it
+    // gives a restored session time to arrive before anything replaces it.
+    setTimeout(becomeGuest, RESTORE_GRACE_MS);
   });
 
   // A tablet that lost wifi mid-boot must be able to try again without someone

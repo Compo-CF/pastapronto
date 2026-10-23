@@ -4193,6 +4193,38 @@ test('a bowl written before shapes were a list still reads', () => {
   assert.deepStrictEqual(menu.pastasOf({ kind: 'pasta' }), [], 'an empty bowl is an empty list');
 });
 
+test('signing in as a guest never overwrites a staff session', () => {
+  // The bug this pins: ready() called signInAnonymously() unconditionally on
+  // load, so a staff device was signed out of its own account on every page
+  // load and every tap between screens. It looked like "sign-in does not
+  // stick"; it was the app signing itself out.
+  const src = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('export function ready()'));
+  const body = fn.slice(0, fn.indexOf('\n  return readyPromise;'));
+
+  // Every path to anonymous must go through the guard, not straight to the
+  // SDK. Comment lines are stripped first: the one above the guard names the
+  // function it exists to contain.
+  const code = body.split(String.fromCharCode(10))
+    .filter((l) => !l.trim().startsWith('//')).join(String.fromCharCode(10));
+  const calls = (code.match(new RegExp('signInAnonymously\\(', 'g')) || []).length;
+  assert.strictEqual(calls, 1,
+    'ready() calls signInAnonymously ' + calls + ' times - it must have exactly '
+    + 'one guarded path, or a restored session gets replaced');
+  assert.ok(/becameGuest/.test(body), 'the guard is gone');
+  assert.ok(/if \(user\) finish\(resolve, user\); else becomeGuest\(\);/.test(body),
+    'a restored user must settle it before anything signs in as a guest');
+
+  // And the fallback has to wait long enough for a restore to land, while
+  // still beating the timeout that rejects the whole thing.
+  const grace = Number((src.match(/RESTORE_GRACE_MS = (\d+)/) || [])[1]);
+  const timeout = Number((src.match(/AUTH_TIMEOUT_MS = (\d+)/) || [])[1]);
+  assert.ok(grace > 0, 'no restore grace');
+  assert.ok(grace < timeout,
+    'the guest fallback (' + grace + 'ms) must fire before the auth timeout ('
+    + timeout + 'ms), or a device with no session to restore never signs in');
+});
+
 test('the member roster never reaches git or the web', () => {
   // private/ holds 700-odd real families and their account numbers. Two
   // separate mechanisms keep it out: .gitignore, and the hosting ignore list -
