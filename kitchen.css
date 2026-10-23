@@ -532,8 +532,8 @@
    looks the same as the kitchen being closed, and a cook should not have to
    walk to the manager screen to tell the two apart. */
 .closedflag {
-  font: 600 13px/1 var(--font, system-ui, sans-serif);
+  font: 600 13px/1 var(--font);
   letter-spacing: .06em; text-transform: uppercase;
-  color: #fff; background: var(--tomato, #d33f30);
+  color: #fff; background: var(--tomato);
   padding: 7px 12px; border-radius: 999px; white-space: nowrap;
 }

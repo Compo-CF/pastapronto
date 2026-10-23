@@ -507,10 +507,10 @@
   color: var(--ink);
   cursor: pointer;
 }
-.medit-chip:hover { border-color: var(--tomato, #d33f30); }
+.medit-chip:hover { border-color: var(--tomato); }
 .medit-chip.is-on {
-  background: var(--tomato, #d33f30);
-  border-color: var(--tomato, #d33f30);
+  background: var(--tomato);
+  border-color: var(--tomato);
   color: #fff;
 }
 .medit-ask.is-unanswered .medit-chip { border-color: #e0b3a8; }
@@ -583,7 +583,7 @@
   padding: 0;
   font-size: 13px;
   font-weight: 700;
-  color: var(--tomato, #d33f30);
+  color: var(--tomato);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -598,6 +598,34 @@
 /* The manager card reads its own state at a glance, so nobody has to
    work out which of two buttons is the pressed one from across a room. */
 #serviceCard.is-closed {
-  border-color: var(--tomato, #d33f30);
-  box-shadow: inset 4px 0 0 var(--tomato, #d33f30);
+  border-color: var(--tomato);
+  box-shadow: inset 4px 0 0 var(--tomato);
+}
+
+/* Open is green and Closed is red, always - the colour is the button identity
+   rather than its state, so you can aim for the right one before reading
+   either label. State is the fill: the live one is solid, the other an outline
+   in the same colour. The tick and the card stripe stay, because colour alone
+   is no use to anyone who cannot tell the two apart. */
+#serviceSwitch .nightopt[data-id="open"] {
+  border-color: var(--basil); color: var(--basil);
+}
+#serviceSwitch .nightopt[data-id="open"]:hover { background: var(--basil-wash); }
+#serviceSwitch .nightopt[data-id="open"]:focus-visible { outline-color: var(--basil); }
+#serviceSwitch .nightopt[data-id="open"][aria-pressed="true"] {
+  background: var(--basil); border-color: var(--basil); color: #fff;
+}
+
+#serviceSwitch .nightopt[data-id="closed"] {
+  border-color: var(--tomato); color: var(--tomato);
+}
+#serviceSwitch .nightopt[data-id="closed"]:hover { background: var(--tomato-wash); }
+#serviceSwitch .nightopt[data-id="closed"][aria-pressed="true"] {
+  background: var(--tomato); border-color: var(--tomato); color: #fff;
+}
+
+/* Or the sub-label stays grey on a solid button. */
+#serviceSwitch .nightopt .nightopt-sub { color: inherit; opacity: .74; }
+#serviceSwitch .nightopt[aria-pressed="true"] .nightopt-sub {
+  color: rgba(255, 255, 255, 0.85); opacity: 1;
 }
