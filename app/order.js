@@ -331,6 +331,12 @@ export function buildOrder(draft, ctx) {
 
     kind,
     guestCount: Number(draft.guestCount),
+    // How many people this membership is feeding tonight: asked once, carried
+    // on every order after. guestCount says how many THIS TRIP is for;
+    // partySize says how many to CHARGE. The two stopped being the same number
+    // the moment one person was allowed to order for part of a table.
+    // Null on an order placed before this existed - memberRollup falls back.
+    partySize: draft.partySize == null ? null : Number(draft.partySize),
     tag: ctx.tag ? ctx.tag.id : null,
     tagLabel: ctx.tag ? ctx.tag.label : 'Walk-up',
     tagKind: ctx.tag ? ctx.tag.kind : 'pickup',
@@ -462,10 +468,19 @@ export function publicView(order) {
  * billable unit is a PERSON, not an order. A party of four that orders pasta
  * and later comes back for pizza is still four covers and one charge.
  *
- * That means party size is the LARGEST head count a member reported that
- * night, not the sum across their orders - summing bills the same table twice,
- * once per trip to the app. Everything else (orders, bowls, pizzas) is a
- * consumption signal rather than a billing one.
+ * The charge comes from `partySize`: asked once a night per membership, worded
+ * about the account rather than the table, and carried on every order after.
+ * Where a membership declared it more than once - someone used the change link
+ * - the LATEST answer wins, because that is the correction.
+ *
+ * Orders written before partySize existed fall back to the old rule, the
+ * LARGEST guestCount that membership reported. That rule is wrong whenever one
+ * order speaks for part of a party (it bills the biggest subset, not the
+ * party), which is exactly why partySize exists; it stays only so a historical
+ * night still rolls up rather than billing nothing.
+ *
+ * Everything else (orders, bowls, pizzas) is a consumption signal, not a
+ * billing one.
  */
 // Which counter on a member row each kind feeds.
 const ROLLUP_FIELD = { pasta: 'bowls', pizza: 'pizzas', burger: 'burgers' };
@@ -490,11 +505,23 @@ export function memberRollup(orders) {
         firstAt: o.submittedAt,
         lastAt: o.submittedAt,
         kinds: new Set(),
+        declaredAt: null,
+        declared: null,
+        largestCount: 0,
       });
     }
     const m = byMember.get(key);
     m.orders += 1;
-    m.partySize = Math.max(m.partySize, Number(o.guestCount) || 0);
+
+    // Two numbers kept side by side, and which one bills is decided after
+    // every order has been seen - a later trip can carry a correction.
+    m.largestCount = Math.max(m.largestCount, Number(o.guestCount) || 0);
+    if (o.partySize != null && Number.isFinite(Number(o.partySize))) {
+      if (!m.declaredAt || new Date(o.submittedAt) >= new Date(m.declaredAt)) {
+        m.declaredAt = o.submittedAt;
+        m.declared = Number(o.partySize);
+      }
+    }
 
     const k = menu.kindOf({ kind: o.kind });
     m[ROLLUP_FIELD[k]] += o.lines.length;
@@ -508,11 +535,18 @@ export function memberRollup(orders) {
   });
 
   return [...byMember.values()]
-    .map((m) => ({
-      ...m,
-      kinds: [...m.kinds].sort(),
-      itemsPerCover: m.partySize ? Math.round((m.items / m.partySize) * 10) / 10 : 0,
-    }))
+    .map((m) => {
+      const partySize = m.declared == null ? m.largestCount : m.declared;
+      return {
+        ...m,
+        partySize,
+        // What the charge rests on, so close-out can say so rather than making
+        // a manager guess which nights are which.
+        chargeBasis: m.declared == null ? 'legacy-headcount' : 'declared',
+        kinds: [...m.kinds].sort(),
+        itemsPerCover: partySize ? Math.round((m.items / partySize) * 10) / 10 : 0,
+      };
+    })
     .sort((a, b) => b.items - a.items
       || b.partySize - a.partySize
       || a.memberNumber.localeCompare(b.memberNumber));
@@ -521,6 +555,64 @@ export function memberRollup(orders) {
 /** Billable AYCE covers: each member's party counted once, however many trips. */
 export function billableCovers(orders) {
   return memberRollup(orders).reduce((a, m) => a + m.partySize, 0);
+}
+
+/**
+ * Memberships that were at the same table at the same time.
+ *
+ * Asking "how many go on YOUR account" stops two memberships at one table from
+ * both answering for the table, but it cannot stop one of them answering for
+ * the table anyway. This is the net that catches what is left, and close-out
+ * shows it for a manager to clear before posting.
+ *
+ * Overlap, not adjacency. Two memberships ordering at table 3 between 18:10
+ * and 19:40 were one seating; a membership starting there at 20:30, after the
+ * first had finished, is a table that turned over. Nothing in this system
+ * records a seating or a cleared table - an order carries a tag and its
+ * timestamps and that is all - so the windows those timestamps describe are
+ * the only evidence there is, and overlap is the one question they can answer.
+ */
+export function overlappingParties(orders) {
+  const live = (orders || []).filter((o) => o.status !== STATUS.VOIDED && o.tag);
+  const byTag = new Map();
+
+  live.forEach((o) => {
+    const key = String(o.memberNumber || 'unknown');
+    if (!byTag.has(o.tag)) byTag.set(o.tag, new Map());
+    const members = byTag.get(o.tag);
+    const at = new Date(o.submittedAt).getTime();
+    const until = new Date(o.deliveredAt || o.submittedAt).getTime();
+    if (!members.has(key)) {
+      members.set(key, {
+        memberNumber: key, name: o.memberName || '', tagLabel: o.tagLabel || o.tag,
+        from: at, to: Math.max(at, until), orders: 0,
+      });
+    }
+    const m = members.get(key);
+    m.orders += 1;
+    m.from = Math.min(m.from, at);
+    m.to = Math.max(m.to, at, until);
+    if (!m.name && o.memberName) m.name = o.memberName;
+  });
+
+  const out = [];
+  byTag.forEach((members, tag) => {
+    const list = [...members.values()].sort((a, b) => a.from - b.from);
+    if (list.length < 2) return;
+    const clash = list.filter((m, i) => list.some((other, j) =>
+      i !== j && m.from <= other.to && other.from <= m.to));
+    if (clash.length < 2) return;
+    out.push({
+      tag,
+      tagLabel: clash[0].tagLabel,
+      members: clash.map((m) => ({
+        memberNumber: m.memberNumber, name: m.name, orders: m.orders,
+        from: new Date(m.from).toISOString(), to: new Date(m.to).toISOString(),
+      })),
+    });
+  });
+
+  return out.sort((a, b) => a.tagLabel.localeCompare(b.tagLabel));
 }
 
 const average = (list) => (list.length ? Math.round(list.reduce((a, b) => a + b, 0) / list.length) : 0);

@@ -3758,6 +3758,123 @@ test('no demo chit puts an invented surname on a real member number', () => {
   assert.deepStrictEqual(offences, [], 'pick demo numbers the roster does not use');
 });
 
+// ------------------------------------------------- the declared party size
+
+/** An order as the guest app now builds one, with the night's party size on it. */
+function trip(opts) {
+  return order.buildOrder({
+    memberNumber: opts.member || '1794',
+    memberName: 'Compofelice',
+    memberStatus: 'verified',
+    guestCount: opts.guests,
+    partySize: opts.party,
+    lines: Array.from({ length: opts.guests }, (_, i) => ({
+      guestLabel: 'G' + i, pasta: 'penne', sauces: ['marinara'],
+      proteins: [], toppings: [], sides: [], portion: 'regular', spice: 'mild',
+    })),
+  }, {
+    ticketNo: opts.ticket || 1,
+    station: 'pasta-1',
+    queueDepth: 1,
+    tag: opts.tag ? { id: opts.tag, label: opts.tag, kind: 'table' } : null,
+    serviceDate: '2026-11-05',
+    now: new Date('2026-11-05T18:00:00Z'),
+  });
+}
+
+test('the charge comes from the declared party, not the biggest order', () => {
+  // S2a: one person orders for themselves, another for the other three, on one
+  // membership. The old rule billed max(1, 3) = 3 for a table of four.
+  const a = trip({ guests: 1, party: 4, ticket: 1 });
+  const b = trip({ guests: 3, party: 4, ticket: 2 });
+  b.submittedAt = '2026-11-05T18:06:00.000Z';
+
+  assert.strictEqual(order.billableCovers([a, b]), 4, 'four people ate, four charges');
+  const m = order.memberRollup([a, b])[0];
+  assert.strictEqual(m.partySize, 4);
+  assert.strictEqual(m.chargeBasis, 'declared');
+  assert.strictEqual(m.items, 4, 'still four plates');
+});
+
+test('two memberships at one table each bill only their own people', () => {
+  // S4: the overcharge. Both entered 4 on the order - the table - because the
+  // kitchen is making four plates between them. Each DECLARED 2, their own
+  // people, because that question is worded about the account. Billing the
+  // head count gives 8 for a table of four; billing the declaration gives 4.
+  const a = trip({ member: '1794', guests: 4, party: 2, tag: 'table-03', ticket: 1 });
+  const b = trip({ member: '1276', guests: 4, party: 2, tag: 'table-03', ticket: 2 });
+  assert.strictEqual(order.billableCovers([a, b]), 4, 'four people, not eight');
+  assert.notStrictEqual(order.billableCovers([a, b]), 8, 'the head count must not bill');
+});
+
+test('a corrected party size wins over the one it corrected', () => {
+  // The change link. A later trip carries the new answer, and later means later
+  // by the clock, not by the order the array happens to be in.
+  const first = trip({ guests: 2, party: 2, ticket: 1 });
+  const fixed = trip({ guests: 2, party: 5, ticket: 2 });
+  fixed.submittedAt = '2026-11-05T18:30:00.000Z';
+
+  assert.strictEqual(order.billableCovers([first, fixed]), 5, 'the correction stands');
+  assert.strictEqual(order.billableCovers([fixed, first]), 5, 'and not just in array order');
+
+  // Corrections go down as well as up - a party of 5 that turns out to be 3.
+  const down = trip({ guests: 2, party: 3, ticket: 3 });
+  down.submittedAt = '2026-11-05T19:00:00.000Z';
+  assert.strictEqual(order.billableCovers([first, fixed, down]), 3,
+    'the latest answer bills, even when it is smaller');
+});
+
+test('a night from before partySize existed still rolls up', () => {
+  // Orders already in Firestore have no partySize. They must not bill zero.
+  const a = trip({ guests: 4, ticket: 1 });
+  const b = trip({ guests: 2, ticket: 2 });
+  assert.strictEqual(a.partySize, null, 'absent, not invented');
+  assert.strictEqual(order.billableCovers([a, b]), 4, 'falls back to the old rule');
+  assert.strictEqual(order.memberRollup([a, b])[0].chargeBasis, 'legacy-headcount',
+    'and says which rule it used');
+});
+
+test('close-out spots two memberships sharing one table', () => {
+  // The net under the wording change. Overlapping windows are one seating.
+  const a = trip({ member: '1794', guests: 2, party: 2, tag: 'table-03', ticket: 1 });
+  a.submittedAt = '2026-11-05T18:10:00.000Z';
+  a.deliveredAt = '2026-11-05T18:40:00.000Z';
+  const b = trip({ member: '1276', guests: 2, party: 2, tag: 'table-03', ticket: 2 });
+  b.submittedAt = '2026-11-05T18:25:00.000Z';
+  b.deliveredAt = '2026-11-05T18:55:00.000Z';
+
+  const flagged = order.overlappingParties([a, b]);
+  assert.strictEqual(flagged.length, 1, 'one table to look at');
+  assert.deepStrictEqual(flagged[0].members.map((m) => m.memberNumber).sort(),
+    ['1276', '1794']);
+});
+
+test('a table that turned over is not mistaken for a shared one', () => {
+  // The question Anthony asked: nothing records a seating, so the only evidence
+  // is the windows. These do not overlap - the second party sat down after the
+  // first had eaten and gone.
+  const early = trip({ member: '1794', guests: 2, party: 2, tag: 'table-03', ticket: 1 });
+  early.submittedAt = '2026-11-05T18:10:00.000Z';
+  early.deliveredAt = '2026-11-05T18:40:00.000Z';
+  const late = trip({ member: '1276', guests: 2, party: 2, tag: 'table-03', ticket: 2 });
+  late.submittedAt = '2026-11-05T20:30:00.000Z';
+  late.deliveredAt = '2026-11-05T21:00:00.000Z';
+
+  assert.deepStrictEqual(order.overlappingParties([early, late]), [],
+    'a turned table is not a shared one');
+
+  // One membership alone at a table is never a clash, however many trips.
+  const again = trip({ member: '1794', guests: 2, party: 2, tag: 'table-03', ticket: 3 });
+  again.submittedAt = '2026-11-05T18:20:00.000Z';
+  assert.deepStrictEqual(order.overlappingParties([early, again]), []);
+
+  // And a voided order cannot put a membership at a table it never used.
+  const voided = trip({ member: '1276', guests: 2, party: 2, tag: 'table-03', ticket: 4 });
+  voided.submittedAt = '2026-11-05T18:15:00.000Z';
+  voided.status = order.STATUS.VOIDED;
+  assert.deepStrictEqual(order.overlappingParties([early, voided]), []);
+});
+
 test('the member roster never reaches git or the web', () => {
   // private/ holds 700-odd real families and their account numbers. Two
   // separate mechanisms keep it out: .gitignore, and the hosting ignore list -
