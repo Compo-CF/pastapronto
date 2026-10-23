@@ -46,6 +46,7 @@ function place(act, minutesIn) {
     memberName: act.name || '',
     memberStatus: act.verified === false ? 'unverified' : 'verified',
     guestCount: act.guests,
+    partySize: act.party == null ? null : act.party,
     lines,
   }, {
     ticketNo: ticket,
@@ -842,9 +843,253 @@ function scoped() {
   console.log('');
 }
 
+
+// =======================================================================
+// THE SHIPPED FLOW
+//
+// Everything above measures the rule that used to bill: MAX of the head
+// counts a member entered. What ships now asks once a night, worded about
+// the account, and carries the answer on every order as partySize. These
+// runs go through the same order.buildOrder and order.memberRollup that the
+// app uses, so this measures the system rather than a model of it.
+// =======================================================================
+
+/**
+ * What the account-scoped question elicits from each membership.
+ *
+ * "How many are you ordering for tonight - everyone whose meals go on your
+ * account." For a table on one membership that is the whole table. Where two
+ * memberships share a table it is each one own people, which is the entire
+ * reason the question was reworded.
+ */
+const DECLARES = {
+  S1: { 1794: 4 },
+  S2a: { 1794: 4 },
+  S2b: { 1794: 1, 1276: 3 },
+  S3a: { 1794: 4 },
+  S3b: { 1794: 4 },
+  S3c: { 1794: 4 },
+  S4: { 1794: 2, 1276: 2 },
+  S5: { 1794: 4, 1276: 4 },
+  S6: { 1794: 14 },
+  S7: { 1794: 4 },
+  S8: { 1794: 2 },
+  S9: { 1794: 4 },
+  S10: { 1794: 4 },
+  S11: { 1794: 4 },
+  S12: { 1794: 4, 1276: 1 },
+  S13: { 1794: 4 },
+  S14: { 1794: 4 },
+  S15: { 1794: 1 },
+};
+
+/** How a membership ordered, which is the thing that used to decide the bill. */
+const METHOD = {
+  S1: 'one orders for all', S2a: 'split, one membership', S2b: 'split, two memberships',
+  S3a: 'repeat trips', S3b: 'repeat trips', S3c: 'split, one membership',
+  S4: 'shared table', S5: 'shared table', S6: 'party over the cap',
+  S7: 'voided and redone', S8: 'voided and redone', S9: 'one orders for all',
+  S10: 'repeat trips', S11: 'repeat trips', S12: 'shared table',
+  S13: 'one orders for all', S14: 'split, one membership', S15: 'repeat trips',
+};
+
+/**
+ * Replay a scenario the way the app now records it.
+ *
+ * `misread` is the share of memberships at a SHARED table who answer for the
+ * whole table anyway - the residue the wording cannot remove. A declared party
+ * is capped at maxGuests because the rules cap it, so a party bigger than that
+ * is capped here too rather than wished away.
+ */
+function runShipped(scenario, opts) {
+  const misread = (opts && opts.misread) || 0;
+  ticket = 0;
+  const declares = DECLARES[scenario.id] || {};
+  const shared = Object.keys(declares).length > 1;
+  const tableTotal = Object.values(declares).reduce((a, n) => a + n, 0);
+
+  let i = 0;
+  return scenario.acts.map((a, idx) => {
+    i += 1;
+    let party = declares[a.member];
+    if (party == null) party = a.guests;
+    if (shared && ((i * 2654435761) % 1000) / 1000 < misread) party = tableTotal;
+    party = Math.min(party, config.order.maxGuests);
+    return place(Object.assign({}, a, { party }), a.at == null ? idx * 2 : a.at);
+  });
+}
+
+function shipped() {
+  const pad = (s, n) => String(s).padEnd(n);
+  const num = (s, n) => String(s).padStart(n);
+
+  const rows = SCENARIOS.map((s) => {
+    const before = order.billableCovers(run(s));
+    const after = order.billableCovers(runShipped(s));
+    const live = run(s).filter((o) => o.status !== order.STATUS.VOIDED);
+    return {
+      id: s.id, method: METHOD[s.id] || '?', truth: s.truth,
+      orders: s.acts.length,
+      items: live.reduce((a, o) => a + o.lines.length, 0),
+      before: before, after: after,
+      wasOff: before - s.truth, nowOff: after - s.truth,
+    };
+  });
+
+  console.log('');
+  console.log('  CHARGES ON THE SHIPPED SYSTEM, PER SCENARIO');
+  console.log('');
+  console.log('  ' + pad('ID', 5) + pad('How they ordered', 24) + num('Ate', 5)
+    + num('Orders', 8) + num('Items', 7) + num('Was', 6) + num('Now', 6) + '  Result');
+  console.log('  ' + '-'.repeat(90));
+  rows.forEach((r) => {
+    const verdict = r.nowOff === 0
+      ? (r.wasOff === 0 ? 'correct' : 'FIXED (was ' + (r.wasOff > 0 ? '+' : '') + r.wasOff + ')')
+      : (r.nowOff > 0 ? 'OVER by ' + r.nowOff : 'UNDER by ' + Math.abs(r.nowOff));
+    console.log('  ' + pad(r.id, 5) + pad(r.method, 24) + num(r.truth, 5)
+      + num(r.orders, 8) + num(r.items, 7) + num(r.before, 6) + num(r.after, 6)
+      + '  ' + verdict);
+  });
+
+  const wrongBefore = rows.filter((r) => r.wasOff !== 0);
+  const wrongAfter = rows.filter((r) => r.nowOff !== 0);
+  console.log('  ' + '-'.repeat(90));
+  console.log('  ' + pad('', 29) + num(rows.reduce((a, r) => a + r.truth, 0), 5)
+    + num(rows.reduce((a, r) => a + r.orders, 0), 8)
+    + num(rows.reduce((a, r) => a + r.items, 0), 7)
+    + num(rows.reduce((a, r) => a + r.before, 0), 6)
+    + num(rows.reduce((a, r) => a + r.after, 0), 6));
+  console.log('');
+  console.log('  scenarios wrong: ' + wrongBefore.length + ' before, ' + wrongAfter.length + ' now');
+  console.log('  covers in error: '
+    + rows.reduce((a, r) => a + Math.abs(r.wasOff), 0) + ' before, '
+    + rows.reduce((a, r) => a + Math.abs(r.nowOff), 0) + ' now');
+
+  const byMethod = {};
+  rows.forEach((r) => {
+    if (!byMethod[r.method]) byMethod[r.method] = { n: 0, before: 0, after: 0, truth: 0 };
+    const m = byMethod[r.method];
+    m.n += 1;
+    m.truth += r.truth;
+    m.before += Math.abs(r.wasOff);
+    m.after += Math.abs(r.nowOff);
+  });
+  console.log('');
+  console.log('  BY HOW THE MEMBERSHIP ORDERED');
+  console.log('  ' + pad('method', 24) + num('cases', 7) + num('ate', 6)
+    + num('error was', 16) + num('error now', 16));
+  console.log('  ' + '-'.repeat(69));
+  Object.entries(byMethod)
+    .sort(function (a, b) { return b[1].before - a[1].before; })
+    .forEach(function (pair) {
+      const k = pair[0];
+      const m = pair[1];
+      const pct = (n) => (m.truth ? Math.round((n / m.truth) * 1000) / 10 : 0) + '%';
+      console.log('  ' + pad(k, 24) + num(m.n, 7) + num(m.truth, 6)
+        + num(m.before + ' (' + pct(m.before) + ')', 16)
+        + num(m.after + ' (' + pct(m.after) + ')', 16));
+    });
+  console.log('');
+}
+
+
+/**
+ * Whole nights through the shipped billing.
+ *
+ * night() is reused, but every order now carries the party its membership
+ * declared, and the charge comes from order.memberRollup() - the same function
+ * close-out calls. `misread` is the share of memberships at a shared table who
+ * answer for the whole table anyway.
+ */
+function nightShipped(seed, opts) {
+  const o = opts || {};
+  const misread = o.misread || 0;
+  const n = night(seed, o);
+
+  // Re-stamp each order with what its membership would have declared.
+  let i = 0;
+  const declared = n.orders.map((ord) => {
+    i += 1;
+    const key = String(ord.memberNumber);
+    let party = n.memberTruth.get(key) || ord.guestCount;
+    if (n.shared.has(key) && ((i * 2654435761) % 1000) / 1000 < misread) {
+      // Reads the question as being about the table: counts the people the
+      // other membership brought as well.
+      party *= 2;
+    }
+    return Object.assign({}, ord, {
+      partySize: Math.min(party, config.order.maxGuests),
+    });
+  });
+  return { orders: declared, memberTruth: n.memberTruth };
+}
+
+function shippedSim() {
+  const MIXES = [
+    { key: 'careful', label: 'careful  (10% split, 3% share)', splitRate: 0.10, shareRate: 0.03 },
+    { key: 'typical', label: 'typical  (25% split, 8% share)', splitRate: 0.25, shareRate: 0.08 },
+    { key: 'loose', label: 'loose    (45% split, 15% share)', splitRate: 0.45, shareRate: 0.15 },
+  ];
+  const MISREADS = [0, 0.15, 0.30];
+  const RUNS = 400;
+  const pad = (s, w) => String(s).padEnd(w);
+  const num = (s, w) => String(s).padStart(w);
+
+  console.log('');
+  console.log('  ' + RUNS + ' nights per mix, through order.memberRollup() - the function');
+  console.log('  close-out actually calls. Scored per membership, not per night.');
+  console.log('');
+  console.log('  ' + pad('mix', 32) + num('old rule', 20)
+    + MISREADS.map((m) => num('misread ' + Math.round(m * 100) + '%', 20)).join(''));
+  console.log('  ' + '-'.repeat(114));
+
+  MIXES.forEach((mix) => {
+    const score = (build) => {
+      let wrong = 0; let total = 0; let got = 0; let want = 0;
+      for (let i = 0; i < RUNS; i += 1) {
+        const n = build(i + 1);
+        const rows = order.memberRollup(n.orders);
+        const by = new Map(rows.map((r) => [r.memberNumber, r.partySize]));
+        n.memberTruth.forEach((w, id) => {
+          const had = by.get(id) || 0;
+          total += 1;
+          if (had !== w) wrong += 1;
+          got += had; want += w;
+        });
+      }
+      return {
+        wrong: Math.round((wrong / total) * 1000) / 10,
+        net: Math.round(((got - want) / want) * 1000) / 10,
+      };
+    };
+
+    const cells = [];
+    const old = score((s) => night(s, { splitRate: mix.splitRate, shareRate: mix.shareRate }));
+    cells.push(old.wrong + '% (' + (old.net >= 0 ? '+' : '') + old.net + '%)');
+    MISREADS.forEach((m) => {
+      const r = score((s) => nightShipped(s, {
+        splitRate: mix.splitRate, shareRate: mix.shareRate, misread: m,
+      }));
+      cells.push(r.wrong + '% (' + (r.net >= 0 ? '+' : '') + r.net + '%)');
+    });
+    console.log('  ' + pad(mix.label, 32) + cells.map((c) => num(c, 20)).join(''));
+  });
+
+  console.log('');
+  console.log('  Left column is the rule that used to bill. The rest is what ships,');
+  console.log('  as more memberships at a shared table answer for the whole table.');
+  console.log('  First figure is memberships billed wrong; the bracket is the error');
+  console.log('  on the night total.');
+  console.log('');
+}
+
+if (process.argv.includes('--shipped')) shipped();
+
 if (process.argv.includes('--scoped')) scoped();
 
 
 if (process.argv.includes('--report-json')) {
   console.log(JSON.stringify(reportData(), null, 1));
 }
+
+if (process.argv.includes('--shipped-sim')) shippedSim();
