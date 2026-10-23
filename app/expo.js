@@ -394,6 +394,13 @@ const CATALOG = menu.catalog();
 
     fillLanes(config.defaultNight);
 
+    // The rail says whether members can order. Staff should not have to
+    // walk to the manager screen to find out why nothing is arriving.
+    db.watchServiceOpen(function (open) {
+      var flag = document.getElementById("closedFlag");
+      if (flag) flag.hidden = open;
+    });
+
     db.watchServiceNight(function (night) {
       state.night = night;
       fillLanes(night);

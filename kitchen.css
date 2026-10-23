@@ -527,3 +527,13 @@
   border: 1px dashed var(--kmuted);
   color: var(--kmuted);
 }
+
+/* Members cannot order right now. Loud on purpose: the rail going quiet
+   looks the same as the kitchen being closed, and a cook should not have to
+   walk to the manager screen to tell the two apart. */
+.closedflag {
+  font: 600 13px/1 var(--font, system-ui, sans-serif);
+  letter-spacing: .06em; text-transform: uppercase;
+  color: #fff; background: var(--tomato, #d33f30);
+  padding: 7px 12px; border-radius: 999px; white-space: nowrap;
+}

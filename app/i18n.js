@@ -157,8 +157,16 @@ const STRINGS = {
     'guest.step.side': 'Pick a side',
     'guest.step.side.sub': 'One basket each.',
     'guest.lane.pizza.blurb': 'One size, three sauces, all the toppings. Straight into the oven.',
-    'guest.guests.title': 'How many are eating?',
-    'guest.guests.sub': 'We will build one {unit} per person. You can change it later.',
+    // Worded about the ACCOUNT, not the table. Two memberships sharing a table
+    // used to both answer for all of it, and both got billed for all of it.
+    // "Your account" is the distinction that stops that, and it is already the
+    // phrase a member uses at a club.
+    'guest.guests.title': 'How many are you ordering for tonight?',
+    'guest.guests.sub': 'Everyone whose meals go on your account. We only ask once.',
+    'guest.party.inherited': 'Ordering for your party of {n} tonight.',
+    'guest.party.change': 'Change',
+    'guest.round.title': 'How many this round?',
+    'guest.round.sub': 'One {unit} each. Your party is already counted - this is just what to cook now.',
     'guest.guests.justme': 'just me',
     'guest.guests.people': 'people',
     'guest.guests.allergy': 'Someone has a food allergy?',
@@ -336,8 +344,12 @@ const STRINGS = {
     'guest.step.side': 'Elija un acompañamiento',
     'guest.step.side.sub': 'Uno por persona.',
     'guest.lane.pizza.blurb': 'Un solo tamaño, tres salsas, todos los ingredientes. Directo al horno.',
-    'guest.guests.title': '¿Cuántos van a comer?',
-    'guest.guests.sub': 'Prepararemos un platillo por persona. Puede cambiarlo después.',
+    'guest.guests.title': '¿Para cuántas personas pide esta noche?',
+    'guest.guests.sub': 'Todos cuyos platillos se cargan a su cuenta. Solo lo preguntamos una vez.',
+    'guest.party.inherited': 'Pidiendo para su grupo de {n} esta noche.',
+    'guest.party.change': 'Cambiar',
+    'guest.round.title': '¿Cuántos en esta ronda?',
+    'guest.round.sub': 'Un {unit} para cada uno. Su grupo ya está contado; esto es solo lo que hay que cocinar ahora.',
     'guest.guests.justme': 'solo yo',
     'guest.guests.people': 'personas',
     'guest.guests.allergy': '¿Alguien tiene alergia alimentaria?',

@@ -262,6 +262,39 @@ function menuMix(r) {
  * easy when both are in the same order. The consumption view is still here in
  * the items columns for spotting a table that ran the kitchen hard.
  */
+/**
+ * Tables where two memberships were seated at the same time.
+ *
+ * The party question is worded about the account, which is what stops two
+ * memberships at one table both answering for all of it. It cannot stop one of
+ * them answering for all of it anyway, and nothing in the system records a
+ * seating, so the only evidence is that their orders overlapped at the same
+ * table. That is a prompt to look, not a verdict - a genuine eight-top split
+ * across two memberships looks exactly the same and is perfectly correct.
+ */
+function sharedTablesPanel(r) {
+  const flagged = r.sharedTables || [];
+  if (!flagged.length) return '';
+
+  const when = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return html`<div class="card rpt-flag">
+    <strong>${flagged.length} table${flagged.length === 1 ? '' : 's'} shared by two memberships</strong>
+    <p class="muted" style="margin:4px 0 10px;font-size:14px">
+      Worth a glance before posting. If both parties counted the same people,
+      those guests are on the bill twice. If they were separate parties sharing
+      a big table, this is right as it stands.
+    </p>
+    <ul class="rpt-flag-list">
+      ${flagged.map((f) => html`<li>
+        <strong>${f.tagLabel}</strong> &mdash;
+        ${f.members.map((m) => html`<span class="rpt-flag-m">${m.name || 'Member ' + m.memberNumber}
+          (${m.memberNumber}, ${when(m.from)}&ndash;${when(m.to)})</span>`).join(' &middot; ')}
+      </li>`).join('')}
+    </ul>
+  </div>`;
+}
+
 function membersToCharge(r) {
   if (!r.members.length) return '';
 
@@ -290,6 +323,8 @@ function membersToCharge(r) {
         order.
       </p>
     </div>
+
+    ${raw(sharedTablesPanel(r))}
 
     <div class="card mtable-wrap">
       <table class="rpt-table">
@@ -490,6 +525,14 @@ function toCsv(r, date) {
   push('Generated', r.generatedAt);
   push('');
 
+  if ((r.sharedTables || []).length) {
+    push('TABLES SHARED BY TWO MEMBERSHIPS - CHECK BEFORE POSTING');
+    push('Table', 'Member', 'Name', 'Orders', 'From', 'To');
+    r.sharedTables.forEach((f) => f.members.forEach((m) => push(
+      f.tagLabel, m.memberNumber, m.name, m.orders, m.from, m.to)));
+    push('');
+  }
+
   push('MEMBERS TO CHARGE');
   push('Charges to post', r.totals.covers);
   push('Members dining', r.totals.members);
@@ -508,6 +551,7 @@ function toCsv(r, date) {
   push('Still open', r.totals.stillOpen);
   push('Voided', r.totals.voided);
   push('Covers (billable, AYCE)', r.totals.covers);
+  push('Tables shared by two memberships', r.totals.sharedTables);
   push('Members', r.totals.members);
   push('Repeat orders', r.totals.repeatOrders);
   push('Bowls', r.totals.bowls);

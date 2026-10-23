@@ -229,6 +229,13 @@ import {
     memberDigits: '',
     member: null,
     guestCount: 2,
+    // How many this membership is feeding tonight. Null until the question is
+    // answered, or until an earlier order's answer is found. guestCount is how
+    // many THIS order is for; partySize is what gets charged, and keeping the
+    // two apart is the whole point of asking once.
+    partySize: null,
+    partyInherited: false,
+    kitchenOpen: true,
     bowls: [],
     activeBowl: 0,
     buildStep: 0,
@@ -569,13 +576,33 @@ import {
       : html`<button class="btn btn-ghost" type="button" data-act="mode" data-id="pro">
           ${t('guest.guests.allergy')}</button>`;
 
+    // The same screen answers two different questions, and which one it is
+    // asking depends on whether this membership has already said how many it
+    // is feeding tonight.
+    //
+    // First trip: the billing question, worded about the ACCOUNT rather than
+    // the table, so that two memberships sharing a table do not both answer
+    // for all of it. Later trips: plates for this round only - the charge was
+    // settled on the first trip and is not asked about again.
+    var known = state.partyInherited && state.partySize;
+    var party = known
+      ? html`<div class="notice notice-ok">
+          ${t('guest.party.inherited', { n: state.partySize })}
+          <button class="linkish" type="button" data-act="changeParty">
+            ${t('guest.party.change')}</button>
+        </div>`
+      : '';
+
     return html`
       <div class="step-head">
         <p class="step-kicker">${t('guest.step', { n: 3 })}</p>
-        <h1 class="step-title">${t('guest.guests.title')}</h1>
-        <p class="step-sub">${t('guest.guests.sub', { unit: lane().one })}</p>
+        <h1 class="step-title">${known ? t('guest.round.title') : t('guest.guests.title')}</h1>
+        <p class="step-sub">${known
+          ? t('guest.round.sub', { unit: lane().one })
+          : t('guest.guests.sub')}</p>
       </div>
       <div class="stack">
+        ${raw(party)}
         <div class="tiles tiles-sm">${counts}</div>
         ${raw(allergenPanel)}
       </div>`;
@@ -1251,6 +1278,23 @@ import {
         var res = await db.lookupMember(state.memberDigits, t.lang);
         state.member = res;
         if (res.status === 'verified' && res.defaultGuests) state.guestCount = res.defaultGuests;
+
+        // Has this membership already said how many it is feeding tonight? If
+        // so the question is not asked again - being asked again, by whoever
+        // happened to pick up a phone next, is how a party of four came to be
+        // billed as three.
+        if (res.status !== 'invalid') {
+          var party = await db.getParty(state.memberDigits);
+          if (party) {
+            state.partySize = party.partySize;
+            state.partyInherited = true;
+            if (!state.guestCountTouched) state.guestCount = party.partySize;
+          } else {
+            state.partySize = null;
+            state.partyInherited = false;
+          }
+        }
+
         state.busy = false;
         if (res.status === 'invalid') return render({ keepScroll: true });
         state.screen = afterMember();
@@ -1264,6 +1308,19 @@ import {
 
     guests: function (el) {
       state.guestCount = Number(el.dataset.id);
+      state.guestCountTouched = true;
+      // On the first trip this tile IS the party answer, so it sets the number
+      // that will be charged. On a later trip it only says how many plates to
+      // build - the charge was settled and must not move because two of four
+      // came back for pizza.
+      if (!state.partyInherited) state.partySize = state.guestCount;
+      render({ keepScroll: true });
+    },
+
+    /** Re-open the billing question. Rare, and deliberately a second tap. */
+    changeParty: function () {
+      state.partyInherited = false;
+      state.partySize = state.guestCount;
       render({ keepScroll: true });
     },
 
@@ -1408,15 +1465,33 @@ import {
     setOrderNotes: function (el) { state.orderNotes = el.value; },
 
     send: async function () {
+      if (!state.kitchenOpen) {
+        toast(t('guest.closed'), true);
+        return render({ keepScroll: true });
+      }
       state.busy = true;
       render({ keepScroll: true });
       try {
+        // Record the party before the order, so the next person at this table
+        // inherits it even if the order itself fails. Written every trip
+        // rather than only the first: it is the same value on a later trip,
+        // and it is the correction on a changed one.
+        var declared = state.partySize || state.guestCount;
+        try {
+          await db.setParty(state.memberDigits, declared);
+        } catch (partyErr) {
+          // The order still carries the number, so close-out is right even if
+          // the shared record did not land. Only the next phone loses out.
+          console.warn('[guest] could not record the party:', partyErr.message);
+        }
+
         var created = await db.submitOrder({
           memberNumber: state.memberDigits,
           memberName: state.member ? state.member.name : '',
           memberStatus: state.member ? state.member.status : 'unverified',
           lang: t.lang,
           guestCount: state.guestCount,
+          partySize: declared,
           source: 'qr',
           avoidAllergens: state.avoid,
           notes: state.orderNotes,
@@ -1675,9 +1750,20 @@ import {
     if (state.boot.tagUnknown) {
       toast(t('guest.where.badtag'), true);
     }
-    if (!state.boot.open) {
-      toast(t('guest.closed'), true);
-    }
+    // Whether the kitchen is taking orders is a manager's switch, watched live
+    // so a member staring at the member-number keypad when service opens sees
+    // it open without reloading - and a member mid-build when it closes is
+    // told before they press Send rather than after.
+    //
+    // The clock rule stays in the AND: config can still shut the whole thing
+    // outside service hours without anyone touching a switch.
+    db.watchServiceOpen(function (open) {
+      var next = open && isOpen();
+      if (next === state.kitchenOpen) return;
+      state.kitchenOpen = next;
+      if (!next) toast(t('guest.closed'), true);
+      render({ keepScroll: true });
+    });
   }
 
   boot();

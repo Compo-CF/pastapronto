@@ -1893,12 +1893,16 @@ test('the rules agree with config about how big a party can be', () => {
   const cap = config.order.maxGuests;
 
   const guestCaps = [...rules.matchAll(/guestCount\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
+  // The declared party is capped by the same number, in the same place.
+  const partyCaps = [...rules.matchAll(/partySize\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
   const lineCaps = [...rules.matchAll(/lines\.size\(\)\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
 
   assert.ok(guestCaps.length >= 2, 'found ' + guestCaps.length + ' guest caps - the scan is broken');
   assert.ok(lineCaps.length >= 2, 'found ' + lineCaps.length + ' line caps - the scan is broken');
 
+  assert.ok(partyCaps.length >= 1, 'no partySize cap in firestore.rules - parties/ is unbounded');
   guestCaps.forEach((n) => assert.strictEqual(n, cap, 'a guestCount cap in firestore.rules'));
+  partyCaps.forEach((n) => assert.strictEqual(n, cap, 'a partySize cap in firestore.rules'));
   lineCaps.forEach((n) => assert.strictEqual(n, cap, 'a lines.size cap in firestore.rules'));
 });
 
@@ -3873,6 +3877,75 @@ test('a table that turned over is not mistaken for a shared one', () => {
   voided.submittedAt = '2026-11-05T18:15:00.000Z';
   voided.status = order.STATUS.VOIDED;
   assert.deepStrictEqual(order.overlappingParties([early, voided]), []);
+});
+
+test('a closed kitchen is refused by the rules, not just by the screen', () => {
+  // The guest screen blocks Send, but a phone that had the page open when the
+  // kitchen closed would still have a working button. The rules are what make
+  // "closed" mean closed.
+  const rules = rulesSource();
+  const create = rules.slice(rules.indexOf('allow create: if signedIn()'));
+  const line = create.slice(0, create.indexOf(';'));
+  assert.ok(line.includes('kitchenOpen()'),
+    'order create must check the kitchen is open');
+
+  const fn = rules.slice(rules.indexOf('function kitchenOpen()'));
+  const body = fn.slice(0, fn.indexOf('\n      }'));
+  assert.ok(body.includes('config/service'), 'it reads the service document');
+  assert.ok(body.includes('svc.open == true'), 'it requires open');
+  assert.ok(
+    body.includes("svc.openFor == request.resource.data.serviceDate"),
+    'it must match the flag against THIS order\'s service date, or last '
+    + 'Thursday\'s "open" admits tonight\'s orders',
+  );
+});
+
+test('the kitchen closes itself when the service date rolls', () => {
+  // Nobody has to remember to close up. The stamp is what expires, so the
+  // reading of it is the thing that has to compare dates.
+  const src = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('export function watchServiceOpen'));
+  const body = fn.slice(0, fn.indexOf('\n}'));
+
+  assert.ok(body.includes('data.openFor === serviceDate()'),
+    'an open stamped for another date must not read as open');
+  assert.ok(body.includes('cb(false)'),
+    'an unreachable service document must read as closed, not open');
+
+  // And closing must clear the stamp rather than leave a stale one behind.
+  const setter = src.slice(src.indexOf('export async function setServiceOpen'));
+  assert.ok(setter.slice(0, setter.indexOf('\n}')).includes('openFor: open === true ? serviceDate() : null'),
+    'closing must clear openFor');
+});
+
+test('the guest screen will not send into a closed kitchen', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const send = src.slice(src.indexOf('send: async function ()'));
+  const head = send.slice(0, send.indexOf('db.submitOrder'));
+  assert.ok(/if \(!state\.kitchenOpen\)/.test(head),
+    'Send must check before it builds an order');
+  assert.ok(src.includes('db.watchServiceOpen('),
+    'and the screen must follow the switch rather than read it once');
+});
+
+test('both rails say when members cannot order', () => {
+  // A quiet rail and a closed kitchen look identical from the pass.
+  ['../app/kitchen.js', '../app/expo.js'].forEach((rel) => {
+    const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+    assert.ok(src.includes('watchServiceOpen'), rel + ' does not watch the switch');
+    assert.ok(src.includes('closedFlag'), rel + ' has nowhere to show it');
+  });
+  ['../kitchen.html', '../expo.html'].forEach((rel) => {
+    const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+    assert.ok(src.includes('id="closedFlag"'), rel + ' is missing the flag');
+  });
+});
+
+test('close-out shows tables two memberships shared', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/report.js', import.meta.url)), 'utf8');
+  assert.ok(src.includes('sharedTablesPanel('), 'no panel on the close-out screen');
+  assert.ok(src.includes('TABLES SHARED BY TWO MEMBERSHIPS'),
+    'the CSV export must carry it too - a figure only on screen is not a record');
 });
 
 test('the member roster never reaches git or the web', () => {

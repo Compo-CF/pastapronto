@@ -30,6 +30,7 @@ const CATALOG = menu.catalog();
     base: '', orders: [], unavailable: [],
     costs: { items: {}, chargePerCover: null },
     night: config.defaultNight,
+    serviceOpen: false,
     // The orders panel. `editing` is the id of the open ticket and `draft` is
     // the working copy of it - never the live snapshot, or a Firestore update
     // landing mid-edit would rewrite what a manager is halfway through typing.
@@ -51,6 +52,9 @@ const CATALOG = menu.catalog();
     qrMeta: document.getElementById('qrMeta'),
     nightSwitch: document.getElementById('nightSwitch'),
     nightNote: document.getElementById('nightNote'),
+    serviceSwitch: document.getElementById('serviceSwitch'),
+    serviceNote: document.getElementById('serviceNote'),
+    serviceCard: document.getElementById('serviceCard'),
     costSummary: document.getElementById('costSummary'),
     costSheet: document.getElementById('costSheet'),
     chargePerCover: document.getElementById('chargePerCover'),
@@ -589,7 +593,56 @@ const CATALOG = menu.catalog();
         : 'Nothing open right now, so this is a clean switch.');
   }
 
+  /**
+   * Open or close the kitchen.
+   *
+   * Two buttons rather than a slider: a slider has to be read to know which
+   * way it is set, and this is a control someone glances at across a pass
+   * while carrying something. Pressed-state marks the live one, the same as
+   * the night switch beside it.
+   *
+   * Closed is the resting state. A night nobody opened is closed, and a night
+   * that ended closes itself at the 4am roll - so the only way to be open is
+   * for somebody to have said so today.
+   */
+  function renderServiceSwitch() {
+    var opts = [
+      { id: 'open', label: 'Open', sub: 'members can order' },
+      { id: 'closed', label: 'Closed', sub: 'orders refused' },
+    ];
+    el.serviceSwitch.innerHTML = opts.map(function (o) {
+      var on = (o.id === 'open') === state.serviceOpen;
+      return html`<button class="nightopt" type="button"
+        data-act="setOpen" data-id="${o.id}" aria-pressed="${on ? 'true' : 'false'}">
+        <span class="nightopt-name">${o.label}</span>
+        <span class="nightopt-sub">${o.sub}</span>
+      </button>`;
+    }).join('');
+
+    el.serviceNote.textContent = state.serviceOpen
+      ? 'Guest phones can send orders, and the rail says OPEN.'
+      : 'Guest phones are refused - and so is anything that gets past them, '
+        + 'because the rules check this too. Opens for tonight only; it closes '
+        + 'itself at the 4am roll.';
+    el.serviceCard.classList.toggle('is-closed', !state.serviceOpen);
+  }
+
   document.addEventListener('click', async function (ev) {
+    var openBtn = ev.target.closest('[data-act="setOpen"]');
+    if (openBtn) {
+      var want = openBtn.getAttribute('data-id') === 'open';
+      if (want === state.serviceOpen) return;
+      try {
+        await db.setServiceOpen(want);
+        toast(want
+          ? 'Kitchen is open. Members can order.'
+          : 'Kitchen is closed. No new orders will be taken.');
+      } catch (err) {
+        toast('Could not change it: ' + err.message, true);
+      }
+      return;
+    }
+
     var btn = ev.target.closest('[data-act="setNight"]');
     if (!btn) return;
     var id = btn.getAttribute('data-id');
@@ -1949,6 +2002,15 @@ const CATALOG = menu.catalog();
       renderMenu();
     }, {
       onError: function (err) { toast('Could not read the service night: ' + err.code, true); },
+    });
+
+    // Whether the kitchen is taking orders. Watched rather than read once, so
+    // two managers on two iPads cannot disagree about it.
+    db.watchServiceOpen(function (open) {
+      state.serviceOpen = open;
+      renderServiceSwitch();
+    }, {
+      onError: function (err) { toast('Could not read the service state: ' + err.code, true); },
     });
 
     db.watchCosts(function (costs) {

@@ -594,3 +594,10 @@
   font-size: 13px;
   color: #8a4a1f;
 }
+
+/* The manager card reads its own state at a glance, so nobody has to
+   work out which of two buttons is the pressed one from across a room. */
+#serviceCard.is-closed {
+  border-color: var(--tomato, #d33f30);
+  box-shadow: inset 4px 0 0 var(--tomato, #d33f30);
+}

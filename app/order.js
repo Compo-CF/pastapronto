@@ -1048,6 +1048,10 @@ export function shiftReport(orders, sla) {
   const bowls = alive.reduce((a, o) => a + o.lines.length, 0);
   const members = memberRollup(orders);
   const covers = members.reduce((a, m) => a + m.partySize, 0);
+  // Tables where two memberships were seated together. Each may have answered
+  // the party question for the whole table instead of their own people, which
+  // would bill those people twice - so a manager looks before posting.
+  const sharedTables = overlappingParties(orders);
 
   return {
     serviceDate: orders.length ? orders[0].serviceDate : null,
@@ -1063,8 +1067,10 @@ export function shiftReport(orders, sla) {
       repeatOrders: Math.max(0, alive.length - members.length),
       bowls,
       bowlsPerCover: covers ? Math.round((bowls / covers) * 100) / 100 : 0,
+      sharedTables: sharedTables.length,
     },
     members,
+    sharedTables,
     timings: {
       avgQueueSec: average(queueWaits),
       avgCookSec: average(cookTimes),

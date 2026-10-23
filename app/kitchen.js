@@ -815,6 +815,13 @@ const CATALOG = menu.catalog();
 
     // The manager can flip the night mid-setup; the rail has to follow without
     // someone reloading a tablet that is mounted to a wall.
+    // The rail says whether members can order. Staff should not have to
+    // walk to the manager screen to find out why nothing is arriving.
+    db.watchServiceOpen(function (open) {
+      var flag = document.getElementById("closedFlag");
+      if (flag) flag.hidden = open;
+    });
+
     db.watchServiceNight(function (night) {
       state.night = night;
       fillStations(night);

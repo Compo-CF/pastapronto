@@ -15,7 +15,11 @@
  *   members/{memberNumber}   { name, dietaryNotes, defaultGuests }
  *   config/availability      { unavailable: [ingredientId] } - the 86 list
  *   config/costs             { items: { id: {price, yield} }, chargePerCover }
- *   config/service           { night } - which night the venue is running
+ *   config/service           { night, open, openFor } - the night, and whether
+ *                            the kitchen is taking orders (openFor is the
+ *                            service date that `open` applies to)
+ *   parties/{date}_{member}  { serviceDate, memberNumber, partySize } - how
+ *                            many a membership is feeding tonight, asked once
  *
  * Every screen listens to "today's orders" with a single-field query and does
  * its own filtering and sorting in memory. A service day is tens to a few
@@ -274,6 +278,104 @@ export function watchServiceNight(cb, { onError } = {}) {
       if (onError) onError(err);
     },
   );
+}
+
+// --------------------------------------------------------------- parties
+
+/**
+ * How many people a membership is feeding tonight.
+ *
+ * One document per membership per service date, so the second person to pick
+ * up a phone at the same table inherits the answer instead of being asked
+ * again - which is the whole point, since being asked again is how a party of
+ * four came to be billed as three.
+ *
+ * Read by id, never listed: the guest screen knows the member number it just
+ * took, and a collection of who is dining tonight is nobody's business.
+ */
+const partyId = (memberNumber, date) => `${date || serviceDate()}_${memberNumber}`;
+
+export async function getParty(memberNumber, date) {
+  const n = order.normalizeMemberNumber(memberNumber);
+  if (!n) return null;
+  await ready();
+  try {
+    const snap = await getDoc(doc(db, 'parties', partyId(n, date)));
+    if (!snap.exists()) return null;
+    const size = Number(snap.data().partySize);
+    return Number.isFinite(size) && size > 0 ? { memberNumber: n, partySize: size } : null;
+  } catch {
+    // Offline, or rules refused. The guest gets asked rather than stranded,
+    // and the answer they give is written when the connection comes back.
+    return null;
+  }
+}
+
+export async function setParty(memberNumber, partySize, date) {
+  const n = order.normalizeMemberNumber(memberNumber);
+  const size = Number(partySize);
+  if (!n) throw new Error('A party needs a member number.');
+  if (!Number.isFinite(size) || size < 1 || size > config.order.maxGuests) {
+    throw new Error('A party is 1 to ' + config.order.maxGuests + ' people.');
+  }
+  await ready();
+  const on = date || serviceDate();
+  await setDoc(doc(db, 'parties', partyId(n, on)), {
+    serviceDate: on,
+    memberNumber: n,
+    partySize: size,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid(),
+  }, { merge: true });
+  return size;
+}
+
+/**
+ * Is the kitchen taking orders?
+ *
+ * The flag is stamped with the service date it was set for, and a date that is
+ * not today reads as closed. That is the whole trick: nobody has to remember to
+ * close up, because the night closes itself at the 4am roll, and a manager has
+ * to open deliberately before a member can send anything in. A plain boolean
+ * would carry Thursday's "open" into next Thursday's setup, which is exactly
+ * the state this exists to prevent.
+ *
+ * A missing or unreachable document reads as CLOSED. A guest who cannot be told
+ * whether the kitchen is ready should not be able to send food to it.
+ *
+ * @param {(open: boolean) => void} cb
+ * @returns {() => void} unsubscribe
+ */
+export function watchServiceOpen(cb, { onError } = {}) {
+  return onSnapshot(
+    serviceRef,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      cb(Boolean(data && data.open === true && data.openFor === serviceDate()));
+    },
+    (err) => {
+      console.error('[db] watchServiceOpen failed:', err.code, err.message);
+      cb(false);
+      if (onError) onError(err);
+    },
+  );
+}
+
+/**
+ * Open or close the kitchen. Manager screen only.
+ *
+ * Opening stamps today's service date; closing clears it, so a stale stamp can
+ * never read as open tomorrow.
+ */
+export async function setServiceOpen(open) {
+  await ready();
+  await setDoc(serviceRef, {
+    open: open === true,
+    openFor: open === true ? serviceDate() : null,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid(),
+  }, { merge: true });
+  return open === true;
 }
 
 /** Switch the night. Manager screen only. */

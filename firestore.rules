@@ -62,6 +62,27 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // How many people a membership is feeding tonight, asked once and then
+    // inherited by every later order on that membership.
+    //
+    // Read one at a time, never listed - the guest screen knows the member
+    // number it just took, and a list of who is dining tonight is a guest list
+    // nobody needs to be able to download.
+    //
+    // A guest writes this, so the bound here is shape and size rather than
+    // authority; the same anonymous identity every other guest write has. What
+    // it does stop is a party of four hundred.
+    match /parties/{partyId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow write: if signedIn()
+        && request.resource.data.partySize is int
+        && request.resource.data.partySize >= 1
+        && request.resource.data.partySize <= 12
+        && request.resource.data.serviceDate is string
+        && request.resource.data.memberNumber is string;
+    }
+
     // Shared service configuration: the 86 list and the food-cost sheet.
     //
     // Validated per document rather than in one combined check. The two have
@@ -85,9 +106,23 @@ service cloud.firestore {
         // Which night the venue is running. A short string and nothing else -
         // the client checks it against config.nights before using it, so an
         // unknown value falls back rather than emptying the menu.
+        // Which night is running, and whether the kitchen is taking orders.
+        //
+        // Each field is checked only when it is there. A merge write sends the
+        // whole resulting document, so these are usually both present - but a
+        // manager who opens the kitchen on a project where no night has ever
+        // been set would otherwise be refused, with nothing on screen to say
+        // why. `openFor` may be null: that is how closing clears the stamp.
         (docId == 'service'
-          && request.resource.data.night is string
-          && request.resource.data.night.size() <= 40)
+          && (!('night' in request.resource.data)
+            || (request.resource.data.night is string
+              && request.resource.data.night.size() <= 40))
+          && (!('open' in request.resource.data)
+            || request.resource.data.open is bool)
+          && (!('openFor' in request.resource.data)
+            || request.resource.data.openFor == null
+            || request.resource.data.openFor is string)
+          && (('night' in request.resource.data) || ('open' in request.resource.data)))
         ||
         // Locations a manager added - the locker room, the halfway house.
         // Bounded in size and nothing more; app/config.js isValidTag() checks
@@ -185,7 +220,19 @@ service cloud.firestore {
       }
 
       allow read: if signedIn();
-      allow create: if signedIn() && validNewOrder();
+      // A closed kitchen refuses food, not just on the guest's screen. The
+      // screen check is a courtesy - it explains - but a phone that had the
+      // page open when the kitchen closed would otherwise still send.
+      //
+      // Matched against THIS order's service date rather than a clock the
+      // rules do not have: an "open" left stamped with last Thursday cannot
+      // admit tonight's order.
+      function kitchenOpen() {
+        let svc = get(/databases/$(database)/documents/config/service).data;
+        return svc.open == true && svc.openFor == request.resource.data.serviceDate;
+      }
+
+      allow create: if signedIn() && validNewOrder() && kitchenOpen();
       allow update: if signedIn() && validUpdate();
       // Deletes are the manager's "clear today" button.
       allow delete: if signedIn();
