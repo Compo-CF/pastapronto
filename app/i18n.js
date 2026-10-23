@@ -234,6 +234,8 @@ const STRINGS = {
     'guest.wait.label': 'Wait',
     'guest.wait.flat': 'About 15-20 min',
     'guest.closed': 'The pasta station is closed right now.',
+    'guest.closed.title': 'The kitchen is not taking orders yet.',
+    'guest.closed.sub': 'Your server will let you know when it opens. This page will update on its own - no need to refresh.',
     'guest.offline': 'We cannot reach the kitchen right now - ask your server.',
 
     'kitchen.lane.queued': 'Sent',
@@ -418,6 +420,8 @@ const STRINGS = {
     'guest.wait.flat': 'Unos 15-20 min',
 
     'guest.closed': 'La estación de pasta está cerrada en este momento.',
+    'guest.closed.title': 'La cocina aún no acepta pedidos.',
+    'guest.closed.sub': 'Su mesero le avisará cuando abra. Esta página se actualizará sola; no hace falta recargar.',
     'guest.offline': 'No podemos comunicarnos con la cocina - pregunte a su mesero.',
 
     'kitchen.lane.queued': 'Enviadas',

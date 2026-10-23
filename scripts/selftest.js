@@ -4045,6 +4045,52 @@ test('a phone at a table never lists the service to get a wait time', () => {
   assert.ok(/db\.publishQueueDepth\(/.test(rail), 'nothing publishes the depth');
 });
 
+test('a device can be handed back without touching the shared account', () => {
+  // Every iPad shares one staff account, so there is no per-device row to
+  // delete when one is retired. Signing the device out is the case that comes
+  // up - a tablet repurposed, or going back to the office.
+  const html = readFileSync(fileURLToPath(new URL('../admin.html', import.meta.url)), 'utf8');
+  assert.ok(html.includes('id="signOutBtn"'), 'no way to hand a device back');
+
+  const admin = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+  const handler = admin.slice(admin.indexOf("getElementById('signOutBtn')"));
+  const body = handler.slice(0, handler.indexOf('});'));
+  assert.ok(/db\.signOutStaff\(/.test(body), 'the button does not sign anything out');
+  assert.ok(/window\.confirm\(/.test(body),
+    'signing a wall-mounted rail out by a stray tap is worse than the tap it saves');
+
+  // And signing out must land back on anonymous, or the device cannot even
+  // read the menu to tell someone what went wrong.
+  const db = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = db.slice(db.indexOf('export async function signOutStaff'));
+  assert.ok(/signInAnonymously/.test(fn.slice(0, fn.indexOf('\n}'))),
+    'signOutStaff leaves the device with no identity at all');
+});
+
+test('a closed kitchen says so on the first screen, not the last', () => {
+  // Meeting the refusal at Send means four bowls built for nothing. The rules
+  // refuse it either way; this is about not wasting somebody's evening.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+
+  const screen = src.slice(src.indexOf('function screenMember()'));
+  const body = screen.slice(0, screen.indexOf('\n  function '));
+  assert.ok(/state\.kitchenOpen/.test(body),
+    'the member-number screen says nothing about the kitchen being shut');
+  assert.ok(/guest\.closed\.title/.test(body), 'and has no words to say it with');
+
+  // And the keypad must not carry on into a flow that ends in a refusal.
+  const submit = src.slice(src.indexOf('submitMember: async function ()'));
+  const head = submit.slice(0, submit.indexOf('db.lookupMember'));
+  assert.ok(/if \(!state\.kitchenOpen\)/.test(head),
+    'the keypad still advances while the kitchen is closed');
+
+  // Both languages, or a Spanish-speaking member gets a blank banner.
+  ['guest.closed.title', 'guest.closed.sub'].forEach((k) => {
+    assert.ok(STRINGS.en[k], k + ' has no English');
+    assert.ok(STRINGS.es[k], k + ' has no Spanish');
+  });
+});
+
 test('the member roster never reaches git or the web', () => {
   // private/ holds 700-odd real families and their account numbers. Two
   // separate mechanisms keep it out: .gitignore, and the hosting ignore list -

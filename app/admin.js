@@ -773,6 +773,27 @@ const CATALOG = menu.catalog();
     }
   });
 
+  /**
+   * Hand an iPad back.
+   *
+   * Every device shares one staff account, so taking a retired one off the
+   * list is not possible without taking them all off. This signs out the
+   * device in front of you, which is the case that actually comes up: a
+   * tablet being repurposed, or one going back to the office.
+   *
+   * For a LOST device, this button is no use - change the password in the
+   * Firebase console and set the iPads up again.
+   */
+  document.getElementById('signOutBtn').addEventListener('click', async function () {
+    if (!window.confirm('Sign this device out? It will need the staff email and password again before it can show any screen.')) return;
+    try {
+      await db.signOutStaff();
+      toast('Signed out. Reload to set this device up again.');
+    } catch (err) {
+      toast('Could not sign out: ' + err.message, true);
+    }
+  });
+
   document.getElementById('resetBtn').addEventListener('click', async function () {
     if (!window.confirm('Delete every order for ' + serviceDate() + '? This cannot be undone.')) return;
     try {

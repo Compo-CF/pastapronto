@@ -506,8 +506,16 @@ import {
     }
     var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'];
 
+    // Say it here, on the first screen, rather than letting someone build
+    // four bowls and meet the refusal at Send. The rules would stop the
+    // order either way; this stops the wasted effort.
+    var shut = state.kitchenOpen ? '' : html`<div class="notice notice-bad">
+      <strong>${t('guest.closed.title')}</strong><br>${t('guest.closed.sub')}
+    </div>`;
+
     return html`
       ${raw(screenWelcome())}
+      ${raw(shut)}
       <div class="langpick" role="group" aria-label="Language / Idioma">
         ${i18n.LANGS.map(function (l) {
           return html`<button class="langpick-opt" type="button" data-act="setLang" data-id="${l.id}"
@@ -1269,6 +1277,10 @@ import {
     },
 
     submitMember: async function () {
+      if (!state.kitchenOpen) {
+        toast(t('guest.closed.sub'), true);
+        return render({ keepScroll: true });
+      }
       state.busy = true;
       render({ keepScroll: true });
       try {
