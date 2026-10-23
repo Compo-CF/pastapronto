@@ -283,7 +283,7 @@ export function buildLine(line, i, kind) {
 
   return {
     ...common,
-    pasta: line.pasta,
+    pastas: menu.pastasOf(line),
     sides: line.sides || [],
     portion: line.portion,
     spice: line.spice || 'mild',
@@ -997,7 +997,7 @@ export function shiftReport(orders, sla) {
 
   const mix = {
     pasta: {
-      pastas: tally(pastaLines, (l) => [l.pasta]),
+      pastas: tally(pastaLines, (l) => menu.pastasOf(l)),
       sauces: tally(pastaLines, (l) => menu.saucesOf(l)),
       proteins: tally(pastaLines, (l) => menu.proteinsOf(l)),
       toppings: tally(pastaLines, (l) => l.toppings || []),

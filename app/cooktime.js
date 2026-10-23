@@ -115,12 +115,14 @@ export function lineCookSec(line) {
     return Math.max(grill, basket);
   }
 
-  const pasta = menu.find('pastas', line.pasta);
+  // A split bowl boils in one pan, so the slowest shape sets the clock -
+  // half a portion of rigatoni still needs rigatoni time.
+  const shapes = menu.pastasOf(line).map((id) => menu.find('pastas', id)).filter(Boolean);
   const proteins = menu.proteinsOf(line).map((id) => menu.find('proteins', id)).filter(Boolean);
   const portion = menu.find('portions', line.portion) || menu.find('portions', 'regular');
 
   let sec = 0;
-  sec += pasta ? pasta.boilSec : 480;
+  sec += shapes.length ? Math.max(...shapes.map((x) => x.boilSec)) : 480;
   sec += sauces.length
     ? Math.max(...sauces.map((x) => x.finishSec)) + (sauces.length - 1) * MODEL.extraSaucePenaltySec
     : 60;

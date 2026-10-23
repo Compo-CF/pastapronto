@@ -432,6 +432,41 @@ export function cheesesOf(line) {
  * rather than assuming the new shape and blowing up the kitchen display
  * mid-service.
  */
+/**
+ * A bowl's pasta shapes, always as an array.
+ *
+ * A bowl used to carry one `pasta` string. It can now be split - half penne,
+ * half linguine - so the shapes are a list, and every order written before
+ * that still reads correctly through here rather than through six separate
+ * fallbacks at the places that consume it.
+ */
+export function pastasOf(line) {
+  if (Array.isArray(line.pastas)) return line.pastas;
+  if (line.pasta) return [line.pasta];
+  return [];
+}
+
+/**
+ * Has a split bowl put a gluten-free shape in with a wheat one?
+ *
+ * Shapes became a list so a bowl could be split, and the split that matters
+ * is this one: a gluten-free shape sharing a bowl with a wheat shape is not
+ * a gluten-free bowl, whatever the guest thought they were ordering.
+ * allergensFor() already says so - the bowl carries gluten - but a chip on a
+ * review screen is not the same as being told while you are choosing.
+ *
+ * Returns the names on each side, or null when there is nothing to say. It
+ * does not refuse the combination: two people sharing one order, one of whom
+ * wants the gluten-free shape, is an ordinary thing to want.
+ */
+export function glutenClash(line) {
+  const shapes = pastasOf(line).map((id) => find('pastas', id)).filter(Boolean);
+  const free = shapes.filter((x) => x.glutenFree);
+  const wheat = shapes.filter((x) => (x.allergens || []).includes('gluten'));
+  if (!free.length || !wheat.length) return null;
+  return { free: free.map((x) => x.name), wheat: wheat.map((x) => x.name) };
+}
+
 export function saucesOf(line) {
   if (Array.isArray(line.sauces)) return line.sauces;
   if (line.sauce) return [line.sauce];
@@ -840,7 +875,9 @@ export function allergensFor(line) {
     cheesesOf(line).forEach((id) => add(find('burgerCheeses', id)));
     (line.sides || []).forEach((id) => add(find('burgerSides', id)));
   } else {
-    add(find('pastas', line.pasta));
+    // Every shape in the bowl. A gluten-free shape beside a wheat one does
+    // not make the bowl gluten free - it makes it a bowl with gluten in it.
+    pastasOf(line).forEach((id) => add(find('pastas', id)));
     (line.sides || []).forEach((id) => add(find('sides', id)));
   }
 
@@ -1011,8 +1048,10 @@ export function describe(line, lang) {
   }
 
   const parts = [];
-  const pasta = nameOf('pastas', line.pasta, lang);
-  if (pasta) parts.push(pasta);
+  const shapes = pastasOf(line).map(name('pastas')).filter(Boolean);
+  // "Penne + Linguine" is one dish split two ways, and reads as one
+  // instruction on the pass.
+  if (shapes.length) parts.push(shapes.join(' + '));
   if (sauceText) parts.push((lang === 'es' ? 'con ' : 'w/ ') + sauceText);
   if (proteins.length) parts.push('+ ' + proteins.join(', '));
   return parts.join(' ');

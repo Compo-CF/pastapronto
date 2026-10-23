@@ -13,6 +13,7 @@ import { config, tagById, isOpen, kindsForNight, nightById } from './config.js';
 import {
   catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine,
   GROUPS_FOR, crustOf, crustBlocks, crustSkips, atCap,
+  glutenClash,
 } from './menu.js';
 import * as i18n from './i18n.js';
 import * as cooktime from './cooktime.js';
@@ -41,7 +42,7 @@ import {
    */
   var STEPS = {
     pasta: [
-      { id: 'pasta', labelKey: 'guest.tab.pasta', group: 'pastas', titleKey: 'guest.step.pasta', subKey: 'guest.step.pasta.sub' },
+      { id: 'pasta', labelKey: 'guest.tab.pasta', group: 'pastas', titleKey: 'guest.step.pasta', subKey: 'guest.step.pasta.sub', multi: true },
       { id: 'sauces', labelKey: 'guest.tab.sauce', group: 'sauces', titleKey: 'guest.step.sauce', subKey: '', multi: true },
       { id: 'proteins', labelKey: 'guest.tab.protein', group: 'proteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
       { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'toppings', titleKey: 'guest.step.toppings', subKey: '' },
@@ -288,7 +289,7 @@ import {
       return Object.assign(base, { base: null, cheeses: [], sides: [] });
     }
     return Object.assign(base, {
-      pasta: null, sides: [], portion: null, spice: 'mild',
+      pastas: [], sides: [], portion: null, spice: 'mild',
     });
   }
 
@@ -307,7 +308,7 @@ import {
     if (bowl.kind === 'burger') {
       return Boolean(bowl.base) && bowl.proteins.length === 1 && bowl.cheeses.length > 0;
     }
-    return Boolean(bowl.pasta && bowl.sauces.length > 0 && bowl.portion);
+    return Boolean(bowl.pastas.length > 0 && bowl.sauces.length > 0 && bowl.portion);
   }
 
   function allBowlsComplete() {
@@ -687,6 +688,23 @@ import {
       body = tileGrid(step.group, {
         act: 'pickOne', value: (bowl[field] || [])[0], multi: false,
       });
+    } else if (step.id === 'pasta') {
+      // A bowl can be split - half penne, half linguine. No cap: the
+      // kitchen cooks it in one pan either way, and a guest who taps four
+      // shapes has said something clear enough to cook.
+      body = tileGrid(step.group, { act: 'togglePasta', value: bowl.pastas, multi: true });
+      // Said while they are choosing, not left to a chip on the review
+      // screen. The combination is allowed - two people sharing one order,
+      // one of them gluten free, is an ordinary thing to want - but nobody
+      // should carry it to the pass believing the bowl is gluten free.
+      var clash = glutenClash(bowl);
+      if (clash) {
+        body += html`<div class="notice notice-warn">
+          ${t('guest.pasta.glutenmix', {
+            free: clash.free.join(', '), wheat: clash.wheat.join(', '),
+          })}
+        </div>`;
+      }
     } else if (step.id === 'proteins') {
       body = tileGrid(step.group, { act: 'toggleProtein', value: bowl.proteins, multi: true });
     } else {
@@ -1401,6 +1419,15 @@ import {
 
     setLang: function (el) {
       i18n.setLang('guest', el.dataset.id);
+    },
+
+    togglePasta: function (el) {
+      var bowl = currentBowl();
+      var id = el.dataset.id;
+      var i = bowl.pastas.indexOf(id);
+      if (i !== -1) bowl.pastas.splice(i, 1);
+      else bowl.pastas.push(id);
+      render({ keepScroll: true });
     },
 
     toggleSauce: function (el) {

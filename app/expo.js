@@ -69,7 +69,7 @@ const CATALOG = menu.catalog();
 
   /** A pizza line draws a pie; a pasta line draws its shape. */
   function lineGlyph(line) {
-    return menu.kindOf(line) === 'pizza' ? 'pie' : pastaShape(line.pasta);
+    return menu.kindOf(line) === 'pizza' ? 'pie' : pastaShape(menu.pastasOf(line)[0]);
   }
 
   function waitLevel(sec) {

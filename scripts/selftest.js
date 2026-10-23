@@ -103,7 +103,7 @@ test('every choice a guest makes survives into the ticket', () => {
       cheeses: ['pz_no_cheese'], proteins: [], toppings: ['pz_strawberry'],
     },
     pasta: {
-      kind: 'pasta', pasta: 'shells', sauces: ['marinara'], proteins: ['chicken'],
+      kind: 'pasta', pastas: ['shells'], sauces: ['marinara'], proteins: ['chicken'],
       toppings: ['parmesan'], sides: ['garlic_bread'], portion: 'kid', spice: 'mild',
     },
     burger: {
@@ -122,8 +122,15 @@ test('every choice a guest makes survives into the ticket', () => {
         kind + ' lost its ' + slot + ' on the way to the kitchen');
     });
 
+    // The shape list. Not in GROUPS_FOR, so neither loop above covers it -
+    // and it is the field a split bowl is built out of.
+    if ('pastas' in chosen) {
+      assert.deepStrictEqual(built.pastas, chosen.pastas,
+        kind + ' lost its shapes on the way to the kitchen');
+    }
+
     // And the scalars that are not groups.
-    ['pasta', 'portion'].forEach((field) => {
+    ['portion'].forEach((field) => {
       if (field in chosen) assert.strictEqual(built[field], chosen[field], kind + '.' + field);
     });
   });
@@ -550,7 +557,9 @@ test('shift report totals, mix and exceptions', () => {
   // Menu mix counts each sauce on a mixed bowl, so sauces exceed bowls.
   const sauceTotal = r.mix.pasta.sauces.reduce((a, x) => a + x.count, 0);
   assert.strictEqual(sauceTotal, 15, '5 orders x (1 sauce + 2 sauces)');
-  assert.strictEqual(r.mix.pasta.pastas.reduce((a, x) => a + x.count, 0), 10, 'one pasta per bowl');
+  // One shape per bowl in this fixture; a split bowl would count two, the
+  // same way a two-sauce bowl counts two sauces above.
+  assert.strictEqual(r.mix.pasta.pastas.reduce((a, x) => a + x.count, 0), 10, 'one shape per bowl');
   assert.strictEqual(r.byKind.pasta.items, 10);
   assert.strictEqual(r.byKind.pizza.items, 0, 'no pizzas in this fixture');
 
@@ -1951,7 +1960,7 @@ test('an edit names the line that changed, and only that line', () => {
   // Change the middle bowl only - the shape, because that is what the chit
   // prints, so it proves the derived text was rebuilt and not carried over.
   const lines = o.lines.map((l) => ({ ...l }));
-  lines[1].pasta = 'shells';
+  lines[1].pastas = ['shells'];
   lines[1].toppings = ['olives'];
 
   const patch = order.editPatch(o, { lines });
@@ -4089,6 +4098,99 @@ test('a closed kitchen says so on the first screen, not the last', () => {
     assert.ok(STRINGS.en[k], k + ' has no English');
     assert.ok(STRINGS.es[k], k + ' has no Spanish');
   });
+});
+
+// ------------------------------------------------------- the split bowl
+
+test('a bowl can be split between shapes, and still be one bowl', () => {
+  const split = { kind: 'pasta', pastas: ['penne', 'rigatoni'], sauces: ['marinara'],
+    proteins: [], toppings: [], sides: [], portion: 'regular', spice: 'mild' };
+  const built = order.buildLine({ ...split, guestLabel: 'Ada' }, 0, 'pasta');
+
+  assert.deepStrictEqual(built.pastas, ['penne', 'rigatoni']);
+  // One line is one plate is one person. Splitting must not quietly make two.
+  assert.strictEqual(built.lineId, 'ln01');
+  assert.ok(built.dish.includes('Penne + Rigatoni'), 'the chit must name both: ' + built.dish);
+});
+
+test('a split bowl boils to the slowest shape in it', () => {
+  // One pan. Half a portion of the slow shape still needs the slow time, so
+  // averaging the two would send it to the pass raw.
+  const one = (ids) => ({ kind: 'pasta', pastas: ids, sauces: ['marinara'],
+    proteins: [], toppings: [], sides: [], portion: 'regular' });
+
+  const shapes = ['fettuccine', 'penne', 'rigatoni'].map((id) => menu.find('pastas', id));
+  const slowest = Math.max(...shapes.map((x) => x.boilSec));
+  const fastest = Math.min(...shapes.map((x) => x.boilSec));
+  assert.notStrictEqual(slowest, fastest, 'fixture needs shapes that differ');
+
+  const slowId = shapes.find((x) => x.boilSec === slowest).id;
+  const fastId = shapes.find((x) => x.boilSec === fastest).id;
+
+  assert.strictEqual(
+    cooktime.lineCookSec(one([fastId, slowId])),
+    cooktime.lineCookSec(one([slowId])),
+    'a split bowl must take the slower shape, not the one picked first',
+  );
+  assert.ok(
+    cooktime.lineCookSec(one([fastId, slowId])) > cooktime.lineCookSec(one([fastId])),
+    'and more than the fast shape alone',
+  );
+});
+
+test('splitting a bowl costs one bowl, not two', () => {
+  // Half and half. If each shape were added at a full portion the cost per
+  // cover would climb every time somebody could not decide.
+  const costs = { penne: { price: 4, yield: 10 }, rigatoni: { price: 6, yield: 10 },
+    marinara: { price: 0, yield: 1 } };
+  const base = { kind: 'pasta', sauces: ['marinara'], proteins: [], toppings: [],
+    sides: [], portion: 'regular' };
+
+  const whole = costing.lineCost({ ...base, pastas: ['penne'] }, costs);
+  const split = costing.lineCost({ ...base, pastas: ['penne', 'rigatoni'] }, costs);
+
+  // penne alone = 0.40; half penne + half rigatoni = 0.20 + 0.30 = 0.50.
+  assert.ok(Math.abs(whole.total - 0.40) < 0.001, 'whole bowl ' + whole.total);
+  assert.ok(Math.abs(split.total - 0.50) < 0.001, 'split bowl ' + split.total);
+  assert.ok(split.total < 0.40 + 0.60, 'a split must not cost two whole bowls');
+});
+
+test('a gluten-free shape beside a wheat one is not a gluten-free bowl', () => {
+  const mixed = { kind: 'pasta', pastas: ['penne', 'fusilli_gf'], sauces: [],
+    proteins: [], toppings: [], sides: [] };
+  assert.ok(menu.allergensFor(mixed).includes('gluten'),
+    'the bowl must carry gluten - it has wheat pasta in it');
+
+  // And with the gluten-free shape picked FIRST, which is the order that
+  // matters: anything reading only shape [0] would call this bowl safe.
+  const gfFirst = { ...mixed, pastas: ['fusilli_gf', 'penne'] };
+  assert.ok(menu.allergensFor(gfFirst).includes('gluten'),
+    'a wheat shape behind a gluten-free one still puts gluten in the bowl');
+
+  const clash = menu.glutenClash(mixed);
+  assert.ok(clash, 'nothing warns the guest while they are choosing');
+  assert.deepStrictEqual(clash.free, ['Gluten-Free Fusilli']);
+  assert.deepStrictEqual(clash.wheat, ['Penne']);
+
+  // And no false alarms either way round.
+  assert.strictEqual(menu.glutenClash({ kind: 'pasta', pastas: ['fusilli_gf'] }), null);
+  assert.strictEqual(menu.glutenClash({ kind: 'pasta', pastas: ['penne', 'shells'] }), null);
+
+  const guest = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  assert.ok(guest.includes('glutenClash(bowl)'), 'the shape step does not check');
+  ['guest.pasta.glutenmix'].forEach((k) => {
+    assert.ok(STRINGS.en[k] && STRINGS.es[k], k + ' is missing a language');
+  });
+});
+
+test('a bowl written before shapes were a list still reads', () => {
+  // Orders already in Firestore carry `pasta`, not `pastas`.
+  const old = { kind: 'pasta', pasta: 'shells', sauces: ['marinara'], proteins: [],
+    toppings: [], sides: [], portion: 'regular' };
+  assert.deepStrictEqual(menu.pastasOf(old), ['shells'], 'the old field must still be read');
+  assert.ok(/Shells/.test(menu.describe(old)), 'and still name the dish: ' + menu.describe(old));
+  assert.ok(cooktime.lineCookSec(old) > 0, 'and still have a cook time');
+  assert.deepStrictEqual(menu.pastasOf({ kind: 'pasta' }), [], 'an empty bowl is an empty list');
 });
 
 test('the member roster never reaches git or the web', () => {

@@ -219,7 +219,11 @@ export function lineCost(line, costs) {
     // Portion size scales the bowl itself. A kid bowl is 0.6 of the pasta, the
     // sauce and the protein, because that is what 0.6 of a bowl means.
     const f = portionFactor(line);
-    if (line.pasta) add(line.pasta, f);
+    // One bowl, however many shapes are in it. Splitting it two ways is
+    // half a portion of each, not two bowls - which is also why the cover
+    // count and the plate count do not move when somebody splits.
+    const shapes = menu.pastasOf(line);
+    shapes.forEach((id) => add(id, f / shapes.length));
     pick(groups.sauces, menu.saucesOf(line), f);
     pick(groups.proteins, menu.proteinsOf(line), f);
     pick(groups.toppings, line.toppings || [], f);
