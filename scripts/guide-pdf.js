@@ -423,20 +423,20 @@ footer(2, 'The floor');
 doc.addPage();
 eyebrow('01 - The member', 62);
 heading('Their own phone. No app, no account.', 88);
-para('They scan the code on the table tent and they are in. The whole order takes about a minute.',
+para('They scan the code on the table tent and they are in - about a minute. If the kitchen is not open yet they are told on the first screen, not after building four bowls.',
   112, { width: COL - 180 });
 
 const memberSteps = [
   ['Scan the tent', 'Every table has its own code. It carries the table with it, so the kitchen always knows where the food goes.'],
   ['Language, then member number', 'English and Español are the first thing on the first screen, each written in its own language. Member numbers are 1 to 4 digits; leading zeros do not matter.'],
   ['Pasta or pizza', 'One tap. The next screen greets them by name.'],
-  ['How many at the table', 'Up to ' + config.order.maxGuests + '. This is the number that becomes covers at close-out.'],
-  ['Build each plate', 'One tile grid per person. Anything 86\'d is greyed out and marked sold out - visible rather than hidden. Allergens show on each ingredient as they build.'],
+  ['How many they are ordering for', 'Worded about the account - everyone whose meals go on their number - so two memberships at one table do not both answer for all of it. Asked ONCE a night; later trips inherit it. A private party has a box of its own, up to ' + config.order.maxPartySize + '.'],
+  ['Build each plate', 'One tile grid per person. Anything 86\'d is greyed out and marked sold out, and allergens show on each ingredient. More than one pasta shape splits the bowl - one plate, cooked to the slower shape.'],
   ['Review and send', 'A note box for anything the tiles do not cover. They get a '
     + 'ticket number, about 15-20 minutes, and a bar with three stops: Sent, Cooking, '
     + 'On its way - Building rather than Cooking while a pizza is on the bench. They '
     + 'are never told the food is ready, only that it is coming, once a runner has it.'],
-  ['Another round', 'Start another order goes back to pasta-or-pizza, not the keypad. Same party, same table, and under all you can eat it adds nothing to their bill.'],
+  ['Another round', 'Back to pasta-or-pizza, not the keypad. They are asked how many plates this round, never how many people again - the charge was settled on the first trip.'],
 ];
 
 y = 148;
@@ -604,21 +604,22 @@ footer(5, 'Front of house');
 doc.addPage();
 eyebrow('04 - Manager', 62);
 heading('Setting up, and closing out', 88);
-y = para('Two screens: one to set the night up and watch it run, one to close it out. Both sit behind '
-  + 'the staff passcode.', 112, { width: COL - 40 });
+y = para('Two screens: one to run the night, one to close it out. Both ask for '
+  + 'the manager code. Every staff screen also has to be signed in once, the first time a device '
+  + 'is used - after that it stays signed in and nobody is asked again.', 112, { width: COL - 40 });
 
 y = screenshot(SHOTS.cost, 340,
   'The food cost tab with the pantry priced. Cost per bowl, per pizza and per cover come from what '
   + 'members actually built - and every ingredient that went out is priced, which the tiles say out loud.',
-  y + 16, 196);
+  y + 16, 176);
 
 let my = y + 8;
 [
+  ['Every service', 'Press OPEN on Taking orders before you start, and CLOSED when you stop - member phones are refused while it is shut, and it closes itself overnight. Check the 86 list while you are there; an ingredient switched off greys out on every phone within a second.'],
   ['Before service', 'Print the tents from the QR codes tab. Codes are drawn on the device, so this works with the internet unplugged.'],
-  ['Before service', 'Check the 86 list. An ingredient switched off greys out on every phone within a second, and the count rides on the tab.'],
-  ['Any time', 'Edit the menu. Rename anything, take something off, or add an item of your own. A new item copies a real cooking time and a picture from one already on the list; you name it and say what it contains, and it will not save until you do.'],
+  ['Any time', 'Edit the menu. Rename anything, take something off, or add an item of your own. A new item copies a cooking time and a picture from one on the list; you name it and say what it contains, and it will not save until you do.'],
   ['During service', 'Today at a glance: covers, open now, accept, cook and runner times, on-time percentage. Also take an order from the bar, search for a ticket, move a table, or reopen one closed by mistake.'],
-  ['After service', 'Close-out leads with who to charge, sorted by member number so it reconciles line by line against the club\'s billing.'],
+  ['After service', 'Close-out leads with who to charge, by member number. A table where two memberships ordered at once is flagged above it - check before posting.'],
 ].forEach((s) => {
   // The close-out panel sits to the right of the first few of these and ends
   // at y + 176. Anything starting below that has the whole column to itself,
@@ -634,7 +635,7 @@ const coX = RIGHT - 176;
 panel(coX, y + 26, 176, 150, { fill: WASH });
 doc.text('CLOSE-OUT, IN ORDER', { x: coX + 12, y: y + 46, size: 7, font: 'monoBold', color: FAINT });
 [
-  ['1', 'Members to charge', 'with member numbers'],
+  ['1', 'Members to charge', 'shared tables flagged first'],
   ['2', 'Service stats', 'times, on-time percent'],
   ['3', 'Food usage', 'split by station'],
 ].forEach((r, i) => {
@@ -646,9 +647,9 @@ doc.text('CLOSE-OUT, IN ORDER', { x: coX + 12, y: y + 46, size: 7, font: 'monoBo
 });
 
 my = Math.max(my, y + 156) + 4;
-panel(M, my, COL, 50, { fill: WASH, accent: LATE, border: null });
-doc.text('The staff passcode is a convenience lock, not security.', { x: M + 14, y: my + 21, size: 9.5, font: 'bold', color: INK });
-para('Keep staff links inside the team. Clear today deletes the whole service day and cannot be undone.',
+panel(M, my, COL, 40, { fill: WASH, accent: LATE, border: null });
+doc.text('The manager code is a convenience lock. The sign-in is the real one.', { x: M + 14, y: my + 21, size: 9.5, font: 'bold', color: INK });
+para('A member who guesses the address sees nothing. Clear today cannot be undone.',
   my + 35, { x: M + 14, width: COL - 28, size: 9, lead: 11 });
 
 footer(6, 'Manager');
