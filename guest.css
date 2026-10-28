@@ -37,6 +37,40 @@
 }
 .wherecard.is-unknown { background: var(--semolina-wash); color: #7a5000; }
 
+/* Change the table on a device that was told it rather than shown it. */
+.wherecard-change {
+  margin-left: 10px;
+  padding: 0 14px;
+  min-height: 36px;
+  border: 2px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+/* The table box. Sized for a thumb on a tablet being carried around a dining
+   room, not for a phone held still at one table. */
+.tagbox { display: grid; gap: 10px; margin: 18px 0 22px; text-align: left; }
+.tagbox-label { font-size: 17px; font-weight: 800; }
+.tagbox-input { min-height: 58px; font-size: 22px; font-weight: 750; text-align: center; }
+.tagbox-foot { display: grid; gap: 10px; }
+.tagbox-hint { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink-soft); }
+.tagbox-hint.is-bad { color: var(--tomato-dark); }
+.tagchips { display: flex; flex-wrap: wrap; gap: 10px; }
+.tagchip {
+  min-height: 52px;
+  padding: 0 20px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-size: 18px;
+  font-weight: 750;
+}
+.tagchip:hover { border-color: var(--tomato); color: var(--tomato-dark); }
+.tagchip:active { transform: scale(0.98); }
+
 .howto { display: grid; gap: 12px; margin-top: 26px; text-align: left; }
 .howto li { display: flex; gap: 14px; align-items: center; list-style: none; font-size: 17px; font-weight: 600; }
 .howto .n {

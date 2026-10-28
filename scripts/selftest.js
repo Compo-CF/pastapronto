@@ -4357,4 +4357,154 @@ test('the roster reader agrees with the keypad about what a number means', () =>
 });
 
 
+// ------------------------------------------- the table a server types in
+
+test('a typed table number resolves to exactly one tent', () => {
+  const ids = (q) => cfgTags.findTags(q).map((t) => t.id);
+
+  assert.deepStrictEqual(ids('12'), ['table-12'],
+    'the room has one Table 12 and nothing else called 12');
+
+  // The reason the box offers chips instead of taking the first match: a
+  // server who types 3 has told us two different places, on two sides of
+  // the building, and only they know which.
+  assert.deepStrictEqual(ids('3'), ['table-03', 'patio-03']);
+
+  // A bare number means the table NUMBERED that. Were it a substring match,
+  // 1 would offer Table 1 and Tables 10 through 19, and the one tent the
+  // server meant would be the hardest to find on the screen.
+  assert.deepStrictEqual(ids('1'), ['table-01', 'patio-01']);
+
+  // Names, with our punctuation and spacing not the server's problem.
+  assert.deepStrictEqual(ids('patio 3'), ['patio-03']);
+  assert.deepStrictEqual(ids('patio3'), ['patio-03']);
+  assert.deepStrictEqual(ids('PATIO-03'), ['patio-03']);
+  assert.deepStrictEqual(ids('takeout'), ['takeout']);
+
+  // Nothing typed is not a match for everything.
+  assert.deepStrictEqual(ids(''), []);
+  assert.deepStrictEqual(ids('   '), []);
+  assert.deepStrictEqual(ids(null), []);
+  assert.deepStrictEqual(ids('!!!'), []);
+  assert.deepStrictEqual(ids('99'), [], 'there is no Table 99 to send food to');
+  assert.deepStrictEqual(ids('zzz'), []);
+});
+
+test('an ambiguous table is refused, not guessed at', () => {
+  // The whole reason the box shows chips. "3" is Table 3 in the dining room
+  // and Patio 3 outside, and only the server holding the tablet knows which
+  // one they are standing at. Taking the first match would read as helpful
+  // and would walk the patio's dinner indoors, with nothing anywhere saying
+  // it had happened - the kitchen would print a correct-looking chit.
+  assert.strictEqual(cfgTags.resolveTag('3'), null, '3 is two places, not one');
+  assert.strictEqual(cfgTags.resolveTag('12').id, 'table-12');
+  assert.strictEqual(cfgTags.resolveTag('patio 3').id, 'patio-03');
+  assert.strictEqual(cfgTags.resolveTag(''), null);
+  assert.strictEqual(cfgTags.resolveTag('99'), null, 'no table, so no table');
+});
+
+test('a location a manager added is typeable too', () => {
+  cfgTags.setCustomTags([
+    { id: 'locker-room', label: 'Locker Room', kind: 'table', area: 'Clubhouse' },
+  ]);
+  try {
+    assert.deepStrictEqual(cfgTags.findTags('locker').map((t) => t.id), ['locker-room'],
+      'a code the club added on Thursday is a place a server can type on Friday');
+  } finally {
+    cfgTags.setCustomTags([]);
+  }
+  assert.deepStrictEqual(cfgTags.findTags('locker'), [],
+    'and stops being one when the manager removes it');
+});
+
+test('a tablet with no QR code asks which table before it asks anything else', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+
+  // The box itself, on the first screen - not discovered at Send, which is
+  // where a table nobody checked turns into a tray nobody can deliver.
+  assert.ok(/function screenWhere\(\)/.test(src), 'there is no table box');
+  assert.ok(src.includes("data-act=\"tagQuery\""), 'the box takes nothing typed into it');
+  assert.ok(src.includes("data-act=\"pickTag\""), 'and offers no way to choose between matches');
+
+  // Where before who: a member lookup costs a round trip, and an order with
+  // nowhere to go should not spend one.
+  const submit = src.slice(src.indexOf('submitMember: async function ()'));
+  const head = submit.slice(0, submit.indexOf('db.lookupMember'));
+  assert.ok(/resolveTypedTag\(\)/.test(head),
+    'the keypad advances without ever settling the table');
+
+  // Next must not light up on a member number alone.
+  const bar = src.slice(src.indexOf("} else if (s === 'member') {"));
+  const clause = bar.slice(0, bar.indexOf("} else if (s === 'guests')"));
+  assert.ok(/state\.boot\.tag/.test(clause) && /resolveTag\(/.test(clause),
+    'the footbar would send an order that has nowhere to be carried');
+
+  // resolveTag refuses an ambiguous query by returning null, and that refusal
+  // only holds if the screen takes no for an answer. This is a shape check,
+  // not a behaviour one: the mistake it is watching for is the screen
+  // reaching past the refusal into the match list for a first-best guess.
+  const resolver = src.slice(src.indexOf('function resolveTypedTag()'));
+  const rbody = resolver.slice(0, resolver.indexOf('\n  }'));
+  assert.ok(/resolveTag\(/.test(rbody),
+    'the screen keeps its own idea of which table a query means');
+  assert.ok(!/\[0\]/.test(rbody),
+    'the screen indexes into the matches - which is the guess resolveTag exists to refuse');
+
+  // Both languages, or a Spanish-speaking server gets an unlabelled box.
+  ['guest.where.ask', 'guest.where.ph', 'guest.where.pick', 'guest.where.none',
+    'guest.sent.newTable'].forEach((k) => {
+    assert.ok(STRINGS.en[k], k + ' has no English');
+    assert.ok(STRINGS.es[k], k + ' has no Spanish');
+  });
+});
+
+test('typing a table number does not also type a member number', () => {
+  // The member screen listens on the document for digits, because the keypad
+  // is drawn as buttons and a tablet may have a real keyboard. Adding a text
+  // field to that screen put the two in the same ear: typing 12 for the table
+  // made the membership 12 as well, silently, on every order of the night.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const handler = src.slice(src.indexOf("document.addEventListener('keydown'"));
+  const body = handler.slice(0, handler.indexOf('\n  });'));
+
+  const guard = body.indexOf("tagName === 'INPUT'");
+  const keypad = body.indexOf('state.memberDigits +=');
+  assert.ok(guard !== -1, 'the keypad listener does not check what is focused');
+  assert.ok(guard < keypad, 'it checks too late to stop the digit');
+});
+
+test('the next table starts clean, and the last one is not billed for it', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const act = src.slice(src.indexOf('newTable: function ()'));
+  const body = act.slice(0, act.indexOf('\n    },'));
+
+  // Everything that identifies the party that just ate. partySize is the one
+  // that costs money: inherited onto the next membership, it bills a four-top
+  // for a party of twelve.
+  ['state.boot.tag = null', "state.tagQuery = ''", "state.memberDigits = ''",
+    'state.member = null', 'state.partySize = null', 'state.partyInherited = false',
+  ].forEach((line) => {
+    assert.ok(body.includes(line), 'newTable leaves behind: ' + line);
+  });
+
+  // And it is reachable - on a roaming tablet only, because a member's phone
+  // sitting at Table 7 has no next table to go to.
+  assert.ok(src.includes("data-act=\"newTable\""), 'nothing on screen calls it');
+  const bar = src.slice(src.indexOf("} else if (s === 'sent') {"));
+  assert.ok(/state\.boot\.roaming/.test(bar.slice(0, 900)),
+    'the button shows on a phone that scanned a tent, where it means nothing');
+});
+
+test('a table typed in survives a manager renaming a location', () => {
+  // watchTags re-resolves the code from the URL. A typed table is not in the
+  // URL, so a listener that re-resolved unconditionally found null and
+  // emptied the box - mid-order, whenever anyone touched the locations doc.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const watch = src.slice(src.indexOf('db.watchTags(function ()'));
+  const body = watch.slice(0, watch.indexOf('\n    });'));
+  assert.ok(/if \(!tagId\) return;/.test(body),
+    'the locations listener still overwrites a table the server typed');
+});
+
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

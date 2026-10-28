@@ -9,7 +9,9 @@
  *   pro    - reveals allergen filters, spice, per-bowl notes, cook times and
  *            a compact review, for adults and staff taking an order
  */
-import { config, tagById, isOpen, kindsForNight, nightById } from './config.js';
+import {
+  config, tagById, findTags, resolveTag, isOpen, kindsForNight, nightById,
+} from './config.js';
 import {
   catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine,
   GROUPS_FOR, crustOf, crustBlocks, crustSkips, atCap,
@@ -228,6 +230,10 @@ import {
     boot: null,
     tag: null,
     memberDigits: '',
+    // What a server has typed into the table box. Kept apart from
+    // boot.tag, which is a resolved location and the only thing an order
+    // is ever built from - half a table number must never reach a ticket.
+    tagQuery: '',
     member: null,
     guestCount: 2,
     // How many this membership is feeding tonight. Null until the question is
@@ -461,9 +467,79 @@ import {
    */
   function screenWelcome() {
     var tag = state.boot.tag;
-    return tag
-      ? html`<div class="wherecard">${raw(art('runner', { size: 26 }))} ${t('guest.where.at')} <strong>&nbsp;${tag.label}</strong></div>`
-      : html`<div class="wherecard is-unknown">${t('guest.where.unknown')}</div>`;
+    if (!tag) return screenWhere();
+    // A roaming tablet can be wrong about where it is in a way a printed tent
+    // cannot, so a table that was typed stays editable. A member's phone that
+    // scanned the tent on their own table has nothing to correct.
+    var change = state.boot.roaming
+      ? '<button class="wherecard-change" type="button" data-act="clearTag">'
+        + escapeHtml(t('common.change')) + '</button>'
+      : '';
+    return html`<div class="wherecard">${raw(art('runner', { size: 26 }))} ${t('guest.where.at')} <strong>&nbsp;${tag.label}</strong>${raw(change)}</div>`;
+  }
+
+  /** Locations matching the table box, capped so one letter cannot fill the screen. */
+  function tagMatches() {
+    return findTags(state.tagQuery).slice(0, 12);
+  }
+
+  /**
+   * The part of the table box that answers back: the hint, and a chip per
+   * match. Repainted on its own as the server types, because a full render
+   * would take the keyboard out from under them mid-number.
+   */
+  function tagFootHtml() {
+    var matches = tagMatches();
+    var typed = state.tagQuery.trim();
+    var note = !typed ? html`<p class="tagbox-hint">${t('guest.where.unknown')}</p>`
+      : matches.length === 0 ? html`<p class="tagbox-hint is-bad">${t('guest.where.none')}</p>`
+      : matches.length > 1 ? html`<p class="tagbox-hint">${t('guest.where.pick')}</p>`
+      : '';
+    var chips = matches.map(function (tg) {
+      return html`<button class="tagchip" type="button" data-act="pickTag" data-id="${tg.id}">${tg.label}</button>`;
+    });
+    return note + (chips.length ? '<div class="tagchips">' + chips.join('') + '</div>' : '');
+  }
+
+  /**
+   * Where the food is going, typed rather than scanned.
+   *
+   * The servers work the room with tablets, so the one thing the QR code used
+   * to carry - which table this is - has to be asked for. It is asked here, on
+   * the first screen beside the member number, because a table settled at Send
+   * is a table nobody checked.
+   *
+   * A code in the URL that is not one of ours lands here too. That used to be
+   * a toast with no way out of it, and this box is the way out.
+   */
+  function screenWhere() {
+    return html`
+      <div class="tagbox">
+        <label class="tagbox-label" for="tagInput">${t('guest.where.ask')}</label>
+        <input class="input tagbox-input" id="tagInput" type="text" inputmode="numeric"
+          autocomplete="off" autocapitalize="off" spellcheck="false"
+          placeholder="${t('guest.where.ph')}" value="${state.tagQuery}"
+          aria-label="${t('guest.where.ask')}" data-act="tagQuery">
+        <div class="tagbox-foot" id="tagFoot">${raw(tagFootHtml())}</div>
+      </div>`;
+  }
+
+  /**
+   * Take the typed table, if what was typed can only mean one place.
+   *
+   * Toasts and returns false otherwise. The ambiguous case is refused rather
+   * than guessed at: "3" is Table 3 and it is also Patio 3, and a guess here
+   * is a tray carried to the wrong side of the building.
+   */
+  function resolveTypedTag() {
+    var only = resolveTag(state.tagQuery);
+    if (only) {
+      state.boot.tag = only;
+      state.boot.tagUnknown = false;
+      return true;
+    }
+    toast(tagMatches().length > 1 ? t('guest.where.pick') : t('guest.where.ask'), true);
+    return false;
   }
 
   /**
@@ -1136,7 +1212,12 @@ import {
     } else if (s === 'member') {
       // The first screen now, so there is nowhere to go back to - and any
       // length from one digit up is a real member number.
-      var ready = state.memberDigits.length >= 1;
+      //
+      // A device that was not told where it is has to be told here. One match
+      // counts as told: the server typed 12, nothing else is Table 12, and
+      // making them tap the only chip on screen is a tap for nothing.
+      var ready = state.memberDigits.length >= 1
+        && (Boolean(state.boot.tag) || Boolean(resolveTag(state.tagQuery)));
       parts = html`
         <button class="btn btn-primary btn-lg btn-block" type="button" data-act="submitMember"
           ${raw(ready && !state.busy ? '' : 'disabled')}>${state.busy ? t('guest.member.checking') : 'Next'}</button>`;
@@ -1172,6 +1253,10 @@ import {
       // had. "Something different" throws the build away, so it is the quieter
       // of the two.
       parts = html`
+        ${raw(state.boot.roaming
+          ? '<button class="btn btn-ghost" type="button" data-act="newTable">'
+            + escapeHtml(t('guest.sent.newTable')) + '</button>'
+          : '')}
         <button class="btn btn-ghost grow" type="button" data-act="restart">
           ${t('guest.sent.new')}</button>
         <button class="btn btn-primary btn-lg grow" type="button" data-act="again">
@@ -1302,6 +1387,36 @@ import {
       render({ keepScroll: true });
     },
 
+    /**
+     * A keystroke in the table box.
+     *
+     * Repaints the matches and the footbar and nothing else: a full render
+     * would replace the input the server is typing into and drop the caret,
+     * which on a tablet means losing the keyboard between the 1 and the 2.
+     */
+    tagQuery: function (el) {
+      state.tagQuery = el.value;
+      var foot = document.getElementById('tagFoot');
+      if (foot) foot.innerHTML = tagFootHtml();
+      renderFootbar();
+    },
+
+    pickTag: function (el) {
+      var tg = tagById(el.dataset.id);
+      if (!tg) return;
+      state.boot.tag = tg;
+      state.boot.tagUnknown = false;
+      state.tagQuery = tg.label;
+      render({ keepScroll: true });
+    },
+
+    /** Wrong table. Back to the box, with the order so far left alone. */
+    clearTag: function () {
+      state.boot.tag = null;
+      state.tagQuery = '';
+      render({ keepScroll: true });
+    },
+
     key: function (el) {
       var k = el.dataset.key;
       if (k === 'clear') state.memberDigits = '';
@@ -1316,6 +1431,9 @@ import {
         toast(t('guest.closed.sub'), true);
         return render({ keepScroll: true });
       }
+      // Where before who. The member number is a network lookup, and there is
+      // no sense spending one on an order that has nowhere to be carried.
+      if (!state.boot.tag && !resolveTypedTag()) return render({ keepScroll: true });
       state.busy = true;
       render({ keepScroll: true });
       try {
@@ -1621,6 +1739,38 @@ import {
       state.screen = state.member ? 'lane' : 'member';
       render();
     },
+
+    /**
+     * The next table, on a server's tablet.
+     *
+     * `restart` above keeps the member and the table, because on a member's
+     * own phone the same party is still sitting there wanting a pizza too. A
+     * roaming tablet is the opposite case: the next order is a different table
+     * AND a different membership, and carrying either one forward is how
+     * table 12's pizza gets billed to table 4.
+     */
+    newTable: function () {
+      if (state.stopStream) state.stopStream();
+      state.bowls = [];
+      state.order = null;
+      state.orderNotes = '';
+      state.activeBowl = 0;
+      state.buildStep = 0;
+      state.kind = null;
+      state.memberDigits = '';
+      state.member = null;
+      state.guestCount = 2;
+      state.guestCountTouched = false;
+      // The party size is the charge, and it belongs to the membership that
+      // just ate - not to whoever this tablet is walked to next.
+      state.partySize = null;
+      state.partyInherited = false;
+      state.avoid = [];
+      state.boot.tag = null;
+      state.tagQuery = '';
+      state.screen = 'member';
+      render();
+    },
   };
 
   /**
@@ -1682,6 +1832,14 @@ import {
 
   document.addEventListener('keydown', function (e) {
     if (state.screen !== 'member') return;
+    // The table box is a real text field on this screen. Digits typed into it
+    // belong to it, not to the member keypad sitting behind it - without this
+    // one, typing table 12 also makes the member number 12.
+    var focused = e.target;
+    if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA')) {
+      if (e.key === 'Enter' && state.memberDigits.length >= 1) actions.submitMember();
+      return;
+    }
     if (/^[0-9]$/.test(e.key) && state.memberDigits.length < config.order.maxMemberNumberLength) {
       state.memberDigits += e.key;
       state.member = null;
@@ -1744,6 +1902,12 @@ import {
       open: isOpen(),
       tag: tagId ? tagById(tagId) : null,
       tagUnknown: Boolean(tagId && !tagById(tagId)),
+      // Did a printed tent tell this device where it is? A QR code that
+      // resolved means a device that stays put - a member's phone at Table 7.
+      // Everything else is roaming: a server's tablet, a bookmark, a code
+      // that is not one of ours. Roaming devices get asked for the table, get
+      // to change it, and get sent back to the box at the next one.
+      roaming: !(tagId && tagById(tagId)),
       menu: menuCatalog(),
     };
 
@@ -1783,7 +1947,11 @@ import {
     });
 
     db.watchTags(function () {
-      var resolved = tagId ? tagById(tagId) : null;
+      // Only a code that came in on the URL gets re-resolved here. A table a
+      // server typed is not in the URL, so re-resolving would find nothing
+      // and quietly empty the box every time a manager renames a location.
+      if (!tagId) return;
+      var resolved = tagById(tagId);
       var sameAsBefore = (resolved && resolved.id) === (state.boot.tag && state.boot.tag.id);
       if (sameAsBefore) return;
       state.boot.tag = resolved;

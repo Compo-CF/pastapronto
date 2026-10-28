@@ -283,6 +283,55 @@ export function tagById(id) {
 }
 
 /**
+ * Locations matching what somebody typed into the "which table?" box.
+ *
+ * A server working a tablet types the table number instead of scanning the
+ * tent, so this has to turn "12", "patio 3" or "locker" into real tags - and
+ * has to be honest when the answer is more than one. A bare number is the
+ * ambiguous case: 3 is Table 3 AND Patio 3, and a tablet that quietly took
+ * the first would send the patio's food to the dining room all night.
+ *
+ * Returns every match, in the order the tags are declared, and leaves the
+ * choosing to the screen.
+ */
+export function findTags(query) {
+  const raw = String(query == null ? '' : query).trim().toLowerCase();
+  if (!raw) return [];
+
+  // Digits alone mean the table NUMBERED that, not every label containing
+  // those digits - otherwise "1" would offer Table 1 and Tables 10 through
+  // 19, and the one tent the server meant would be buried in the list.
+  if (/^[0-9]+$/.test(raw)) {
+    const wanted = Number(raw);
+    return allTags().filter((t) => {
+      const trailing = t.label.match(/([0-9]+)\s*$/);
+      return Boolean(trailing) && Number(trailing[1]) === wanted;
+    });
+  }
+
+  // Everything else is a name. Punctuation and spacing are stripped from both
+  // sides so "patio3" finds Patio 3 and "19th hole" finds 19th-hole; a server
+  // mid-shift should not have to match our hyphens.
+  const squash = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const needle = squash(raw);
+  if (!needle) return [];
+  return allTags().filter((t) => squash(t.label + ' ' + t.id).includes(needle));
+}
+
+/**
+ * The single place a typed query can mean, or null if it does not mean one.
+ *
+ * This lives here rather than on the screen because it is the decision worth
+ * getting right, and "or null" is the whole of it: taking the first of two
+ * matches would read as helpful and would walk the patio's dinner into the
+ * dining room, with nothing on any screen to say it had happened.
+ */
+export function resolveTag(query) {
+  const matches = findTags(query);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/**
  * A night by id, falling back to the default rather than returning nothing.
  *
  * Every screen calls this, including before the live setting has arrived from
