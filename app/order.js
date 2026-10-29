@@ -18,6 +18,7 @@
  *
  *   Any live status can be VOIDED (comp/mistake) - a terminal, auditable stop.
  */
+import { config } from './config.js';
 import * as menu from './menu.js';
 import * as cooktime from './cooktime.js';
 
@@ -261,6 +262,20 @@ export function buildLine(line, i, kind) {
     allergens: menu.allergensFor(line),
     cookSec: cooktime.lineCookSec(line),
     dish: menu.describe(line),
+
+    // The salad, on every kind rather than per-kind, because it is not part
+    // of any of them - it is a second plate that goes out beside whatever was
+    // built. Stored null when there is none, so a chit never has to tell
+    // "no salad" apart from "salad bar is self-serve tonight": neither puts
+    // anything on the ticket.
+    //
+    // Read through menu, not off the line, so a dressing left behind by a
+    // member who changed their mind cannot reach the pass.
+    salad: menu.saladOf(line) ? line.salad : null,
+    dressing: (menu.dressingOf(line) || {}).id || null,
+    saladNote: menu.saladOf(line)
+      ? String(line.saladNote || '').slice(0, config.order.maxSaladNoteLength)
+      : '',
   };
 
   if (kind === 'burger') {

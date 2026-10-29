@@ -46,15 +46,34 @@ const cases = [
   ['guest may read one member', 'ALLOW', `${DB}/members/1794`, 'get', false],
   ['staff may read the menu', 'ALLOW', `${DB}/config/menu`, 'get', true],
   ['guest may read the menu', 'ALLOW', `${DB}/config/menu`, 'get', false],
+
+  // Who plates the salad. This one setting decides whether two steps appear
+  // in front of every member in the room, so it is bounded to the two real
+  // modes rather than to "a string" - a third value would take the step away
+  // from a kitchen that is making them, and nothing on screen would say why.
+  ['staff may set salad to kitchen', 'ALLOW', `${DB}/config/service`, 'update', true,
+    { salad: 'kitchen', open: true }],
+  ['staff may set salad to bar', 'ALLOW', `${DB}/config/service`, 'update', true,
+    { salad: 'bar', open: true }],
+  ['no third salad mode', 'DENY', `${DB}/config/service`, 'update', true,
+    { salad: 'maybe', open: true }],
+  ['a guest may not move the salad switch', 'DENY', `${DB}/config/service`, 'update', false,
+    { salad: 'bar', open: true }],
+  ['salad alone is a whole write', 'ALLOW', `${DB}/config/service`, 'update', true,
+    { salad: 'kitchen' }],
 ];
 
-const testCases = cases.map(([name, expectation, path, method, isStaff]) => ({
+const testCases = cases.map(([name, expectation, path, method, isStaff, data]) => ({
   expectation,
   request: {
     auth: { uid: STAFF_UID, token: { firebase: { sign_in_provider: isStaff ? 'password' : 'anonymous' } } },
     path,
     method,
     time: new Date().toISOString(),
+    // Write cases carry the document the client is trying to leave behind.
+    // Reads have none, and passing an empty one would make every write rule
+    // that checks a field look like it passed on a document with no fields.
+    ...(data ? { resource: { data } } : {}),
   },
   functionMocks: [...staffMock(isStaff), svcMock],
 }));

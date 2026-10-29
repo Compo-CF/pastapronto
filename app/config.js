@@ -116,6 +116,10 @@ export const config = {
     // remember them - 2, 02, 002 and 0002 are all member 2 - so there are two
     // patterns: what the keypad will accept, and the canonical form that gets
     // stored and looked up. order.normalizeMemberNumber() converts between them.
+    // "no tomato", "extra croutons", "dressing on the side". Shorter than a
+    // bowl note on purpose: it is one instruction about one plate, and a
+    // paragraph here is a paragraph the pantry cook reads mid-service.
+    maxSaladNoteLength: 90,
     maxMemberNumberLength: 4,
     memberNumberInputPattern: /^[0-9]{1,4}$/,
     memberNumberPattern: /^[1-9][0-9]{0,3}$/,
@@ -173,6 +177,23 @@ export const config = {
   // What the app runs as until someone says otherwise, and what it falls back
   // to when the setting cannot be read.
   defaultNight: 'neapolitan',
+
+  /**
+   * Who makes the salad tonight.
+   *
+   *   'bar'     - make your own at the salad bar. Nothing about salad appears
+   *               in the app, because the app cannot take an order for
+   *               something the member walks over and builds themselves.
+   *   'kitchen' - the kitchen plates it, so it is a step in the build and it
+   *               prints on the chit.
+   *
+   * 'bar' is the resting state, the same way the kitchen rests closed: a club
+   * that never touches the switch gets exactly the app it had before there
+   * was one. A value that is neither falls back here rather than emptying the
+   * build, which is what a typo in a shared document would otherwise do.
+   */
+  saladModes: ['kitchen', 'bar'],
+  defaultSaladMode: 'bar',
 
   // Seats per area, which no tent can tell us. Table counts are deliberately
   // NOT stored here - an area has however many tents it has in `tags` below,

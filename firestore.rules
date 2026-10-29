@@ -154,7 +154,15 @@ service cloud.firestore {
           && (!('openFor' in request.resource.data)
             || request.resource.data.openFor == null
             || request.resource.data.openFor is string)
-          && (('night' in request.resource.data) || ('open' in request.resource.data)))
+          // Who plates the salad. Bounded to the two real modes rather than
+          // to "a short string": this one decides whether a step appears in
+          // front of every member in the room, and a third value would take
+          // it away from a kitchen that is making them.
+          && (!('salad' in request.resource.data)
+            || request.resource.data.salad in ['kitchen', 'bar'])
+          && (('night' in request.resource.data)
+            || ('open' in request.resource.data)
+            || ('salad' in request.resource.data)))
         ||
         // Locations a manager added - the locker room, the halfway house.
         // Bounded in size and nothing more; app/config.js isValidTag() checks

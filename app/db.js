@@ -525,6 +525,42 @@ export async function setServiceOpen(open) {
   return open === true;
 }
 
+/**
+ * Who is making the salad tonight, live on every screen.
+ *
+ * Falls back to the configured default rather than to nothing, and refuses a
+ * value that is not a real mode. A typo in a shared document should leave the
+ * app exactly as it was, not put a salad step in front of a kitchen that is
+ * not plating any - or, worse, take the step away from one that is.
+ */
+export function watchSaladMode(cb, { onError } = {}) {
+  return onSnapshot(
+    serviceRef,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      const mode = data && typeof data.salad === 'string' ? data.salad : config.defaultSaladMode;
+      cb(config.saladModes.indexOf(mode) === -1 ? config.defaultSaladMode : mode);
+    },
+    (err) => {
+      console.error('[db] watchSaladMode failed:', err.code, err.message);
+      cb(config.defaultSaladMode);
+      if (onError) onError(err);
+    },
+  );
+}
+
+/** Switch who makes the salad. Manager screen only. */
+export async function setSaladMode(mode) {
+  if (config.saladModes.indexOf(mode) === -1) throw new Error('Unknown salad mode: ' + mode);
+  await ready();
+  await setDoc(serviceRef, {
+    salad: mode,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid(),
+  }, { merge: true });
+  return mode;
+}
+
 /** Switch the night. Manager screen only. */
 export async function setServiceNight(nightId) {
   if (!config.nights[nightId]) throw new Error('Unknown night: ' + nightId);

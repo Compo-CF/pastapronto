@@ -15,7 +15,7 @@ import {
 import {
   catalog as menuCatalog, saucesOf, groupRules, nameOf, describe as describeLine,
   GROUPS_FOR, crustOf, crustBlocks, crustSkips, atCap,
-  glutenClash,
+  glutenClash, saladOf, dressingOf, pastasOf, allergensFor,
 } from './menu.js';
 import * as i18n from './i18n.js';
 import * as cooktime from './cooktime.js';
@@ -42,12 +42,28 @@ import {
    * all - and at a table of eight that is eight anonymous pizzas arriving
    * together.
    */
+  /**
+   * The salad, as two steps on the end of a build.
+   *
+   * Shared by pasta and pizza rather than written into each, because they are
+   * the same two questions about the same plate: a club that renames House to
+   * Garden should not have to be told which lane it was on.
+   *
+   * They only exist when the kitchen is plating salads - see steps(). With
+   * the salad bar self-serve there is nothing here the app can order.
+   */
+  var SALAD_STEPS = [
+    { id: 'salad', labelKey: 'guest.tab.salad', group: 'salads', titleKey: 'guest.step.salad', subKey: 'guest.step.salad.sub' },
+    { id: 'dressing', labelKey: 'guest.tab.dressing', group: 'dressings', titleKey: 'guest.step.dressing', subKey: 'guest.step.dressing.sub' },
+  ];
+
   var STEPS = {
     pasta: [
       { id: 'pasta', labelKey: 'guest.tab.pasta', group: 'pastas', titleKey: 'guest.step.pasta', subKey: 'guest.step.pasta.sub', multi: true },
       { id: 'sauces', labelKey: 'guest.tab.sauce', group: 'sauces', titleKey: 'guest.step.sauce', subKey: '', multi: true },
       { id: 'proteins', labelKey: 'guest.tab.protein', group: 'proteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
       { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'toppings', titleKey: 'guest.step.toppings', subKey: '' },
+      SALAD_STEPS[0], SALAD_STEPS[1],
       { id: 'finish', labelKey: 'guest.tab.size', group: 'portions', titleKey: 'guest.step.size', subKey: '' },
     ],
     pizza: [
@@ -56,6 +72,7 @@ import {
       { id: 'cheeses', labelKey: 'guest.tab.cheese', group: 'pizzaCheeses', titleKey: 'guest.step.cheese', subKey: 'guest.step.amountsub', multi: true },
       { id: 'proteins', labelKey: 'guest.tab.protein', group: 'pizzaProteins', titleKey: 'guest.step.protein', subKey: '', multi: true },
       { id: 'toppings', labelKey: 'guest.tab.toppings', group: 'pizzaToppings', titleKey: 'guest.step.toppings', subKey: '' },
+      SALAD_STEPS[0], SALAD_STEPS[1],
       { id: 'finish', labelKey: 'guest.tab.who', group: null, titleKey: 'guest.step.who', subKey: 'guest.step.who.sub' },
     ],
     burger: [
@@ -175,10 +192,37 @@ import {
   function steps() {
     var list = STEPS[state.kind] || STEPS.pasta;
     var bowl = state.bowls[state.activeBowl];
+
+    if (!saladOn()) {
+      // The bar is self-serve tonight. Both steps come out of the strip
+      // rather than sitting in it greyed: a step a guest cannot answer is a
+      // step they stop and read anyway.
+      list = list.filter(function (st) { return st.id !== 'salad' && st.id !== 'dressing'; });
+    } else if (bowl && !saladOf(bowl)) {
+      // No salad on this plate, so there is nothing to dress. Asking anyway
+      // is how a plate with no salad ends up carrying a dressing.
+      list = list.filter(function (st) { return st.id !== 'dressing'; });
+    }
+
     if (!bowl) return list;
     var skip = crustSkips(bowl);
     if (!skip.length) return list;
     return list.filter(function (st) { return skip.indexOf(st.id) === -1; });
+  }
+
+  /**
+   * Steps that keep a text box under their tiles.
+   *
+   * These do not advance when a tile is tapped, because the tile is not the
+   * last thing being asked. Named as a set rather than checked inline so that
+   * a third such step is one entry here instead of one more `||` somebody has
+   * to remember - selftest counts the boxes in this file against it.
+   */
+  var STEPS_WITH_A_BOX = { finish: true, dressing: true };
+
+  /** Is the kitchen plating salads tonight? */
+  function saladOn() {
+    return state.saladMode === 'kitchen';
   }
 
   /** Keep the step pointer inside the list after it changes length. */
@@ -243,6 +287,10 @@ import {
     partySize: null,
     partyInherited: false,
     kitchenOpen: true,
+    // Who plates the salad. Starts at the configured resting state and is
+    // corrected by Firestore a moment later, so the first paint never shows a
+    // salad step the club is not running.
+    saladMode: config.defaultSaladMode,
     bowls: [],
     activeBowl: 0,
     buildStep: 0,
@@ -283,6 +331,12 @@ import {
       proteins: [],
       toppings: [],
       notes: '',
+      // Every plate starts with no salad, including on a night the kitchen is
+      // plating them: a salad nobody asked for is a salad that gets thrown
+      // away, and "No salad" is one tap.
+      salad: 'sal_none',
+      dressing: null,
+      saladNote: '',
     };
     // Every pizza starts classic, so a guest who never thinks about the crust
     // gets the one they would have got before it was a question.
@@ -310,6 +364,10 @@ import {
    */
   function bowlComplete(bowl) {
     if (!bowl) return false;
+    // Whatever is in the bowl, a salad nobody dressed cannot go out. Checked
+    // here as well as in menu.validateLine() so the review screen marks the
+    // plate unfinished instead of letting Send be the thing that explains it.
+    if (saladOn() && saladOf(bowl) && !bowl.dressing) return false;
     if (bowl.kind === 'pizza') return bowl.sauces.length > 0 && bowl.cheeses.length > 0;
     if (bowl.kind === 'burger') {
       return Boolean(bowl.base) && bowl.proteins.length === 1 && bowl.cheeses.length > 0;
@@ -561,6 +619,7 @@ import {
             : ''))}
         <h1>${t('guest.lane.title')}</h1>
         <p>${nightTagline()}</p>
+        ${raw(saladOn() ? '' : '<p class="hero-aside">' + escapeHtml(t('guest.salad.atBar')) + '</p>')}
       </div>
 
       <div class="lanepick">
@@ -758,6 +817,7 @@ import {
     var body;
     if (step.id === 'toppings') body = buildToppings(bowl);
     else if (step.id === 'finish') body = buildFinish(bowl);
+    else if (step.id === 'dressing') body = buildDressing(bowl);
     else if (step.id === 'sauces') {
       body = tileGrid(step.group, {
         act: 'toggleSauce', value: bowl.sauces, multi: true,
@@ -916,6 +976,29 @@ import {
     </div>`;
   }
 
+  /**
+   * The dressing, and the one box this whole feature exists for.
+   *
+   * "No tomato" and "extra croutons" are not choices anybody could have put
+   * on a tile - they are the member talking to the pantry cook - so the note
+   * sits on the same screen as the dressing rather than being folded into the
+   * plate note at the end. A salad note read off the bowl note is a salad
+   * note the cold station never sees, because that panel is about the bowl.
+   */
+  function buildDressing(bowl) {
+    var tiles = tileGrid('dressings', { act: 'pick', value: bowl.dressing, multi: false });
+    return html`${raw(tiles)}
+      <div class="card stack" style="margin-top:22px">
+        <div class="field">
+          <label for="saladNote">${t('guest.salad.note')}</label>
+          <textarea class="textarea" id="saladNote"
+            maxlength="${state.boot.limits.maxSaladNoteLength}"
+            placeholder="${t('guest.salad.notePh')}"
+            data-act="setSaladNote">${bowl.saladNote}</textarea>
+        </div>
+      </div>`;
+  }
+
   function buildFinish(bowl) {
     // Pasta is the only kind with a size to pick. A pizza is one size and a
     // burger is one burger, so for them this step is the name and note alone.
@@ -936,7 +1019,11 @@ import {
       var bowlGroups = GROUPS_FOR[bowl.kind] || GROUPS_FOR.pasta;
       var glyph = isPizza ? 'pie'
         : isBurger ? 'meatball'
-          : (item('pastas', bowl.pasta) || {}).shape || 'none';
+          // pastasOf, not bowl.pasta. The shape became a LIST when the split
+          // bowl landed and this reader was left on the old singular field,
+          // so every pasta card on this screen has been drawing the empty
+          // glyph since. A split bowl shows the first shape in it.
+          : (item('pastas', pastasOf(bowl)[0]) || {}).shape || 'none';
       var toppingGroup = bowlGroups.toppings;
 
       var extras = [];
@@ -992,29 +1079,21 @@ import {
       </div>`;
     });
 
-    // Roll the allergens up from whichever groups this lane actually uses,
-    // plus the crust for a pizza - every pie carries the crust's gluten, and
-    // its dairy now comes from whichever cheese was chosen.
+    // One call, not a second copy of the rules.
+    //
+    // This screen used to roll its own, walking the groups by hand - and it
+    // read the singular pasta and protein fields, both of which became lists
+    // this reader behind. The consequence was not a blank line: it was "This
+    // order contains:" quietly omitting the gluten in every bowl of pasta and
+    // everything in every protein, on the one screen a member checks before
+    // sending. menu.allergensFor() is what the kitchen chit and the expo
+    // screen already use, it reads both the list and the old singular, and it
+    // picks up the salad and its dressing without being told to.
     var allergens = [];
-    var addAll = function (list) {
-      list.forEach(function (a) { if (allergens.indexOf(a) === -1) allergens.push(a); });
-    };
     state.bowls.forEach(function (b) {
-      var isPizza = b.kind === 'pizza';
-      var entries = saucesOf(b).map(function (x) { return item(isPizza ? 'pizzaSauces' : 'sauces', x); })
-        .concat(b.toppings.map(function (t) { return item(isPizza ? 'pizzaToppings' : 'toppings', t); }));
-
-      if (isPizza) {
-        addAll((crustOf(b) || {}).allergens || []);
-        entries = entries
-          .concat((b.cheeses || []).map(function (c) { return item('pizzaCheeses', c); }));
-      } else {
-        entries = entries
-          .concat([item('pastas', b.pasta), item('proteins', b.protein)])
-          .concat((b.sides || []).map(function (x) { return item('sides', x); }));
-      }
-
-      entries.forEach(function (entry) { addAll(entry && entry.allergens ? entry.allergens : []); });
+      allergensFor(b).forEach(function (a) {
+        if (allergens.indexOf(a) === -1) allergens.push(a);
+      });
     });
 
     var allergenRow = allergens.length
@@ -1051,40 +1130,18 @@ import {
       </div>`;
   }
 
+  /**
+   * What a review card calls the dish.
+   *
+   * menu.describe() - the same sentence the kitchen chit carries. This was a
+   * second implementation of it for a while, and the two drifted exactly the
+   * way two copies do: describe() learned to read a split bowl's list of
+   * shapes and this one did not, so a review card showed "w/ Marinara" with
+   * no pasta in front of it. Now there is one sentence, and the member
+   * confirms the words the cook will read.
+   */
   function dishText(bowl) {
-    var isPizza = bowl.kind === 'pizza';
-    var nameIn = function (group) {
-      return function (id) { return (item(group, id) || {}).name; };
-    };
-    var sauceText = saucesOf(bowl)
-      .map(nameIn(isPizza ? 'pizzaSauces' : 'sauces')).filter(Boolean).join(' + ');
-    var proteins = (bowl.proteins || [])
-      .map(nameIn(isPizza ? 'pizzaProteins' : 'proteins')).filter(Boolean);
-
-    if (isPizza) {
-      var sauceRule = groupRules('pizzaSauces', bowl.sauces);
-      var cheeseRule = groupRules('pizzaCheeses', bowl.cheeses || []);
-      var qualify = function (text, rule) {
-        return rule.amount && text ? text + ' (' + rule.amount.amount + ')' : text;
-      };
-      var sauceLabel = sauceRule.exclusive ? 'No-sauce'
-        : qualify(sauceRule.bases.map(nameIn('pizzaSauces')).filter(Boolean).join(' + '), sauceRule);
-      var cheeseLabel = cheeseRule.exclusive ? 'no cheese'
-        : qualify(cheeseRule.bases.map(nameIn('pizzaCheeses')).filter(Boolean).join(' + '), cheeseRule);
-
-      var on = proteins.concat(bowl.toppings.map(nameIn('pizzaToppings')).filter(Boolean));
-      var out = [sauceLabel ? sauceLabel + ' Pizza' : 'Pizza'];
-      if (cheeseLabel) out.push('w/ ' + cheeseLabel);
-      if (on.length) out.push((cheeseLabel ? '+ ' : 'w/ ') + on.join(', '));
-      return out.join(' ');
-    }
-
-    var pasta = item('pastas', bowl.pasta);
-    var parts = [];
-    if (pasta) parts.push(pasta.name);
-    if (sauceText) parts.push('w/ ' + sauceText);
-    if (proteins.length) parts.push('+ ' + proteins.join(', '));
-    return parts.join(' ');
+    return describeLine(bowl, t.lang);
   }
 
   /**
@@ -1301,6 +1358,7 @@ import {
   var GROUP_FIELD = {
     pastas: 'pasta', proteins: 'protein', portions: 'portion',
     burgerBuns: 'base', pizzaCrusts: 'base',
+    salads: 'salad', dressings: 'dressing',
   };
 
   /**
@@ -1519,12 +1577,22 @@ import {
       // A dessert crust removes the cheese and meat steps, so the pointer can
       // be left past the end of a list that just got shorter.
       if (field === 'base') clampStep();
+      if (field === 'salad') {
+        // Taking the salad off takes the dressing with it. dressingOf() would
+        // hide a leftover on the way to the kitchen, but the review card and
+        // the tiles read the plate directly, so the plate is what gets
+        // cleared. The step strip grows or shrinks by one either way.
+        if (!saladOf(bowl)) { bowl.dressing = null; bowl.saladNote = ''; }
+        clampStep();
+      }
       // Tapping a choice moves you on - fewer buttons for a child to hunt for.
-      // Except on the finish step, where the name and the note sit below the
-      // tiles: advancing from there carried the guest straight out of a screen
-      // they had not filled in, which is how pasta arrived with nobody's name
-      // on it.
-      if (steps()[state.buildStep].id === 'finish') {
+      // Except on a step that keeps a text box under its tiles: advancing from
+      // one of those carries the guest straight out of a screen they have not
+      // finished with. It said `=== 'finish'` for exactly that reason, and the
+      // salad note walked into the same wall - the dressing tile is the last
+      // thing above its box, so tapping one took the box away before anybody
+      // could reach it and not one note would ever have been typed.
+      if (STEPS_WITH_A_BOX[steps()[state.buildStep].id]) {
         return render({ keepScroll: true });
       }
       advance();
@@ -1647,6 +1715,10 @@ import {
       currentBowl().guestLabel = el.value.trim();
     },
     setNotes: function (el) { currentBowl().notes = el.value; },
+
+    // No re-render, the same as every other box on these screens: it would
+    // take the keyboard away mid-sentence.
+    setSaladNote: function (el) { currentBowl().saladNote = el.value; },
     setOrderNotes: function (el) { state.orderNotes = el.value; },
 
     send: async function () {
@@ -1896,6 +1968,7 @@ import {
         maxSidesPerBurger: config.order.maxSidesPerBurger,
         toppingAdvice: config.order.toppingAdvice,
         maxNoteLength: config.order.maxNoteLength,
+        maxSaladNoteLength: config.order.maxSaladNoteLength,
         maxOrderNoteLength: config.order.maxOrderNoteLength,
       },
       sla: config.sla,
@@ -1975,6 +2048,26 @@ import {
         state.screen = state.member ? afterMember() : 'member';
       }
       render();
+    });
+
+    // Who plates the salad, live. A manager flipping this moves two steps in
+    // and out of every build in the room, which is the point - the club
+    // decides at 5pm whether the cold station is doing covers tonight.
+    db.watchSaladMode(function (mode) {
+      if (mode === state.saladMode) return;
+      state.saladMode = mode;
+      if (mode !== 'kitchen') {
+        // Moved to the bar. Anything already on a plate comes off it: left
+        // alone, a Caesar chosen five minutes ago still rides to a station
+        // that has stopped making them.
+        state.bowls.forEach(function (b) {
+          b.salad = 'sal_none';
+          b.dressing = null;
+          b.saladNote = '';
+        });
+      }
+      clampStep();
+      render({ keepScroll: true });
     });
 
     db.watchAvailability(function (list) {

@@ -79,6 +79,18 @@ const LANES = [
       ['burgerSides', 'Sides', 'one basket'],
     ],
   },
+  {
+    // Not a kind - a station. The salad goes out beside a bowl or beside a
+    // pie, so pricing it under either lane would have put it on one screen
+    // and hidden it on the other, and pricing it under both would have let a
+    // manager enter two different numbers for one bag of romaine.
+    lane: 'salad',
+    label: 'Cold station',
+    groups: [
+      ['salads', 'Salads', 'one plated salad'],
+      ['dressings', 'Dressings', 'one ramekin'],
+    ],
+  },
 ];
 
 /**
@@ -230,6 +242,17 @@ export function lineCost(line, costs) {
     // A side is its own plate. A kid-size bowl still comes with a whole piece
     // of garlic bread, so sides do not take the portion factor.
     (line.sides || []).forEach((id) => add(id, 1));
+  }
+
+  // The salad is costed after the branches and outside all of them, because
+  // it is a second plate rather than part of the first. It never takes the
+  // portion factor for the same reason a side does not: a kid-size bowl comes
+  // with a whole salad or with none.
+  const salad = menu.saladOf(line);
+  if (salad) {
+    add(salad.id, 1);
+    const dressing = menu.dressingOf(line);
+    if (dressing) add(dressing.id, 1);
   }
 
   const total = parts.reduce((a, p) => a + p.cost, 0);

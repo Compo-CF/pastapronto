@@ -32,6 +32,7 @@ const CATALOG = menu.catalog();
     costs: { items: {}, chargePerCover: null },
     night: config.defaultNight,
     serviceOpen: false,
+    saladMode: config.defaultSaladMode,
     // The orders panel. `editing` is the id of the open ticket and `draft` is
     // the working copy of it - never the live snapshot, or a Firestore update
     // landing mid-edit would rewrite what a manager is halfway through typing.
@@ -56,6 +57,9 @@ const CATALOG = menu.catalog();
     serviceSwitch: document.getElementById('serviceSwitch'),
     serviceNote: document.getElementById('serviceNote'),
     serviceCard: document.getElementById('serviceCard'),
+    saladSwitch: document.getElementById('saladSwitch'),
+    saladNote: document.getElementById('saladNote'),
+    saladCard: document.getElementById('saladCard'),
     costSummary: document.getElementById('costSummary'),
     costSheet: document.getElementById('costSheet'),
     chargePerCover: document.getElementById('chargePerCover'),
@@ -640,7 +644,58 @@ const CATALOG = menu.catalog();
     el.serviceCard.classList.toggle('is-closed', !state.serviceOpen);
   }
 
+  /**
+   * Who makes the salad tonight.
+   *
+   * The same two-button shape as the kitchen switch above it, for the same
+   * reason: a manager glances at this from across a pass and has to know
+   * which way it is set without reading both labels.
+   *
+   * "Make your own" is the resting state and the quieter of the two, because
+   * it is the one that asks nothing of the kitchen - and because a club that
+   * has never touched this switch is running the salad bar, which is how
+   * every night before tonight worked.
+   */
+  function renderSaladSwitch() {
+    var opts = [
+      { id: 'kitchen', label: 'Kitchen made', sub: 'in the app' },
+      { id: 'bar', label: 'Make your own', sub: 'self-serve, off in the app' },
+    ];
+    el.saladSwitch.innerHTML = opts.map(function (o) {
+      return html`<button class="nightopt" type="button"
+        data-act="setSalad" data-id="${o.id}"
+        aria-pressed="${o.id === state.saladMode ? 'true' : 'false'}">
+        <span class="nightopt-name">${o.label}</span>
+        <span class="nightopt-sub">${o.sub}</span>
+      </button>`;
+    }).join('');
+
+    el.saladNote.textContent = state.saladMode === 'kitchen'
+      ? 'Members pick a Caesar or a House and a dressing while they build, and '
+        + 'it prints on the chit with any note they left. The cold station is '
+        + 'doing covers tonight.'
+      : 'No salad step on any phone, and nothing on the chits. Members are told '
+        + 'on the order screen that the bar is self-serve. Switching mid-service '
+        + 'clears any salad already on a plate that has not been sent.';
+    el.saladCard.classList.toggle('is-closed', state.saladMode !== 'kitchen');
+  }
+
   document.addEventListener('click', async function (ev) {
+    var saladBtn = ev.target.closest('[data-act="setSalad"]');
+    if (saladBtn) {
+      var mode = saladBtn.getAttribute('data-id');
+      if (mode === state.saladMode) return;
+      try {
+        await db.setSaladMode(mode);
+        toast(mode === 'kitchen'
+          ? 'Kitchen is making the salads. The step is on every phone now.'
+          : 'Salad bar is self-serve. The step is off every phone now.');
+      } catch (err) {
+        toast('Could not change it: ' + err.message, true);
+      }
+      return;
+    }
+
     var openBtn = ev.target.closest('[data-act="setOpen"]');
     if (openBtn) {
       var want = openBtn.getAttribute('data-id') === 'open';
@@ -2050,6 +2105,16 @@ const CATALOG = menu.catalog();
       renderServiceSwitch();
     }, {
       onError: function (err) { toast('Could not read the service state: ' + err.code, true); },
+    });
+
+    // Who makes the salad, watched for the same reason: two managers on two
+    // iPads must not be able to disagree about whether the cold station is
+    // doing covers tonight.
+    db.watchSaladMode(function (mode) {
+      state.saladMode = mode;
+      renderSaladSwitch();
+    }, {
+      onError: function (err) { toast('Could not read the salad setting: ' + err.code, true); },
     });
 
     db.watchCosts(function (costs) {

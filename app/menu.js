@@ -332,6 +332,49 @@ const BURGER_SIDES = [
   { id: 'side_rings', name: 'Onion Rings', es: 'Aros de Cebolla', icon: 'onion_ring', cookSec: 270, allergens: ['gluten'], kid: true },
 ];
 
+/**
+ * The salad that rides along with a plate, when the club is making them.
+ *
+ * Two of them, because this is a pop-up pasta night and not a salad bar: the
+ * kitchen plates a Caesar or a House and sends it with the bowl. Which of the
+ * two - or neither - is a per-plate choice, so a table of four can take two
+ * salads and two not.
+ *
+ * 'none' is a real tile rather than a skipped step. A guest who wants no
+ * salad has to say so, the same way they pick a portion, because a step that
+ * can be walked past without answering is a step half a table walks past.
+ */
+const SALADS = [
+  { id: 'sal_none', name: 'No salad', es: 'Sin ensalada', icon: 'none', allergens: [], exclusive: true },
+  // Romaine, parmesan and croutons on the plate. The anchovy lives in the
+  // dressing, not here.
+  { id: 'sal_caesar', name: 'Caesar', es: 'César', icon: 'salad', allergens: ['gluten', 'dairy'] },
+  { id: 'sal_house', name: 'House', es: 'De la Casa', icon: 'spinach', allergens: [] },
+];
+
+/**
+ * Dressings, served on the side of either salad.
+ *
+ * Any dressing on either salad - a member who wants ranch on a Caesar gets
+ * ranch on a Caesar. Pairing them would be the kitchen telling a club member
+ * what they are allowed to like.
+ *
+ * ALLERGEN GAP, on purpose and worth knowing: Caesar dressing is made with
+ * anchovy, and this app's allergen list has no 'fish'. The egg and dairy in
+ * it are declared below; the fish is not, because inventing an allergen id
+ * here would put a chip on the avoid screen that nothing else in the menu
+ * has been audited against. Adding fish is a menu-wide decision, not a
+ * salad one.
+ */
+const DRESSINGS = [
+  { id: 'drs_balsamic', name: 'Balsamic', es: 'Balsámico', icon: 'olive' },
+  { id: 'drs_ranch', name: 'Ranch', es: 'Ranch', icon: 'cream', allergens: ['dairy', 'egg'] },
+  { id: 'drs_bluecheese', name: 'Blue Cheese', es: 'Queso Azul', icon: 'cheese', allergens: ['dairy', 'egg'] },
+  { id: 'drs_caesar', name: 'Caesar', es: 'César', icon: 'garlic', allergens: ['dairy', 'egg'] },
+  { id: 'drs_honeymustard', name: 'Honey Mustard', es: 'Miel y Mostaza', icon: 'butter', allergens: ['egg'] },
+  { id: 'drs_sherry', name: 'Sherry Vinaigrette', es: 'Vinagreta de Jerez', icon: 'herb' },
+];
+
 const GROUPS = {
   pastas: PASTAS, sauces: SAUCES, proteins: PROTEINS,
   toppings: TOPPINGS, sides: SIDES, portions: PORTIONS,
@@ -342,6 +385,7 @@ const GROUPS = {
   burgerBuns: BURGER_BUNS, burgerPatties: BURGER_PATTIES,
   burgerCheeses: BURGER_CHEESES, burgerToppings: BURGER_TOPPINGS,
   burgerSauces: BURGER_SAUCES, burgerSides: BURGER_SIDES,
+  salads: SALADS, dressings: DRESSINGS,
 };
 
 /** Every kind any night can serve. */
@@ -486,6 +530,36 @@ export function proteinsOf(line) {
   return [];
 }
 
+/**
+ * The salad on a plate, or null when there is not one.
+ *
+ * 'none' is how the tiles say "no salad"; null is how every screen after them
+ * says it, so this is the one place that translation happens. A line written
+ * before salads existed carries no field at all and reads the same way.
+ */
+export function saladOf(line) {
+  const item = find('salads', line && line.salad);
+  // "No salad" is a real tile with a real id - that is what makes it
+  // tappable - but it is not a salad. `exclusive` is how this menu already
+  // marks a tile that answers a question with nothing ("No Sauce", "No
+  // Cheese"), and it is the same flag that keeps it off the cost sheet. One
+  // flag, so renaming the id cannot make the two disagree.
+  return item && !item.exclusive ? item : null;
+}
+
+/**
+ * The dressing beside it, or null.
+ *
+ * Gated on there BEING a salad rather than read straight off the line: a
+ * member who picks ranch and then goes back and takes the salad off would
+ * otherwise leave a dressing behind, and a chit reading "Dressing: Ranch"
+ * with no salad on it is a cook stopping to ask somebody.
+ */
+export function dressingOf(line) {
+  if (!saladOf(line)) return null;
+  return find('dressings', line && line.dressing);
+}
+
 /** Look up one ingredient in a group. Returns null rather than throwing. */
 function find(group, id) {
   const list = GROUPS[group];
@@ -531,6 +605,8 @@ export const EDITABLE_GROUPS = [
   ['burgerToppings', 'Burger toppings'],
   ['burgerSauces', 'Burger sauces'],
   ['burgerSides', 'Burger sides'],
+  ['salads', 'Salads'],
+  ['dressings', 'Salad dressings'],
 ];
 
 /**
@@ -566,6 +642,13 @@ export const GROUP_KIND = {
   burgerToppings: 'burger',
   burgerSauces: 'burger',
   burgerSides: 'burger',
+
+  // A salad is served beside a bowl AND beside a pie, so it is the first
+  // group owned by more than one kind - which is why these are lists. It
+  // shows in the editor while either lane is running and disappears with
+  // both, the same as everything else here.
+  salads: ['pasta', 'pizza'],
+  dressings: ['pasta', 'pizza'],
 };
 
 /**
@@ -579,7 +662,14 @@ export const GROUP_KIND = {
  */
 export function editableGroupsFor(kinds) {
   const running = new Set(kinds || []);
-  return EDITABLE_GROUPS.filter(([group]) => running.has(GROUP_KIND[group]));
+  return EDITABLE_GROUPS.filter(([group]) => ownersOf(group).some((k) => running.has(k)));
+}
+
+/** Which kinds claim a group. Always a list, however GROUP_KIND spells it. */
+export function ownersOf(group) {
+  const owner = GROUP_KIND[group];
+  if (!owner) return [];
+  return Array.isArray(owner) ? owner : [owner];
 }
 
 /**
@@ -883,6 +973,12 @@ export function allergensFor(line) {
 
   saucesOf(line).forEach((id) => add(find(g.sauces, id)));
   proteinsOf(line).forEach((id) => add(find(g.proteins, id)));
+  // The salad and what is poured on it. Croutons are gluten and a creamy
+  // dressing is dairy, and neither is on the plate the bowl came from - so a
+  // bowl that was gluten free stops being a gluten-free PLATE the moment a
+  // Caesar lands beside it.
+  add(saladOf(line));
+  add(dressingOf(line));
   (line.toppings || []).forEach((id) => add(find(g.toppings, id)));
   return [...out];
 }
@@ -899,16 +995,6 @@ export function nameOf(group, id, lang) {
   return (lang === 'es' && item.es) ? item.es : item.name;
 }
 
-/**
- * Human one-liner used on chits and review screens.
- *
- * Takes a language, and defaults to English on purpose: order.buildOrder()
- * calls this to store `dish` on the document, and that stored string is the
- * canonical English record the CSV, the PDF and any later audit read. A screen
- * wanting another language recomputes from the ids it already has - which is
- * what lets a Spanish guest's order arrive on an English kitchen rail, and
- * the reverse.
- */
 /**
  * A line broken into labelled rows, for screens that read it rather than
  * speak it.
@@ -959,10 +1045,52 @@ export function ingredientList(line, lang) {
     add(es ? 'Tamaño' : 'Size', [nameOf('portions', line.portion, lang)]);
   }
 
+  // Last, because it is the last thing plated - and its own rows rather than
+  // folded into the Side row, because a salad goes out on its own plate from
+  // a different station and the note on it belongs to the salad, not to the
+  // bowl. A plate with no salad adds nothing here at all.
+  const salad = saladOf(line);
+  if (salad) {
+    add(es ? 'Ensalada' : 'Salad', [nameOf('salads', salad.id, lang)]);
+    add(es ? 'Aderezo' : 'Dressing', [nameOf('dressings', (dressingOf(line) || {}).id, lang)]);
+    add(es ? 'Nota de ensalada' : 'Salad note', [String(line.saladNote || '').trim()]);
+  }
+
   return rows;
 }
 
+/**
+ * Human one-liner used on chits and review screens.
+ *
+ * Takes a language, and defaults to English on purpose: order.buildOrder()
+ * calls this to store `dish` on the document, and that stored string is the
+ * canonical English record the CSV, the PDF and any later audit read. A screen
+ * wanting another language recomputes from the ids it already has - which is
+ * what lets a Spanish guest's order arrive on an English kitchen rail, and
+ * the reverse.
+ *
+ * The salad is added out here rather than inside describeDish. That has one
+ * branch per kind and a return in each, so a fourth kind would have been a
+ * fourth place to forget - which is exactly how the pizza crust came to be
+ * chosen on the phone and dropped on the way to the kitchen.
+ */
 export function describe(line, lang) {
+  const dish = describeDish(line, lang);
+  const salad = saladOf(line);
+  if (!salad) return dish;
+
+  const es = lang === 'es';
+  const dressing = dressingOf(line);
+  const name = nameOf('salads', salad.id, lang);
+  const poured = dressing ? name + ' (' + nameOf('dressings', dressing.id, lang) + ')' : name;
+  // "+ Caesar" on the end of a bowl reads as something stirred into it. The
+  // word says which plate it is. ASCII on purpose: this string is stored on
+  // the document as the canonical English record and gets re-read by the CSV
+  // and the close-out PDF, neither of which should have to carry a bullet.
+  return dish + (es ? ' + ensalada: ' : ' + salad: ') + poured;
+}
+
+function describeDish(line, lang) {
   const g = GROUPS_FOR[kindOf(line)];
   const name = (group) => (id) => nameOf(group, id, lang);
   const sauces = saucesOf(line).map(name(g.sauces)).filter(Boolean);
@@ -1112,6 +1240,17 @@ export function validateLine(line, limits) {
   const toppings = line.toppings || [];
   if (toppings.some((t) => !find(g.toppings, t))) errors.push('Unknown topping.');
 
+  // The salad, checked on every kind because it belongs to none of them.
+  // A dressing with no salad is caught by dressingOf() on the way out; what
+  // is caught HERE is the other way round - a salad nobody dressed, which is
+  // a plate the cold station cannot finish and would have to come and ask
+  // about mid-service.
+  if (line.salad && !find('salads', line.salad)) errors.push('That salad is not on the menu.');
+  if (saladOf(line)) {
+    if (!line.dressing) errors.push('Pick a dressing for the salad.');
+    else if (!find('dressings', line.dressing)) errors.push('That dressing is not on the menu.');
+  }
+
   if (kind === 'pizza') {
     const cheeses = cheesesOf(line);
     if (cheeses.length === 0) errors.push('Pick a cheese, or No Cheese.');
@@ -1174,7 +1313,19 @@ export function validateLine(line, limits) {
     return errors;
   }
 
-  if (!find('pastas', line.pasta)) errors.push('Pick a pasta shape.');
+  // pastasOf, not line.pasta.
+  //
+  // The shape became a LIST when the split bowl landed and this reader was
+  // left on the old singular field, so this rejected every bowl the app has
+  // built since - and db.submitOrder() runs validateDraft before it writes,
+  // which means pasta ordering has been refused outright. Nothing caught it
+  // because the fixture every validation test uses still carries the old
+  // singular field, so the suite was only ever asking about a shape the app
+  // had stopped producing.
+  const shapes = pastasOf(line);
+  if (!shapes.length || shapes.some((id) => !find('pastas', id))) {
+    errors.push('Pick a pasta shape.');
+  }
   if (!find('portions', line.portion)) errors.push('Pick a portion size.');
   const sides = line.sides || [];
   if (sides.some((x) => !find('sides', x))) errors.push('Unknown side.');
@@ -1205,5 +1356,6 @@ export function catalog() {
     burgerBuns: BURGER_BUNS, burgerPatties: BURGER_PATTIES,
     burgerCheeses: BURGER_CHEESES, burgerToppings: BURGER_TOPPINGS,
     burgerSauces: BURGER_SAUCES, burgerSides: BURGER_SIDES,
+    salads: SALADS, dressings: DRESSINGS,
   };
 }

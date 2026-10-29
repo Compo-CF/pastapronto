@@ -4507,4 +4507,404 @@ test('a table typed in survives a manager renaming a location', () => {
 });
 
 
+// -------------------------------------------------------------- the salad
+
+/** A pasta plate, with whatever salad fields a case wants on it. */
+function plate(extra) {
+  return {
+    kind: 'pasta', pastas: ['penne'], sauces: ['marinara'], proteins: [],
+    toppings: [], sides: [], portion: 'regular', spice: 'mild',
+    ...extra,
+  };
+}
+
+test('"no salad" is a tile, and it is not a salad', () => {
+  // The step has to be answerable with nothing, and the answer has to be a
+  // real tappable id - otherwise half a table walks past the step without
+  // deciding and the kitchen cannot tell them from the ones who declined.
+  assert.strictEqual(menu.saladOf(plate({ salad: 'sal_none' })), null);
+  assert.strictEqual(menu.saladOf(plate({})), null, 'a plate from before salads existed');
+  assert.strictEqual(menu.saladOf(plate({ salad: 'sal_nonsense' })), null);
+  assert.strictEqual(menu.saladOf(plate({ salad: 'sal_caesar' })).id, 'sal_caesar');
+});
+
+test('a dressing cannot outlive the salad it was for', () => {
+  // A member picks Ranch, goes back a step and takes the salad off. The
+  // dressing is still sitting on the plate object; nothing downstream may
+  // see it, or a chit reads "Dressing: Ranch" with no salad under it and a
+  // cook stops mid-service to go and ask whose ticket it is.
+  const orphan = plate({ salad: 'sal_none', dressing: 'drs_ranch', saladNote: 'no tomato' });
+  assert.strictEqual(menu.dressingOf(orphan), null);
+
+  const built = order.buildLine(orphan, 0, 'pasta');
+  assert.strictEqual(built.salad, null);
+  assert.strictEqual(built.dressing, null);
+  assert.strictEqual(built.saladNote, '', 'the note went with it');
+
+  assert.ok(!menu.describe(orphan).includes('Ranch'));
+  assert.ok(!JSON.stringify(menu.ingredientList(orphan)).includes('Ranch'));
+});
+
+test('the salad reaches the kitchen, and so does the note', () => {
+  // buildLine is the gate: a field it does not name is a field chosen on a
+  // phone and dropped on the way to the pass. That is exactly how the pizza
+  // crust was lost once already.
+  const built = order.buildLine(
+    plate({ salad: 'sal_caesar', dressing: 'drs_sherry', saladNote: 'extra croutons' }),
+    0, 'pasta',
+  );
+  assert.strictEqual(built.salad, 'sal_caesar');
+  assert.strictEqual(built.dressing, 'drs_sherry');
+  assert.strictEqual(built.saladNote, 'extra croutons');
+
+  // And it is on the chit, in rows, which is what the rail and the expo
+  // screen both render.
+  const labels = menu.ingredientList(built).map((r) => r.label);
+  assert.ok(labels.includes('Salad'), 'no salad row on the chit');
+  assert.ok(labels.includes('Dressing'), 'no dressing row on the chit');
+  assert.ok(labels.includes('Salad note'), 'the note never reaches the cold station');
+
+  // A plate with no salad adds nothing at all - not an empty row.
+  const plain = order.buildLine(plate({ salad: 'sal_none' }), 0, 'pasta');
+  menu.ingredientList(plain).forEach((r) => {
+    assert.ok(!['Salad', 'Dressing', 'Salad note'].includes(r.label),
+      'a plate with no salad is printing salad rows');
+  });
+});
+
+test('a salad note is capped before it is stored, not after', () => {
+  const built = order.buildLine(
+    plate({ salad: 'sal_house', dressing: 'drs_ranch', saladNote: 'x'.repeat(400) }), 0, 'pasta',
+  );
+  assert.strictEqual(built.saladNote.length, config.order.maxSaladNoteLength);
+});
+
+test('a salad brings its allergens to the plate beside it', () => {
+  // The bowl was gluten free. It is still gluten free; the PLATE is not,
+  // because the croutons arrived on it - and the member reads one line that
+  // says what is in front of them, not two.
+  const gf = plate({ pastas: ['gf_penne'], sauces: ['marinara'] });
+  const bare = menu.allergensFor(gf);
+  assert.ok(!bare.includes('gluten'), 'fixture is wrong - start without gluten');
+
+  const withCaesar = menu.allergensFor({ ...gf, salad: 'sal_caesar', dressing: 'drs_ranch' });
+  assert.ok(withCaesar.includes('gluten'), 'the croutons are not declared');
+  assert.ok(withCaesar.includes('dairy'), 'the ranch is not declared');
+  assert.ok(withCaesar.includes('egg'), 'the ranch is not declared');
+
+  // House with a vinaigrette adds nothing, so nothing is invented either.
+  const house = menu.allergensFor({ ...gf, salad: 'sal_house', dressing: 'drs_balsamic' });
+  assert.deepStrictEqual(house.slice().sort(), bare.slice().sort());
+});
+
+test('a salad nobody dressed is not a finished plate', () => {
+  const errs = menu.validateLine(plate({ salad: 'sal_caesar', dressing: null }), config.order);
+  assert.ok(errs.some((e) => /dressing/i.test(e)), 'a salad with no dressing passed validation');
+
+  assert.deepStrictEqual(
+    menu.validateLine(plate({ salad: 'sal_caesar', dressing: 'drs_caesar' }), config.order), [],
+  );
+  assert.deepStrictEqual(
+    menu.validateLine(plate({ salad: 'sal_none' }), config.order), [],
+    'declining a salad is a complete answer',
+  );
+  assert.ok(
+    menu.validateLine(plate({ salad: 'sal_caesar', dressing: 'drs_nope' }), config.order).length,
+    'a dressing that is not on the menu went through',
+  );
+});
+
+test('the salad reads as its own plate, in both languages', () => {
+  const p = plate({ salad: 'sal_caesar', dressing: 'drs_ranch' });
+  assert.ok(menu.describe(p).includes('salad: Caesar (Ranch)'), 'EN: ' + menu.describe(p));
+  assert.ok(menu.describe(p, 'es').includes('ensalada: César (Ranch)'),
+    'ES: ' + menu.describe(p, 'es'));
+
+  // "+ Caesar" on the end of a bowl reads as something stirred into it.
+  assert.ok(!menu.describe(p).includes('+ Caesar ('), 'the word "salad" is missing');
+
+  // The stored dish is the canonical English record the CSV and the PDF read
+  // back, so the English stays printable ASCII.
+  assert.ok(/^[ -~]*$/.test(menu.describe(p)), 'the English dish line left ASCII');
+  assert.strictEqual(menu.describe(plate({ salad: 'sal_none' })), 'Penne w/ Marinara');
+});
+
+test('a salad and a dressing with the same name are two different things', () => {
+  // Both lists have a Caesar. Unprefixed they were one id in two groups: the
+  // cost sheet keyed both to one price, and findAnywhere() could only ever
+  // return whichever list it reached first. selftest caught it by counting.
+  const salads = menu.catalog().salads.map((x) => x.id);
+  const dressings = menu.catalog().dressings.map((x) => x.id);
+  assert.deepStrictEqual(salads.filter((id) => dressings.includes(id)), [],
+    'these ids collide across the two lists');
+
+  assert.strictEqual(menu.findAnywhere('sal_caesar').name, 'Caesar');
+  assert.strictEqual(menu.findAnywhere('drs_caesar').name, 'Caesar');
+  assert.notStrictEqual(menu.findAnywhere('sal_caesar'), menu.findAnywhere('drs_caesar'));
+});
+
+test('a salad is costed as the second plate it is', () => {
+  const costs = {
+    penne: { price: 12, yield: 20 },
+    marinara: { price: 10, yield: 20 },
+    sal_caesar: { price: 24, yield: 12 },
+    drs_ranch: { price: 9, yield: 30 },
+  };
+  const extra = 24 / 12 + 9 / 30;
+  const bare = costing.lineCost(plate({ salad: 'sal_none' }), costs);
+  const withSalad = costing.lineCost(plate({ salad: 'sal_caesar', dressing: 'drs_ranch' }), costs);
+  assert.ok(withSalad.complete, 'priced ingredients still read as incomplete');
+  assert.ok(Math.abs((withSalad.total - bare.total) - extra) < 1e-9,
+    'the salad and its dressing are not both on the bill');
+
+  // A kid bowl is 0.6 of the pasta and a WHOLE salad, the same way a side is
+  // a whole piece of garlic bread.
+  const kid = costing.lineCost(
+    plate({ portion: 'kid', salad: 'sal_caesar', dressing: 'drs_ranch' }), costs,
+  );
+  const kidBare = costing.lineCost(plate({ portion: 'kid', salad: 'sal_none' }), costs);
+  assert.ok(Math.abs((kid.total - kidBare.total) - extra) < 1e-9,
+    'a kid-size bowl is being charged for a kid-size salad');
+});
+
+test('the salad has somewhere to be priced, and "no salad" does not', () => {
+  const ids = costing.costableIds();
+  assert.ok(ids.includes('sal_caesar') && ids.includes('drs_ranch'),
+    'a manager cannot enter what the salad costs');
+  assert.ok(!ids.includes('sal_none'),
+    '"No salad" has a price box, which is money entered against nothing');
+});
+
+test('the salad step is on both lanes that serve one, and on neither otherwise', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+
+  // Written once and shared, not copied into each lane - two copies of two
+  // steps is two places to rename House and one place to forget.
+  assert.ok(/var SALAD_STEPS = \[/.test(src), 'the steps are not declared');
+  assert.strictEqual((src.match(/SALAD_STEPS\[0\], SALAD_STEPS\[1\]/g) || []).length, 2,
+    'the salad belongs to exactly two lanes: pasta and pizza');
+
+  // And they come out of the strip when the bar is self-serve. Greying them
+  // would leave a step a member stops and reads before finding they cannot
+  // answer it.
+  const fn = src.slice(src.indexOf('function steps()'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(/saladOn\(\)/.test(body), 'steps() does not ask who is making the salad');
+  assert.ok(/st\.id !== 'dressing'/.test(body),
+    'the dressing step survives a plate with no salad on it');
+  assert.ok(body.includes('!saladOf(bowl)'),
+    'the dressing step is filtered on something other than whether there IS a salad');
+});
+
+test('moving the salad to the bar takes it off the plates too', () => {
+  // A manager flips the switch at 6:40. Somebody has had a Caesar on their
+  // plate since 6:35 and has not sent yet. Left alone that plate rides to a
+  // station that has stopped making them.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const w = src.slice(src.indexOf('db.watchSaladMode(function (mode)'));
+  const body = w.slice(0, w.indexOf('\n    });'));
+
+  assert.ok(/state\.bowls\.forEach/.test(body), 'plates already built keep their salad');
+  ["b.salad = 'sal_none'", 'b.dressing = null', "b.saladNote = ''"].forEach((line) => {
+    assert.ok(body.includes(line), 'switching to the bar leaves behind: ' + line);
+  });
+  assert.ok(/clampStep\(\)/.test(body),
+    'two steps vanish and the step pointer is left past the end of the list');
+});
+
+test('the salad note has a box of its own, on the dressing step', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('function buildDressing(bowl)'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+
+  assert.ok(/data-act="setSaladNote"/.test(body), 'there is nowhere to type "no tomato"');
+  assert.ok(/maxSaladNoteLength/.test(body), 'the box is not bounded');
+  assert.ok(/tileGrid\('dressings'/.test(body), 'the dressings are not on this step');
+
+  // Not folded into the plate note at the end: that panel is about the bowl,
+  // and a salad note read off it is a salad note the cold station never sees.
+  const panel = src.slice(src.indexOf('function detailPanel(bowl)'));
+  assert.ok(!/saladNote/.test(panel.slice(0, panel.indexOf('\n  }'))),
+    'the salad note is being collected on the plate panel');
+});
+
+test('a step with a box under its tiles does not advance out from under it', () => {
+  // Tapping a tile advances to the next step, which is right for a step that
+  // asks one thing. It is wrong for a step that also has something to TYPE:
+  // the tap takes the box away before anyone reaches it. That already happened
+  // once - pasta arrived with nobody's name on it - and the salad note was the
+  // second time, because the dressing tiles sit directly above their box.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const map = src.slice(src.indexOf('var STEPS_WITH_A_BOX'));
+  const body = map.slice(0, map.indexOf('};'));
+  ['finish', 'dressing'].forEach((id) => {
+    assert.ok(body.includes(id + ': true'),
+      'the ' + id + ' step advances away from its own text box');
+  });
+  assert.ok(src.includes('STEPS_WITH_A_BOX[steps()[state.buildStep].id]'),
+    'nothing reads the map, so every step advances again');
+
+  // The trip-wire: a third box on a BUILD step means a third entry here.
+  // Scoped to the build renderers, because the review screen has a box too
+  // and nothing advances off that one - counting it would make this test
+  // red for a reason that has nothing to do with what it is guarding.
+  const buildArea = src.slice(
+    src.indexOf('function detailPanel(bowl)'), src.indexOf('function screenReview()'),
+  );
+  assert.ok(buildArea.length > 200, 'the build renderers moved - this slice is wrong');
+  assert.strictEqual((buildArea.match(/<textarea/g) || []).length, 2,
+    'a text box was added or removed on a build step - does its step still advance?');
+});
+
+test('both switch positions say what they do, in both languages', () => {
+  ['guest.tab.salad', 'guest.tab.dressing', 'guest.step.salad', 'guest.step.salad.sub',
+    'guest.step.dressing', 'guest.step.dressing.sub', 'guest.salad.note',
+    'guest.salad.notePh', 'guest.salad.atBar'].forEach((k) => {
+    assert.ok(STRINGS.en[k], k + ' has no English');
+    assert.ok(STRINGS.es[k], k + ' has no Spanish');
+  });
+
+  // The manager screen has the switch, and it is two buttons rather than a
+  // slider for the same reason the kitchen switch is.
+  const admin = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+  assert.ok(/data-act="setSalad"/.test(admin), 'no salad control on the manager screen');
+  assert.ok(/db\.setSaladMode\(/.test(admin), 'the switch writes nothing');
+  assert.ok(/db\.watchSaladMode\(/.test(admin),
+    'two managers on two iPads could disagree about it');
+
+  // Both positions, rendered from one list so neither can be dropped.
+  const fn = admin.slice(admin.indexOf('function renderSaladSwitch'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  config.saladModes.forEach((m) => {
+    assert.ok(body.includes("id: '" + m + "'"), 'the switch has no ' + m + ' position');
+  });
+});
+
+test('an unknown salad mode never reaches a screen', () => {
+  // config, the rules and db all agree on the two modes.
+  assert.deepStrictEqual(config.saladModes, ['kitchen', 'bar']);
+  assert.ok(config.saladModes.includes(config.defaultSaladMode));
+  assert.strictEqual(config.defaultSaladMode, 'bar',
+    'the resting state is the one that asks nothing of the kitchen');
+
+  const rules = readFileSync(fileURLToPath(new URL('../firestore.rules', import.meta.url)), 'utf8');
+  config.saladModes.forEach((m) => {
+    assert.ok(rules.includes("'" + m + "'"), 'the rules do not allow mode ' + m);
+  });
+
+  const db = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const setter = db.slice(db.indexOf('export async function setSaladMode'));
+  assert.ok(/saladModes\.indexOf\(mode\) === -1/.test(setter.slice(0, 400)),
+    'setSaladMode writes whatever it is handed');
+  const watcher = db.slice(db.indexOf('export function watchSaladMode'));
+  assert.ok(/defaultSaladMode/.test(watcher.slice(0, 800)),
+    'a value nobody set leaves the screens with no mode at all');
+});
+
+test('a review card shows the dish, the right glyph, and an unfinished plate', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+
+  // dishText delegates to menu.describe() instead of deriving the sentence a
+  // second time. It used to derive it, and the two drifted the way two copies
+  // do: describe() learned to read a split bowl and this one did not.
+  assert.ok(src.includes('return describeLine(bowl, t.lang);'),
+    'the review card has its own idea of what a dish is called again');
+
+  // The glyph reads the list of shapes. On the singular field it resolved to
+  // nothing and every pasta card drew the empty plate.
+  assert.ok(!src.includes("item('pastas', bowl.pasta)"),
+    'the review glyph is reading the singular pasta field again');
+  assert.ok(src.includes("item('pastas', pastasOf(bowl)[0])"),
+    'the review glyph is not reading the list of shapes');
+
+  // A salad nobody dressed keeps the plate unfinished, so the review screen
+  // marks it and Send stays off - rather than letting Send be the thing that
+  // explains it.
+  assert.ok(src.includes('if (saladOn() && saladOf(bowl) && !bowl.dressing) return false;'),
+    'a salad with no dressing counts as a finished plate');
+});
+
+test('the review screen lists the allergens the kitchen lists', () => {
+  // This screen used to roll its own allergens by hand, off the singular
+  // pasta and protein fields - both of which became lists on 23 Oct, leaving
+  // this reader behind. The result was not a blank line: "This order
+  // contains:" silently dropped the gluten in every bowl of pasta and
+  // everything in every protein, on the one screen a member checks before
+  // sending.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+
+  assert.ok(!/item\('pastas', b\.pasta\)/.test(src),
+    'the review screen is reading the singular pasta field again');
+  assert.ok(!/\bb\.protein\b/.test(src) && !/bowl\.protein\b/.test(src),
+    'something is reading the singular protein field');
+  assert.ok(/allergensFor\(b\)/.test(src),
+    'the review screen is not using the same rollup as the chit');
+
+  // The proof it was ever broken: the field that reader wanted is one no
+  // plate has had since the split bowl landed.
+  const split = plate({ pastas: ['spaghetti', 'penne'], proteins: ['chicken'] });
+  assert.strictEqual(split.pasta, undefined, 'the field the old reader wanted does not exist');
+  assert.ok(menu.allergensFor(split).includes('gluten'));
+});
+
+
+test('the order the app actually builds passes its own validation', () => {
+  // The shared draft() fixture above carries `pasta: 'shells'` - a singular
+  // field nothing has produced since the split bowl landed on 23 Oct. So
+  // every validation test was asking about a shape the app had stopped
+  // building, while the shape it DOES build was rejected by validateLine and
+  // therefore by db.submitOrder(), which runs validateDraft before it writes.
+  // Pasta ordering was refused outright on the live site and the suite was
+  // green the whole time.
+  //
+  // This builds the line the way app/guest.js newBowl() builds it, and reads
+  // the field names out of guest.js rather than restating them - a
+  // restatement is exactly how the first copy came to drift.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const nb = src.slice(src.indexOf('function newBowl(index)'));
+  const body = nb.slice(0, nb.indexOf('\n  }'));
+  assert.ok(body.includes('pastas: []'),
+    'newBowl no longer starts a bowl with a list of shapes - this test is stale');
+  assert.ok(!/(^|[^a-z])pasta: /.test(body),
+    'newBowl is back to one shape per bowl - this test is stale');
+
+  const asBuilt = {
+    guestLabel: 'Ada', kind: 'pasta',
+    pastas: ['penne'], sauces: ['marinara'], proteins: [], toppings: [],
+    sides: [], portion: 'regular', spice: 'mild',
+    salad: 'sal_none', dressing: null, saladNote: '',
+  };
+  assert.deepStrictEqual(
+    order.validateDraft({ ...draft(), lines: [asBuilt] }, config), [],
+    'the app cannot send the order it just built',
+  );
+
+  // The split bowl this was all for.
+  assert.deepStrictEqual(
+    order.validateDraft({ ...draft(), lines: [{ ...asBuilt, pastas: ['penne', 'rigatoni'] }] },
+      config), [],
+  );
+
+  // And a bowl with a salad on it, which is the shape the app builds now.
+  assert.deepStrictEqual(
+    order.validateDraft({ ...draft(),
+      lines: [{ ...asBuilt, salad: 'sal_caesar', dressing: 'drs_ranch', saladNote: 'no tomato' }] },
+    config), [],
+  );
+
+  // "Pick a pasta shape" is a real error and has to survive the fix.
+  assert.ok(order.validateDraft({ ...draft(), lines: [{ ...asBuilt, pastas: [] }] }, config)
+    .some((e) => /pasta shape/.test(e)), 'an empty bowl now validates');
+  assert.ok(order.validateDraft({ ...draft(), lines: [{ ...asBuilt, pastas: ['nope'] }] }, config)
+    .some((e) => /pasta shape/.test(e)), 'a shape that is not on the menu now validates');
+
+  // Firestore still holds orders written before the change, so the singular
+  // has to keep reading.
+  const legacy = { ...asBuilt, pasta: 'shells' };
+  delete legacy.pastas;
+  assert.deepStrictEqual(order.validateDraft({ ...draft(), lines: [legacy] }, config), [],
+    'an order taken before 23 Oct no longer validates');
+});
+
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

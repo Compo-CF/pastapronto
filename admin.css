@@ -647,3 +647,45 @@
   border-color: #c62828;
   box-shadow: inset 4px 0 0 #c62828;
 }
+
+/* The salad switch: green for the station that is doing covers, and a plain
+   slate for the one that is not. Deliberately NOT the stop red above it -
+   "make your own at the bar" is how this club ran every night before the
+   switch existed, and a normal night should not read on a manager's screen
+   as something gone wrong. Green says the kitchen has taken extra work on. */
+#saladSwitch {
+  --svc-go: #15703c;
+  --svc-go-wash: #e9f4ed;
+  --svc-off: #5b5048;
+  --svc-off-wash: #f1ece6;
+}
+
+#saladSwitch .nightopt[data-id="kitchen"] {
+  border-color: var(--svc-go); color: var(--svc-go);
+}
+#saladSwitch .nightopt[data-id="kitchen"]:hover { background: var(--svc-go-wash); }
+#saladSwitch .nightopt[data-id="kitchen"]:focus-visible { outline-color: var(--svc-go); }
+#saladSwitch .nightopt[data-id="kitchen"][aria-pressed="true"] {
+  background: var(--svc-go); border-color: var(--svc-go); color: #fff;
+}
+
+#saladSwitch .nightopt[data-id="bar"] {
+  border-color: var(--svc-off); color: var(--svc-off);
+}
+#saladSwitch .nightopt[data-id="bar"]:hover { background: var(--svc-off-wash); }
+#saladSwitch .nightopt[data-id="bar"]:focus-visible { outline-color: var(--svc-off); }
+#saladSwitch .nightopt[data-id="bar"][aria-pressed="true"] {
+  background: var(--svc-off); border-color: var(--svc-off); color: #fff;
+}
+
+#saladSwitch .nightopt .nightopt-sub { color: inherit; opacity: .74; }
+#saladSwitch .nightopt[aria-pressed="true"] .nightopt-sub {
+  color: rgba(255, 255, 255, 0.85); opacity: 1;
+}
+
+/* No stripe when the bar is self-serve: there is nothing to flag. The stripe
+   marks the card only while the cold station is on the hook for covers. */
+#saladCard:not(.is-closed) {
+  border-color: #15703c;
+  box-shadow: inset 4px 0 0 #15703c;
+}

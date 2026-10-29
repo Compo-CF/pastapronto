@@ -22,6 +22,10 @@
 .hero h1 { font-size: clamp(36px, 9vw, 58px); line-height: 1; letter-spacing: -0.04em; margin: 0 0 10px; }
 .hero h1 em { font-style: normal; color: var(--tomato); }
 .hero p { font-size: 19px; color: var(--ink-soft); margin: 0 auto; max-width: 30ch; }
+/* Told once, where a member is choosing what to order rather than where they
+   are paying attention to a keypad: with the bar self-serve there is no salad
+   step coming, and somebody should say so before they go looking for one. */
+.hero p.hero-aside { margin-top: 10px; font-size: 15px; font-weight: 650; color: var(--ink-faint); }
 
 .wherecard {
   display: inline-flex;
