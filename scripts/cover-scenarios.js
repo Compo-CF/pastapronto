@@ -26,11 +26,35 @@ const DAY = '2026-11-05';
 
 let ticket = 0;
 
-/** A plausible bowl. Contents never affect covers - the head count does. */
-const bowl = (who) => ({
-  guestLabel: who, pasta: 'penne', sauces: ['marinara'], proteins: ['chicken'],
-  toppings: ['parmesan'], sides: [], portion: 'regular', spice: 'mild',
-});
+/**
+ * A plausible bowl. Contents never affect covers - the head count does.
+ *
+ * But the SHAPE does, and this carried `pasta: 'penne'` long after the app
+ * stopped building that: a singular field that became a list on 23 Oct. So
+ * every number this file has printed since then came from simulating an order
+ * no phone could produce, at the same time as six readers of that dead field
+ * were quietly refusing the real one. Same blind spot as the test fixture,
+ * same five days.
+ *
+ * These are exactly the fields app/guest.js newBowl() puts on a plate, salad
+ * included, so what is measured here is what gets sent.
+ */
+const bowl = (who) => {
+  // Roughly a third of plates take a salad, chosen off the name so a run is
+  // repeatable. A salad must not be able to move a charge - it is a second
+  // plate, not a second cover - and the only way to show that is to put some
+  // through and see the numbers refuse to budge. They do: every figure in
+  // this file is identical with and without this line.
+  const h = [...who].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const takesSalad = h % 3 === 0;
+  return {
+    guestLabel: who, pastas: ['penne'], sauces: ['marinara'], proteins: ['chicken'],
+    toppings: ['parmesan'], sides: [], portion: 'regular', spice: 'mild',
+    salad: takesSalad ? 'sal_caesar' : 'sal_none',
+    dressing: takesSalad ? 'drs_ranch' : null,
+    saladNote: takesSalad && h % 6 === 0 ? 'no tomato' : '',
+  };
+};
 
 const pie = (who) => ({
   guestLabel: who, kind: 'pizza', sauces: ['pz_marinara'],
@@ -41,13 +65,29 @@ const pie = (who) => ({
 function place(act, minutesIn) {
   ticket += 1;
   const lines = (act.lines || []).map((who) => (act.kind === 'pizza' ? pie(who) : bowl(who)));
-  const built = order.buildOrder({
+
+  const draft = {
     memberNumber: act.member,
     memberName: act.name || '',
     memberStatus: act.verified === false ? 'unverified' : 'verified',
     guestCount: act.guests,
     partySize: act.party == null ? null : act.party,
     lines,
+  };
+
+  // The gate db.submitOrder() puts in front of every real order, run here for
+  // the same reason. Without it this file measured charges on orders the live
+  // app would have refused outright - which is precisely what happened: every
+  // pasta order was rejected at submit for five days while these scenarios
+  // reported a clean night. A simulation that skips the refusal is a
+  // simulation of a system nobody is running.
+  const refused = order.validateDraft(draft, config, []);
+  if (refused.length) {
+    throw new Error('the app would refuse this order: ' + refused.join('; '));
+  }
+
+  const built = order.buildOrder({
+    ...draft,
   }, {
     ticketNo: ticket,
     station: order.stationForTicket(ticket, config.kitchen.stations, true,
