@@ -1023,7 +1023,13 @@ export function ingredientList(line, lang) {
   };
 
   if (kind === 'pasta') {
-    add(es ? 'Pasta' : 'Pasta', [nameOf('pastas', line.pasta, lang)]);
+    // Every shape in the bowl, named. This read line.pasta - the singular
+    // field that became a list on 23 Oct - so it resolved to nothing, add()
+    // dropped the empty row, and the chit lost the one line saying WHICH
+    // pasta. The cook was left reading the glyph: a picture that can draw one
+    // shape, for a bowl that may hold two, and that nobody can tell apart at
+    // a glance on a busy pass. First row on the ticket, and it was missing.
+    add(es ? 'Pasta' : 'Pasta', pastasOf(line).map((id) => nameOf('pastas', id, lang)));
   } else if (kind === 'burger') {
     add(es ? 'Pan' : 'Bun', [nameOf('burgerBuns', line.base, lang)]);
   } else {

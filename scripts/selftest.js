@@ -4907,6 +4907,40 @@ test('the order the app actually builds passes its own validation', () => {
 });
 
 
+test('the chit says which pasta, in words', () => {
+  // The glyph is a picture of a noodle. It can draw one shape, a split bowl
+  // holds two, and at a pass nobody is squinting at a 34-pixel drawing to
+  // tell gemelli from penne. The row naming it was the FIRST row on the
+  // ticket and it had quietly stopped rendering: ingredientList() asked for
+  // line.pasta, got nothing, and add() drops an empty row - so the chit went
+  // Sauce, Protein, Toppings, Size with no pasta named anywhere on it.
+  const rows = (line) => menu.ingredientList(line).map((r) => r.label + ': ' + r.items.join(', '));
+  const base = {
+    kind: 'pasta', sauces: ['butter'], proteins: ['chicken'],
+    toppings: ['parmesan'], sides: [], portion: 'regular', spice: 'mild',
+  };
+
+  assert.strictEqual(rows({ ...base, pastas: ['spaghetti'] })[0], 'Pasta: Spaghetti',
+    'the shape is not the first thing on the ticket');
+
+  // Both of them, because the picture can only ever show one.
+  assert.strictEqual(rows({ ...base, pastas: ['penne', 'rigatoni'] })[0],
+    'Pasta: Penne, Rigatoni', 'a split bowl names only half of itself');
+
+  // Orders taken before 23 Oct are still in Firestore and still get cooked.
+  assert.strictEqual(rows({ ...base, pasta: 'shells' })[0], 'Pasta: Shells');
+
+  // Spanish chits get the shape too.
+  assert.strictEqual(
+    menu.ingredientList({ ...base, pastas: ['spaghetti'] }, 'es')[0].items[0], 'Espagueti',
+  );
+
+  // And a pizza has no pasta row to lose.
+  const pie = menu.ingredientList({ kind: 'pizza', base: 'classic', sauces: ['pz_marinara'],
+    cheeses: ['pz_shred_mozz'], proteins: [], toppings: [] });
+  assert.ok(!pie.some((r) => r.label === 'Pasta'), 'a pizza is carrying a pasta row');
+});
+
 test('nothing reads the pasta shape off the field a line stopped carrying', () => {
   // The split bowl turned `pasta` into `pastas` on 23 Oct and left SIX readers
   // on the old singular field. Every one failed silently, and separately:
@@ -4925,11 +4959,23 @@ test('nothing reads the pasta shape off the field a line stopped carrying', () =
   // class rather than six assertions, because the seventh will be somewhere
   // none of these were.
   //
-  // menu.js is excluded on purpose: pastasOf() and proteinsOf() read the old
-  // field deliberately, so orders already in Firestore keep working. That one
-  // fallback is what lets everything else be strict.
-  const FILES = ['guest.js', 'order.js', 'kitchen.js', 'expo.js', 'report.js',
-    'report-pdf.js', 'costing.js', 'cooktime.js', 'seed.js', 'db.js', 'admin.js'];
+  // menu.js IS scanned, with two lines named below. It was excluded wholesale
+  // at first, on the grounds that pastasOf() and proteinsOf() read the old
+  // field deliberately - and the seventh reader was hiding in it: the chit's
+  // own Pasta row, which resolved to nothing, so the row was dropped and the
+  // kitchen lost the line naming the shape. An exemption the size of a file
+  // hides whatever else is in that file.
+  const FILES = ['menu.js', 'guest.js', 'order.js', 'kitchen.js', 'expo.js',
+    'report.js', 'report-pdf.js', 'costing.js', 'cooktime.js', 'seed.js',
+    'db.js', 'admin.js'];
+
+  // The only two reads allowed anywhere, quoted whole. They are the legacy
+  // fallbacks themselves - the reason orders already in Firestore keep
+  // working - and nothing else gets to claim that excuse.
+  const ALLOWED = [
+    'if (line.pasta) return [line.pasta];',
+    "if (line.protein && line.protein !== 'none') return [line.protein];",
+  ];
 
   // Plain substrings, not a pattern. A pattern here needed a word boundary to
   // tell `line.pasta` from the `b.pasta` inside `guest.tab.pasta`, and getting
@@ -4944,17 +4990,24 @@ test('nothing reads the pasta shape off the field a line stopped carrying', () =
   });
 
   const offenders = [];
+  const seen = new Set();
   FILES.forEach((f) => {
     const src = readFileSync(fileURLToPath(new URL('../app/' + f, import.meta.url)), 'utf8');
     src.split(String.fromCharCode(10)).forEach((text, i) => {
       const trimmed = text.trim();
       if (trimmed.startsWith('//') || trimmed.startsWith('*')) return;
+      if (ALLOWED.includes(trimmed)) { seen.add(trimmed); return; }
       if (flag(text)) offenders.push(f + ':' + (i + 1) + '  ' + trimmed.slice(0, 68));
     });
   });
 
   assert.deepStrictEqual(offenders, [],
     'these read a field no line has carried since the shapes became a list');
+
+  // An allowance nobody uses is an allowance that has stopped describing the
+  // code, and the next person reads it as permission. Both have to be real.
+  assert.deepStrictEqual(ALLOWED.filter((a) => !seen.has(a)), [],
+    'these lines are excused but no longer exist - drop them from ALLOWED');
 
   // The guard has to be able to SEE one. Without this the test is a tautology
   // the day somebody mistypes an entry in DEAD - and a tautology is what the
