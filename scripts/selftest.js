@@ -4907,4 +4907,71 @@ test('the order the app actually builds passes its own validation', () => {
 });
 
 
+test('nothing reads the pasta shape off the field a line stopped carrying', () => {
+  // The split bowl turned `pasta` into `pastas` on 23 Oct and left SIX readers
+  // on the old singular field. Every one failed silently, and separately:
+  //
+  //   - the Next button on the pasta step never lit up, so no member could
+  //     start a bowl of pasta at all - a shape ticked on screen and a dead
+  //     grey button under it
+  //   - validateDraft refused every pasta order at submit
+  //   - the review card drew the empty glyph and named no shape
+  //   - the review allergen line dropped the gluten
+  //   - the 86 check could not catch a shape that had sold out
+  //   - every chit on the rail drew the empty plate
+  //
+  // Not one of them threw, and the suite stayed green for five days because
+  // its fixture still carried the old field. So this is a guard for the whole
+  // class rather than six assertions, because the seventh will be somewhere
+  // none of these were.
+  //
+  // menu.js is excluded on purpose: pastasOf() and proteinsOf() read the old
+  // field deliberately, so orders already in Firestore keep working. That one
+  // fallback is what lets everything else be strict.
+  const FILES = ['guest.js', 'order.js', 'kitchen.js', 'expo.js', 'report.js',
+    'report-pdf.js', 'costing.js', 'cooktime.js', 'seed.js', 'db.js', 'admin.js'];
+
+  // Plain substrings, not a pattern. A pattern here needed a word boundary to
+  // tell `line.pasta` from the `b.pasta` inside `guest.tab.pasta`, and getting
+  // that subtly wrong is how a guard sits there passing while the thing it
+  // guards is broken - which is exactly what the first version of this did.
+  const DEAD = ['line.pasta', 'line.protein', 'bowl.pasta', 'bowl.protein'];
+
+  const flag = (text) => DEAD.some((bad) => {
+    const at = text.indexOf(bad);
+    // `pastas` and `proteins` carry the dead name as a prefix.
+    return at !== -1 && text.charAt(at + bad.length) !== 's';
+  });
+
+  const offenders = [];
+  FILES.forEach((f) => {
+    const src = readFileSync(fileURLToPath(new URL('../app/' + f, import.meta.url)), 'utf8');
+    src.split(String.fromCharCode(10)).forEach((text, i) => {
+      const trimmed = text.trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('*')) return;
+      if (flag(text)) offenders.push(f + ':' + (i + 1) + '  ' + trimmed.slice(0, 68));
+    });
+  });
+
+  assert.deepStrictEqual(offenders, [],
+    'these read a field no line has carried since the shapes became a list');
+
+  // The guard has to be able to SEE one. Without this the test is a tautology
+  // the day somebody mistypes an entry in DEAD - and a tautology is what the
+  // first attempt at this turned out to be.
+  assert.ok(flag('        line.pasta,'), 'the guard cannot see a real offender');
+  assert.ok(flag('    return pastaShape(line.pasta);'), 'the guard misses the chit glyph');
+  assert.ok(!flag('    pastas: menu.pastasOf(line),'), 'the guard flags the correct plural');
+  assert.ok(!flag("      { id: 'pasta', labelKey: 'guest.tab.pasta' },"),
+    'the guard flags a string key, which would make it noise');
+
+  // And the one reader that never named the field, because it reached it
+  // through a variable: the Next button on the pasta step. bowl[step.id] with
+  // step.id 'pasta' IS bowl.pasta, and no substring search will ever see it.
+  const guest = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  assert.ok(guest.includes("step.id === 'pasta' ? pastasOf(bowl).length > 0"),
+    'the pasta step has no line of its own in the Next gate, so it falls through '
+    + 'to bowl[step.id] - the dead field under another name, and Next stays grey');
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

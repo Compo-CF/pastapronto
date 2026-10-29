@@ -1287,8 +1287,13 @@ import {
       var bowl = currentBowl();
       var step = steps()[state.buildStep];
       // The finish step only gates on a size, and only pasta has one.
+      // The pasta step needs its own line. Without one it fell through to
+      // Boolean(bowl[step.id]) - bowl.pasta - which has not existed since the
+      // shapes became a list, so Next stayed grey with a shape plainly ticked
+      // on screen and nobody could start a bowl of pasta at all.
       var chosen = step.id === 'toppings' || step.id === 'proteins' ? true
         : step.id === 'finish' ? (bowl.kind !== 'pasta' || Boolean(bowl.portion))
+        : step.id === 'pasta' ? pastasOf(bowl).length > 0
         : step.id === 'sauces' ? bowl.sauces.length > 0
         : step.id === 'cheeses' ? bowl.cheeses.length > 0
         : Boolean(bowl[step.id]);

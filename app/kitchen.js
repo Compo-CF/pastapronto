@@ -273,9 +273,14 @@ const CATALOG = menu.catalog();
     return hit ? hit.shape : 'none';
   }
 
-  /** A pizza line draws a pie; a pasta line draws its shape. */
+  /**
+   * A pizza line draws a pie; a pasta line draws its shape - the FIRST of
+   * them, since a split bowl has more than one and a chit has room for one
+   * picture. This asked for line.pasta until now, a field no line has carried
+   * since the split landed, so every bowl on the rail drew the empty plate.
+   */
   function lineGlyph(line) {
-    return menu.kindOf(line) === 'pizza' ? 'pie' : pastaShape(line.pasta);
+    return menu.kindOf(line) === 'pizza' ? 'pie' : pastaShape(menu.pastasOf(line)[0]);
   }
 
   /**

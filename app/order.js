@@ -209,7 +209,7 @@ export function validateDraft(draft, cfg, unavailable = []) {
 
     if (unavailable.length) {
       const chosen = [
-        line.pasta,
+        ...menu.pastasOf(line),
         ...menu.saucesOf(line),
         ...menu.cheesesOf(line),
         ...menu.proteinsOf(line),
