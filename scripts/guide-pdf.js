@@ -401,7 +401,7 @@ eyebrow('Who does what', y + 26);
 // four lines of information, which is what made the cover feel padded out
 // instead of composed.
 const roles = [
-  ['THE MEMBER', 'their own phone', 'Scans, picks a language, builds, sends.'],
+  ['THE MEMBER', 'phone, or a tablet', 'Scans a tent and builds - or a server does it for them.'],
   ['BACK OF HOUSE', 'kitchen iPad', 'Accepts, cooks to the estimate, calls up.'],
   ['FRONT OF HOUSE', 'expo iPad', 'Runs it, confirms allergies, delivers.'],
   ['MANAGER', 'manager, close-out', 'Sets up, watches the clocks, closes out.'],
@@ -422,20 +422,20 @@ footer(2, 'The floor');
 
 doc.addPage();
 eyebrow('01 - The member', 62);
-heading('Their own phone. No app, no account.', 88);
-para('They scan the code on the table tent and they are in - about a minute. If the kitchen is not open yet they are told on the first screen, not after building four bowls.',
+heading('Their own phone, or a server with a tablet.', 88);
+para('They scan the code on the table tent and they are in - about a minute. A server works the same screens on a tablet, typing the table. If the kitchen is not open yet they are told on the first screen, not after building four bowls.',
   112, { width: COL - 180 });
 
 const memberSteps = [
-  ['Scan the tent', 'Every table has its own code. It carries the table with it, so the kitchen always knows where the food goes.'],
+  ['Scan the tent, or type the table', 'Every tent carries its own code, so the kitchen knows where the food goes. A server on a tablet has no tent to scan and types the table instead - see Front of house.'],
   ['Language, then member number', 'English and Español are the first thing on the first screen, each written in its own language. Member numbers are 1 to 4 digits; leading zeros do not matter.'],
   ['Pasta or pizza', 'One tap. The next screen greets them by name.'],
-  ['How many they are ordering for', 'Worded about the account - everyone whose meals go on their number - so two memberships at one table do not both answer for all of it. Asked ONCE a night; later trips inherit it. A private party has a box of its own, up to ' + config.order.maxPartySize + '.'],
-  ['Build each plate', 'One tile grid per person. Anything 86\'d is greyed out and marked sold out, and allergens show on each ingredient. More than one pasta shape splits the bowl - one plate, cooked to the slower shape.'],
+  ['How many they are ordering for', 'Worded about the account - everyone whose meals go on their number - so two memberships at one table do not both answer for it. Asked ONCE a night; later trips inherit it. A private party has its own box, up to ' + config.order.maxPartySize + '.'],
+  ['Build each plate', 'One tile grid per person. Anything 86\'d is greyed out and marked sold out, and allergens show on each ingredient. More than one pasta shape splits the bowl - one plate, cooked to the slower shape. When salads are kitchen made, a plate can also take a Caesar or House with a dressing and a note.'],
   ['Review and send', 'A note box for anything the tiles do not cover. They get a '
-    + 'ticket number, about 15-20 minutes, and a bar with three stops: Sent, Cooking, '
-    + 'On its way - Building rather than Cooking while a pizza is on the bench. They '
-    + 'are never told the food is ready, only that it is coming, once a runner has it.'],
+    + 'ticket number, about 15-20 minutes, and three stops: Sent, Cooking, On its way - '
+    + 'Building while a pizza is on the bench. They are never told the food is ready, '
+    + 'only that it is coming, once a runner has it.'],
   ['Another round', 'Back to pasta-or-pizza, not the keypad. They are asked how many plates this round, never how many people again - the charge was settled on the first trip.'],
 ];
 
@@ -485,12 +485,12 @@ limits.forEach(([k, v]) => {
 
 // Full width, so it has to clear BOTH columns. Taking only the steps column
 // into account put it straight through the phone screenshot beside them.
-y = Math.max(y, rightColumnBottom) + 18;
-panel(M, y, COL, 58, { fill: WASH, accent: QUEUED, border: null });
+y = Math.max(y, rightColumnBottom) + 10;
+panel(M, y, COL, 48, { fill: WASH, accent: QUEUED, border: null });
 doc.text('An unrecognised member number still goes through.', { x: M + 14, y: y + 22, size: 10, font: 'bold', color: INK });
-para('The kitchen is not the place to settle a membership question and a hungry guest should not be '
-  + 'stuck at a keypad. The ticket is stamped UNVERIFIED and appears flagged on the close-out sheet for '
-  + 'the office to sort out afterwards.', y + 37, { x: M + 14, width: COL - 28, size: 9, lead: 11.5 });
+para('The kitchen is no place to settle a membership question, and a hungry guest should not be stuck '
+  + 'at a keypad. The ticket is stamped UNVERIFIED and flagged on the close-out for the office.',
+  y + 37, { x: M + 14, width: COL - 28, size: 9, lead: 11.5 });
 
 footer(3, 'The member');
 
@@ -520,6 +520,7 @@ let cy = y + 44;
   ['Allergy banner', 'Names exactly what to avoid. Read it before the food.'],
   ['Rush / Held / Unverified', 'Each badge says what it means in words, not colour alone.'],
   ['A Spanish note', 'Shows a best-effort English reading with the member\'s own words underneath, tagged ES. Read both - the gloss is a helper, not a translation.'],
+  ['Salad rows', 'When the kitchen is making salads, a plate that took one prints Salad, Dressing and any note the member left. It is a second plate off the cold station, not something in the bowl.'],
 ].forEach((n) => {
   doc.text(n[0], { x: M, y: cy, size: 9.5, font: 'bold', color: INK });
   cy = para(n[1], cy + 13, { width: halfW, size: 9, lead: 11.5 }) + 12;
@@ -588,10 +589,14 @@ y += 6;
   y = end + 16;
 });
 
-panel(M, y, COL, 58, { fill: WASH, accent: BRAND, border: null });
-doc.text('A member without a smartphone is not stuck.', { x: M + 14, y: y + 22, size: 10, font: 'bold', color: INK });
-para('Any staff device can open the same ordering screen, take their member number and build the order '
-  + 'with them. The ticket is identical - the kitchen cannot tell, and does not need to.',
+panel(M, y, COL, 94, { fill: WASH, accent: BRAND, border: null });
+doc.text('Taking the order yourself, on a tablet.', { x: M + 14, y: y + 22, size: 10, font: 'bold', color: INK });
+para('For a member without a smartphone, and for a whole room when the club works it that way. Any '
+  + 'staff device opens the same ordering screen and the ticket is identical - the kitchen cannot '
+  + 'tell, and does not need to. There is no tent to scan, so the FIRST screen asks which table: type '
+  + 'the number and tap the match. Typing 3 offers Table 3 and Patio 3, because only you know which '
+  + 'one you are standing at. Then the member number, then build it with them. After sending, press '
+  + 'New table - it clears the table AND the member, so the next table is not billed to the last one.',
   y + 37, { x: M + 14, width: COL - 28, size: 9, lead: 11.5 });
 
 footer(5, 'Front of house');
@@ -608,15 +613,20 @@ y = para('Two screens: one to run the night, one to close it out. Both ask for '
   + 'the manager code. Every staff screen also has to be signed in once, the first time a device '
   + 'is used - after that it stays signed in and nobody is asked again.', 112, { width: COL - 40 });
 
-y = screenshot(SHOTS.cost, 340,
+// 310 rather than 340. The salad switch needed a row of its own on this
+// page and the page had no slack, so the room came off the one element
+// here that carries no instruction - the same trade the close-out copy
+// made last time this page filled up.
+y = screenshot(SHOTS.cost, 310,
   'The food cost tab with the pantry priced. Cost per bowl, per pizza and per cover come from what '
   + 'members actually built - and every ingredient that went out is priced, which the tiles say out loud.',
-  y + 16, 176);
+  y + 16, 126);
 
 let my = y + 8;
 [
-  ['Every service', 'Press OPEN on Taking orders before you start, and CLOSED when you stop - member phones are refused while it is shut, and it closes itself overnight. Check the 86 list while you are there; an ingredient switched off greys out on every phone within a second.'],
+  ['Every service', 'Press OPEN on Taking orders before you start and CLOSED when you stop - phones are refused while it is shut, and it closes overnight. Check the 86 list too: switching an ingredient off greys it out on every phone within a second.'],
   ['Before service', 'Print the tents from the QR codes tab. Codes are drawn on the device, so this works with the internet unplugged.'],
+  ['Salad', 'Kitchen made puts a salad and a dressing step on every phone and both on the chit. Make your own takes the step away and says so on the order screen; any salad already on an unsent plate is cleared.'],
   ['Any time', 'Edit the menu. Rename anything, take something off, or add an item of your own. A new item copies a cooking time and a picture from one on the list; you name it and say what it contains, and it will not save until you do.'],
   ['During service', 'Today at a glance: covers, open now, accept, cook and runner times, on-time percentage. Also take an order from the bar, search for a ticket, move a table, or reopen one closed by mistake.'],
   ['After service', 'Close-out leads with who to charge, by member number. A table where two memberships ordered at once is flagged above it - check before posting.'],
@@ -782,7 +792,12 @@ function verify(pdfBytes) {
   const problems = [];
   const streams = [...src.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
     .map((m) => m[1])
-    .filter((s) => /Tj/.test(s));
+    // Not /Tj/: three embedded JPEGs carry those two bytes by coincidence,
+    // and counting them as pages made every number this function printed
+    // three too high - it said "page 9" of an eight-page document for a
+    // fault on page 6. A real content stream positions text before it
+    // draws it, and a JPEG does not.
+    .filter((s) => / Td \(/.test(s));
 
   const hits = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
   const H = doc.height;
