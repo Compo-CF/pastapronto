@@ -739,6 +739,12 @@ async function boot() {
 
   el.datePick.max = serviceDate();
   await db.ready();
+  // The prep guide names what sold, and the names live in config/menu rather
+  // than in the catalog as written: every item the club added itself, and
+  // every one it renamed. The rail has watched this since it shipped; this
+  // screen never read it, so the close-out printed "cw_alfredo_2" where the
+  // chit said "Alfredo" - on the one page a cook preps tomorrow from.
+  await db.loadMenuOverrides();
   await load(serviceDate());
 }
 

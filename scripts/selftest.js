@@ -22,6 +22,7 @@ import * as roster from './roster.js';
 import { art, has as hasArt } from '../app/art.js';
 import * as pdf from '../app/pdf.js';
 import { buildReportPdf } from '../app/report-pdf.js';
+import { html, raw } from '../app/ui.js';
 
 const { STATUS } = order;
 const sla = config.sla;
@@ -5027,4 +5028,120 @@ test('nothing reads the pasta shape off the field a line stopped carrying', () =
     + 'to bowl[step.id] - the dead field under another name, and Next stays grey');
 });
 
+
+// --------------------------------------------------- the template, and lists
+
+test('html`` renders a list of raw() markers rather than [object Object]', () => {
+  // The array branch was `v.join('')`, which stringifies what it holds - and a
+  // raw() marker is an object, so a list of them joined to "[object Object]".
+  //
+  // A list of html`` fragments is a list of STRINGS, so it rendered fine. That
+  // is why this hid: the close-out's legend and axis are built that way and
+  // looked right, while the bars of the same chart - the one place that mapped
+  // straight to raw() - printed twelve copies of that text where the picture
+  // of the night's service should have been. Nothing threw.
+  const out = html`<div>${[raw('<i>a</i>'), raw('<i>b</i>')]}</div>`;
+  assert.strictEqual(out, '<div><i>a</i><i>b</i></div>');
+  assert.ok(!/\[object Object\]/.test(out), 'a raw() in a list is being stringified');
+
+  // THE ONE THAT MATTERS, and the one the first version of this test missed.
+  //
+  // Every repeated row on every screen is a list of html`` fragments, and a
+  // fragment is a string of real markup. The first fix mapped the escape over
+  // list elements, which turned all of them into visible tags - and this test
+  // passed anyway, because it only ever asserted on ['x', 'y'], which has
+  // nothing in it to escape. A browser found it; the suite did not. So the
+  // list members here carry angle brackets, which is the whole point.
+  assert.strictEqual(
+    html`<ul>${[html`<li>a</li>`, html`<li>b</li>`]}</ul>`,
+    '<ul><li>a</li><li>b</li></ul>',
+    'a list of html`` fragments is being escaped - every row on every screen '
+    + 'would render as its own source code',
+  );
+  assert.strictEqual(html`<p>${['x', 'y']}</p>`, '<p>xy</p>', 'a list of strings');
+  assert.strictEqual(html`<p>${raw('<b>')}</p>`, '<p><b></p>', 'a bare raw()');
+  assert.strictEqual(html`<p>${raw('')}</p>`, '<p></p>', "raw('') renders as nothing");
+  // A value on its own is still escaped. A list is already-safe HTML by
+  // construction; a lone value is whatever was handed in.
+  assert.strictEqual(html`<p>${'<script>'}</p>`, '<p>&lt;script&gt;</p>',
+    'a plain interpolated value must still be escaped');
+  assert.strictEqual(html`<p>${null}</p>`, '<p></p>', 'a missing value renders as nothing');
+  // Lists of lists arrive whenever one map() returns another; the rule is
+  // applied through them rather than only at the top.
+  assert.strictEqual(html`<p>${[[raw('<b>')], [html`<i>x</i>`]]}</p>`, '<p><b><i>x</i></p>',
+    'nested lists');
+});
+
+test('the close-out names what sold the way the club named it', () => {
+  // The names of everything a manager added or renamed live in config/menu,
+  // not in the catalog as written. The rail watches that document; this screen
+  // read the orders and nothing else, so the prep guide printed raw ids -
+  // "cw_alfredo_2" for the second-commonest sauce in the room - on the one
+  // page tomorrow's cook preps from. The chit beside it said "Alfredo".
+  const src = readFileSync(fileURLToPath(new URL('../app/report.js', import.meta.url)), 'utf8');
+
+  // Code only. The first version of this guard tested the raw text, so
+  // commenting the call out left it passing - the same tautology the dead-field
+  // guard was, caught the same way, by mutating the thing and watching.
+  const code = src.split(String.fromCharCode(10))
+    .filter((l) => {
+      const s = l.trim();
+      return s && !s.startsWith('//') && !s.startsWith('*') && !s.startsWith('/*');
+    });
+  const at = (needle) => code.findIndex((l) => l.includes(needle));
+
+  const overrides = at('db.loadMenuOverrides(');
+  const firstLoad = at('await load(serviceDate())');
+  assert.ok(overrides !== -1,
+    "the close-out never reads the club's own names for its own menu");
+  assert.ok(firstLoad !== -1, 'the close-out no longer loads a service on boot');
+  // Before the orders, or the first paint names them wrong and corrects itself.
+  assert.ok(overrides < firstLoad,
+    'the overrides must land before the first report is built');
+
+  // The guard has to be able to SEE the thing missing, or it is decoration.
+  const blinded = code.filter((l) => !l.includes('db.loadMenuOverrides('));
+  assert.strictEqual(blinded.length, code.length - 1,
+    'the guard is not matching exactly the one line it claims to protect');
+});
+
+test('an added item keeps its name all the way to the prep guide', () => {
+  // The end-to-end of the one above, on the real shape: an id the catalog has
+  // never heard of, named only by the overrides, has to come out of
+  // shiftReport() as a name rather than as itself.
+  const added = {
+    cw_selftest_sauce: {
+      name: 'Selftest Sauce', group: 'sauces', template: 'marinara', added: true,
+      // Not decoration: an added item with no allergens array is refused,
+      // because nobody having answered the question is not the same answer as
+      // "none". Leaving it out here is how this test first failed.
+      allergens: [],
+    },
+  };
+  assert.ok(!menu.findAnywhere('cw_selftest_sauce'),
+    'the catalog already has the id this test invented');
+
+  menu.applyMenuOverrides(added);
+  try {
+    const found = menu.findAnywhere('cw_selftest_sauce');
+    assert.ok(found, "applyMenuOverrides did not add the club's own item");
+    assert.strictEqual(found.name, 'Selftest Sauce');
+
+    // The whole point: shiftReport() has to name it, not print its id.
+    const r = order.shiftReport([{
+      ticketNo: 1, kind: 'pasta', serviceDate: '2026-01-01', memberNumber: '1',
+      status: STATUS.QUEUED, guestCount: 1, cookEstimateSec: 300, events: [],
+      submittedAt: '2026-01-01T00:00:00.000Z',
+      lines: [{ pastas: ['penne'], sauce: 'cw_selftest_sauce', portion: 'regular' }],
+    }], config.sla);
+    const sauce = r.mix.pasta.sauces.find((x) => x.id === 'cw_selftest_sauce');
+    assert.ok(sauce, "the prep guide did not count the club's own sauce at all");
+    assert.strictEqual(sauce.name, 'Selftest Sauce',
+      'the prep guide printed the id instead of the name the club gave it');
+  } finally {
+    // Put the catalog back; every later test reads the same module object.
+    menu.applyMenuOverrides({});
+  }
+  assert.ok(!menu.findAnywhere('cw_selftest_sauce'), 'the catalog was left dirty');
+});
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

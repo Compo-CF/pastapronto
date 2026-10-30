@@ -71,15 +71,31 @@ export function escapeHtml(s) {
 
 /** Tagged template that escapes every interpolated value. */
 export function html(strings, ...values) {
-  return strings.reduce((acc, str, i) => {
-    let v = values[i - 1];
-    if (Array.isArray(v)) v = v.join('');
+  // A value interpolated on its own is escaped. A value inside a LIST is
+  // already-safe HTML and is not - because a list is how every screen renders
+  // a repeated row, and its elements are html`` fragments, which are strings
+  // of real markup. Escaping those would print the tags instead of the rows.
+  //
+  // The bug this fixes: the list branch was `v.join('')`, which stringifies
+  // whatever it holds. A raw() marker is an object, so a list of them joined
+  // to "[object Object]" - which is why the close-out's legend and axis (lists
+  // of html`` fragments, so strings) drew correctly while the bars of that
+  // same chart (the one list that maps straight to raw()) came out as twelve
+  // copies of that text. Nothing threw. So: unwrap the marker, and otherwise
+  // leave a list element exactly as join() left it.
+  const inList = (v) => {
+    if (Array.isArray(v)) return v.map(inList).join('');
+    if (v !== null && typeof v === 'object' && '__raw' in v) return v.__raw;
+    return v == null ? '' : String(v);
+  };
+  const one = (v) => {
+    if (Array.isArray(v)) return inList(v);
     // Test for the marker key, not its truthiness: raw('') is legitimate and
     // must render as nothing rather than being escaped as an object.
-    else if (v !== null && typeof v === 'object' && '__raw' in v) v = v.__raw;
-    else v = escapeHtml(v);
-    return acc + v + str;
-  });
+    if (v !== null && typeof v === 'object' && '__raw' in v) return v.__raw;
+    return escapeHtml(v);
+  };
+  return strings.reduce((acc, str, i) => acc + one(values[i - 1]) + str);
 }
 
 /** Mark a string as already-safe HTML for use inside html``. */
