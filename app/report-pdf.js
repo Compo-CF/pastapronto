@@ -224,9 +224,17 @@ export function buildReportPdf(report, date, brand = {}) {
   );
 
   table([
-    { label: T('report.col.member'), width: 62, get: (m) => m.memberNumber, mono: true },
-    { label: T('report.col.name'), width: 148, get: (m) => m.name || '' },
+    // The summary cell under this column is a LABEL ("25 members"), and a mono
+    // column right-aligns, so this has to be wide enough to hold the words
+    // rather than just a member number - otherwise the foot runs off the left
+    // edge of the page. Adding the Basis column below is what first pushed it
+    // over, by shrinking every column's share of a fixed width.
+    { label: T('report.col.member'), width: 78, get: (m) => m.memberNumber, mono: true },
+    { label: T('report.col.name'), width: 132, get: (m) => m.name || '' },
     { label: T('report.col.charges'), width: 60, get: (m) => m.partySize, mono: true, bold: true },
+    // Where that charge came from. On paper there is no colour to lean on, so
+    // the normal case prints blank and only a guess puts a word on the row.
+    { label: 'Basis', width: 56, get: (m) => (m.chargeBasis === 'declared' ? '' : 'assumed') },
     { label: T('report.col.orders'), width: 52, get: (m) => m.orders, mono: true },
     { label: T('report.col.bowls'), width: 48, get: (m) => m.bowls || '', mono: true },
     { label: T('report.col.pizzas'), width: 50, get: (m) => m.pizzas || '', mono: true },
@@ -235,7 +243,7 @@ export function buildReportPdf(report, date, brand = {}) {
     { label: T('report.col.confirm'), width: 58, get: (m) => (m.status === 'verified' ? '' : T('report.confirmFlag')) },
   ], members, [
     members.length + (members.length === 1 ? ' member' : ' members'), '',
-    t.covers, t.orders, k.pasta.items, k.pizza.items, t.bowls, t.bowlsPerCover, '',
+    t.covers, '', t.orders, k.pasta.items, k.pizza.items, t.bowls, t.bowlsPerCover, '',
   ]);
 
   const unverified = members.filter((m) => m.status !== 'verified');
@@ -263,8 +271,14 @@ export function buildReportPdf(report, date, brand = {}) {
     ['Items', String(t.bowls), (k.pasta.items || 0) + ' bowls / ' + (k.pizza.items || 0) + ' pizzas'],
     ['Items per cover', String(t.bowlsPerCover), 'how much the room ate'],
     ['Delivered', String(t.delivered), t.stillOpen + ' still open'],
-    ['On time', report.onTime.pct == null ? '--' : report.onTime.pct + '%',
-      report.onTime.lateCount + ' late of ' + (report.onTime.count + report.onTime.lateCount)],
+    // Two rows, because one was answering for two clocks. "Cooked on time"
+    // starts at accept and cannot see the wait before it.
+    ['Cooked on time', report.onTime.pct == null ? '--' : report.onTime.pct + '%',
+      report.onTime.lateCount + ' late of ' + (report.onTime.count + report.onTime.lateCount)
+      + ' · accept to food up'],
+    ['Accepted on time', report.accepts.pct == null ? '--' : report.accepts.pct + '%',
+      report.accepts.lateCount + ' sat past the allowance of '
+      + report.accepts.count + ' · order to pickup'],
     ['Avg ticket', mmss(report.timings.avgTotalSec), 'order to table'],
     ['Ticket p90', mmss(report.timings.p90TotalSec), 'worst ' + mmss(report.timings.worstTotalSec)],
     ['Avg cook', mmss(report.timings.avgCookSec), 'accept to food up'],
@@ -358,6 +372,25 @@ export function buildReportPdf(report, date, brand = {}) {
     ], report.late);
   } else {
     prose('Nothing ran late. Every delivered ticket finished inside its allowance.');
+  }
+
+  // Printed next to the late tickets rather than in a corner of its own: these
+  // were taken out of every timing on the page, and a reader told "nothing ran
+  // late" has to learn in the same place that a ticket was not counted.
+  if ((report.unattended || []).length) {
+    const n = report.unattended.length;
+    prose(n + (n === 1 ? ' ticket was' : ' tickets were') + ' left sitting in cooking for '
+      + 'several times the estimate, so the time recorded is when the rail was cleared '
+      + 'rather than when the food was ready. Excluded from every average above, and '
+      + 'not counted late - the kitchen never had a clock on '
+      + (n === 1 ? 'it' : 'them') + '.');
+    table([
+      { label: 'Ticket', width: 60, get: (x) => '#' + x.ticketNo, mono: true },
+      { label: 'Where', width: 130, get: (x) => x.tagLabel || '' },
+      { label: 'Station', width: 110, get: (x) => x.station || '' },
+      { label: 'Estimate', width: 80, get: (x) => mmss(x.estimateSec), mono: true },
+      { label: 'Sat for', width: 80, get: (x) => mmss(x.cookSec), mono: true, bold: true },
+    ], report.unattended);
   }
 
   if ((report.stations || []).length) {

@@ -147,6 +147,23 @@
   text-transform: uppercase; color: var(--tomato-dark); white-space: nowrap;
 }
 
+/*
+ * Where a charge came from. "asked" is the quiet one on purpose: it is the
+ * normal case and should not shout on every row of a clean night. "assumed"
+ * carries the same tomato the unverified-member flag does, because they are
+ * the same kind of thing - a number to check before it is posted.
+ */
+.basis {
+  display: inline-block; padding: 1px 7px; border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.basis.is-declared { border: 1px solid var(--line-strong); color: var(--ink-soft); }
+.basis.is-assumed {
+  border: 1px solid var(--tomato); color: var(--tomato-dark);
+  background: var(--tomato-wash);
+}
+
 .rpt-foot { font-size: 14px; line-height: 1.55; margin: 12px 0 0; }
 
 /* ------------------------------------------------------------------- print
@@ -233,7 +250,7 @@
   /* Backgrounds are dropped by default when printing. Anything whose meaning
      lives in a fill has to ask for the ink. */
   .curve-seg, .mixbar, .mixbar i, .chargebar, .rpt-headline,
-  .stat, .mixcard, .exbox, .flag, .rpt-table tr.is-unverified td {
+  .stat, .mixcard, .exbox, .flag, .basis, .rpt-table tr.is-unverified td {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

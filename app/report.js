@@ -90,11 +90,23 @@ function statTiles(r) {
       note: 'how much the room ate',
     },
     { label: 'Delivered', value: r.totals.delivered, note: r.totals.stillOpen + ' still open' },
+    // Two tiles, because one number was answering for two clocks and only
+    // ever reporting the kinder of them. "On time" starts counting at accept,
+    // so it can read 100% on a night when every ticket in the room sat past
+    // the SLA waiting to be picked up - which is what it did.
     {
-      label: 'On time', value: r.onTime.pct == null ? '--' : r.onTime.pct + '%',
-      note: r.onTime.lateCount + ' late of ' + (r.onTime.count + r.onTime.lateCount),
+      label: 'Cooked on time', value: r.onTime.pct == null ? '--' : r.onTime.pct + '%',
+      note: r.onTime.lateCount + ' late of ' + (r.onTime.count + r.onTime.lateCount)
+        + ' · accept to food up',
       good: r.onTime.pct != null && r.onTime.pct >= 90,
       bad: r.onTime.pct != null && r.onTime.pct < 75,
+    },
+    {
+      label: 'Accepted on time', value: r.accepts.pct == null ? '--' : r.accepts.pct + '%',
+      note: r.accepts.lateCount + ' past ' + mmss(config.sla.acceptLateSec)
+        + ' of ' + r.accepts.count + ' · order to pickup',
+      good: r.accepts.pct != null && r.accepts.pct >= 90,
+      bad: r.accepts.pct != null && r.accepts.pct < 75,
     },
     { label: 'Avg ticket', value: mmss(r.timings.avgTotalSec), note: 'order to table' },
     { label: 'Ticket p90', value: mmss(r.timings.p90TotalSec), note: 'worst ' + mmss(r.timings.worstTotalSec) },
@@ -303,6 +315,11 @@ function membersToCharge(r) {
       || a.memberNumber.localeCompare(b.memberNumber),
   );
   const unverified = rows.filter((m) => m.status !== 'verified');
+  // memberRollup has always known which charges were answered for and which
+  // were a fallback - its own comment says it is there "so close-out can say
+  // so rather than making a manager guess which nights are which". Nothing
+  // ever showed it, so a declared party of one read exactly like a guessed one.
+  const assumed = rows.filter((m) => m.chargeBasis !== 'declared');
   const maxItems = Math.max(...rows.map((m) => m.items));
 
   return html`<section class="rpt-section rpt-billing">
@@ -330,7 +347,7 @@ function membersToCharge(r) {
       <table class="rpt-table">
         <thead><tr>
           <th>Member</th><th>Name</th>
-          <th class="num">Charges</th>
+          <th class="num">Charges</th><th>Basis</th>
           <th class="num">Orders</th><th class="num">Bowls</th><th class="num">Pizzas</th>
           <th class="num">Items</th><th class="num">Per cover</th>
           <th class="col-viz">Ate</th>
@@ -340,6 +357,9 @@ function membersToCharge(r) {
             <td class="mono">${m.memberNumber}</td>
             <td>${m.name}${raw(m.status === 'verified' ? '' : '<span class="flag">not in directory</span>')}</td>
             <td class="num charge">${m.partySize}</td>
+            <td>${raw(m.chargeBasis === 'declared'
+    ? '<span class="basis is-declared">asked</span>'
+    : '<span class="basis is-assumed">assumed</span>')}</td>
             <td class="num">${m.orders}</td>
             <td class="num">${m.bowls || ''}</td>
             <td class="num">${m.pizzas || ''}</td>
@@ -354,7 +374,7 @@ function membersToCharge(r) {
         </tbody>
         <tfoot><tr>
           <th>${rows.length} member${rows.length === 1 ? '' : 's'}</th><th></th>
-          <th class="num charge">${r.totals.covers}</th>
+          <th class="num charge">${r.totals.covers}</th><th></th>
           <th class="num">${r.totals.orders}</th>
           <th class="num">${r.byKind.pasta.items}</th>
           <th class="num">${r.byKind.pizza.items}</th>
@@ -367,6 +387,16 @@ function membersToCharge(r) {
 
     <p class="muted rpt-foot">
       <strong>Charges is the billing column</strong> - the rest is consumption.
+      ${raw(assumed.length
+    ? '<strong>Basis</strong> says where that number came from. <em>asked</em> means '
+      + 'somebody answered the party question; <em>assumed</em> means nobody did and '
+      + 'the app fell back to the headcount on the ticket. '
+      + assumed.length + ' of these ' + (assumed.length === 1 ? 'is' : 'are') + ' assumed: '
+      + assumed.map((m) => m.memberNumber).join(', ')
+      + ' - check ' + (assumed.length === 1 ? 'it' : 'them') + ' before posting.'
+    : '<strong>Basis</strong> says where that number came from, and every one tonight '
+      + 'is <em>asked</em> - somebody answered the party question on every membership '
+      + 'in the room, so none of these charges is a guess.')}
       ${r.totals.repeatOrders > 0
         ? 'Tonight ' + r.totals.repeatOrders + ' order' + (r.totals.repeatOrders === 1 ? ' was' : 's were') + ' a repeat trip by a member already counted, and added nothing to the bill.'
         : 'Nobody ordered twice tonight.'}
@@ -379,11 +409,38 @@ function membersToCharge(r) {
 
 /** Tickets that blew the cook SLA, worst first. */
 function lateTable(r) {
+  // Shown wherever the late tickets are, and never only in the totals: these
+  // were taken OUT of every timing on the page, so a reader who is told
+  // "nothing ran late" has to be told in the same breath that one ticket was
+  // not counted - otherwise the exclusion is just a quieter kind of wrong.
+  const unattended = !r.unattended.length ? '' : html`<div class="card mtable-wrap"
+      style="margin-top:14px">
+    <p class="muted" style="margin:0 0 10px;font-size:14px">
+      <strong>${r.unattended.length} ticket${r.unattended.length === 1 ? '' : 's'}
+      nobody was watching.</strong> Each sat in cooking for more than
+      ${config.sla.cookAbandonFactor}x its estimate, so its "food up" time is when
+      somebody came back and cleared the rail rather than when the food was ready.
+      Left out of every average above, and not counted late - the kitchen never
+      had a clock on ${r.unattended.length === 1 ? 'it' : 'them'}.
+    </p>
+    <table class="rpt-table">
+      <thead><tr>
+        <th>Ticket</th><th>Where</th><th>Station</th>
+        <th class="num">Estimate</th><th class="num">Sat for</th>
+      </tr></thead>
+      <tbody>${r.unattended.map((x) => html`<tr>
+        <td>#${x.ticketNo}</td><td>${x.tagLabel}</td><td>${x.station}</td>
+        <td class="num">${mmss(x.estimateSec)}</td><td class="num">${mmss(x.cookSec)}</td>
+      </tr>`)}</tbody>
+    </table>
+  </div>`;
+
   if (!r.late.length) {
     return html`<section class="rpt-section">
       <h2 class="sec-title">${t('report.late')}</h2>
       <div class="rpt-empty">Nothing ran late. Every delivered ticket finished inside
         ${config.sla.cookLateFactor}x its estimate.</div>
+      ${raw(unattended)}
     </section>`;
   }
   return html`<section class="rpt-section">
@@ -402,6 +459,7 @@ function lateTable(r) {
         </tr>`)}</tbody>
       </table>
     </div>
+    ${raw(unattended)}
   </section>`;
 }
 
@@ -537,11 +595,14 @@ function toCsv(r, date) {
   push('Charges to post', r.totals.covers);
   push('Members dining', r.totals.members);
   push('');
-  push('Member', 'Name', 'Status', 'Charges', 'Orders', 'Bowls', 'Pizzas', 'Items', 'Per cover', 'First', 'Last');
+  // Basis travels with the charge, because this file is what gets posted
+  // against and a 1 that was answered for is not a 1 that was assumed.
+  push('Member', 'Name', 'Status', 'Charges', 'Basis', 'Orders', 'Bowls', 'Pizzas', 'Items', 'Per cover', 'First', 'Last');
   [...r.members]
     .sort((a, b) => (Number(a.memberNumber) || 0) - (Number(b.memberNumber) || 0)
       || a.memberNumber.localeCompare(b.memberNumber))
-    .forEach((m) => push(m.memberNumber, m.name, m.status, m.partySize, m.orders,
+    .forEach((m) => push(m.memberNumber, m.name, m.status, m.partySize,
+      m.chargeBasis === 'declared' ? 'asked' : 'assumed', m.orders,
       m.bowls, m.pizzas, m.items, m.itemsPerCover, m.firstAt, m.lastAt));
   push('');
 
@@ -565,8 +626,23 @@ function toCsv(r, date) {
   push('Avg ticket', mmss(r.timings.avgTotalSec));
   push('Ticket p90', mmss(r.timings.p90TotalSec));
   push('Worst ticket', mmss(r.timings.worstTotalSec));
-  push('On time %', r.onTime.pct == null ? '' : r.onTime.pct);
+  push('Cooked on time %', r.onTime.pct == null ? '' : r.onTime.pct);
+  push('Cooked late (tickets)', r.onTime.lateCount);
+  push('Accepted on time %', r.accepts.pct == null ? '' : r.accepts.pct);
+  push('Accepted past ' + mmss(config.sla.acceptLateSec) + ' (tickets)', r.accepts.lateCount);
+  push('Accepted past ' + mmss(config.sla.acceptWarnSec) + ' (tickets)',
+    r.accepts.warnCount + r.accepts.lateCount);
   push('');
+
+  if (r.unattended.length) {
+    push('TICKETS NOBODY WAS WATCHING - EXCLUDED FROM THE TIMINGS ABOVE');
+    push('Each sat in cooking past ' + config.sla.cookAbandonFactor
+      + 'x its estimate, so its food-up time is when the rail was cleared.');
+    push('Ticket', 'Where', 'Station', 'Estimate', 'Sat for');
+    r.unattended.forEach((x) => push('#' + x.ticketNo, x.tagLabel, x.station,
+      mmss(x.estimateSec), mmss(x.cookSec)));
+    push('');
+  }
 
   push('SERVICE CURVE');
   push('Time', 'Orders', 'Bowls', 'Pizzas', 'Total items', 'Covers');

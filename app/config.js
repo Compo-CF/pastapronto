@@ -65,6 +65,21 @@ export const config = {
     acceptLateSec: 120,
     cookWarnFactor: 1.0,
     cookLateFactor: 1.35,
+    /*
+     * Past this multiple of the estimate, a ticket was not being cooked.
+     *
+     * Nobody stands over a pan for three times as long as the food takes; a
+     * number like that means the rail was not being watched and the stamp
+     * records when somebody came back and cleared it. Calling that "late"
+     * puts a fiction into the cook average and into the worst-case figure a
+     * manager quotes the club.
+     *
+     * 3x is well clear of real service. On the night this was taken from, the
+     * slowest genuine ticket ran 1.14x its estimate and the abandoned one ran
+     * 4.63x - this sits in the gap between them, rather than anywhere near
+     * the 1.35x that means "late".
+     */
+    cookAbandonFactor: 3,
     runnerWarnSec: 60,
     runnerLateSec: 150,
     undoWindowSec: 120,

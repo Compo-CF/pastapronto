@@ -945,14 +945,55 @@ export function shiftReport(orders, sla) {
   const voided = orders.filter((o) => o.status === STATUS.VOIDED);
   const held = orders.filter((o) => o.status === STATUS.HELD);
 
-  // ---- timings, over delivered tickets only ------------------------------
+  // ---- tickets nobody was watching ---------------------------------------
+  //
+  // A ticket that sat in 'cooking' for several times its estimate was not
+  // being cooked. Its readyAt records the moment somebody came back and
+  // cleared the rail, usually at shutdown, and its deliveredAt lands a second
+  // later because both bumps were one action. Left in, one of these drags the
+  // cook average up, becomes the worst-case figure a manager quotes the club,
+  // and counts as the kitchen missing an SLA it never had a chance at.
+  //
+  // Taken out of the timings and reported on its own instead - never dropped
+  // quietly, because a ticket nobody watched is the more interesting fact.
+  //
+  // The test for this is the cook clock, NOT the one-second gap between ready
+  // and delivered. Six of fifty tickets on the night this came from had that
+  // gap and five were ordinary - expo marks both when the runner is already
+  // standing there. Only the cook clock separated the abandoned one.
+  const abandoned = (o) => o.acceptedAt && o.readyAt
+    && secs(o.acceptedAt, o.readyAt) > o.cookEstimateSec * sla.cookAbandonFactor;
+  const unattended = done.filter(abandoned).map((o) => ({
+    ticketNo: o.ticketNo,
+    tagLabel: o.tagLabel,
+    station: o.station,
+    cookSec: Math.round(secs(o.acceptedAt, o.readyAt)),
+    estimateSec: o.cookEstimateSec,
+  })).sort((a, b) => b.cookSec - a.cookSec);
+  const cooked = done.filter((o) => !abandoned(o));
+
+  // ---- timings, over delivered tickets somebody actually cooked ----------
+  //
+  // The accept clock is the exception: it ran before any of this and was real
+  // even on a ticket that was then forgotten, so it keeps every ticket.
   const queueWaits = done.filter((o) => o.acceptedAt).map((o) => secs(o.submittedAt, o.acceptedAt));
-  const cookTimes = done.filter((o) => o.acceptedAt && o.readyAt).map((o) => secs(o.acceptedAt, o.readyAt));
-  const runnerTimes = done.filter((o) => o.readyAt && o.deliveredAt).map((o) => secs(o.readyAt, o.deliveredAt));
-  const totalTimes = done.map((o) => secs(o.submittedAt, o.deliveredAt));
+  const cookTimes = cooked.filter((o) => o.acceptedAt && o.readyAt).map((o) => secs(o.acceptedAt, o.readyAt));
+  const runnerTimes = cooked.filter((o) => o.readyAt && o.deliveredAt).map((o) => secs(o.readyAt, o.deliveredAt));
+  const totalTimes = cooked.map((o) => secs(o.submittedAt, o.deliveredAt));
+
+  // ---- how long tickets sat before anyone picked them up -----------------
+  //
+  // The on-time figure below measures cooking, and only cooking: its clock
+  // starts at accept. A room can therefore read 100% on time while every
+  // ticket in it spent longer than the SLA allows waiting to be picked up,
+  // which is exactly what happened the night this was written - 98% on time,
+  // and 27 of 50 tickets past the late threshold before the kitchen touched
+  // them. One number cannot answer both questions, so the wait gets its own.
+  const acceptLate = queueWaits.filter((s) => s > sla.acceptLateSec).length;
+  const acceptWarn = queueWaits.filter((s) => s > sla.acceptWarnSec && s <= sla.acceptLateSec).length;
 
   // ---- who blew the cook SLA, and by how much ---------------------------
-  const late = done
+  const late = cooked
     .filter((o) => o.acceptedAt && o.readyAt)
     .map((o) => {
       const cookSec = secs(o.acceptedAt, o.readyAt);
@@ -970,7 +1011,7 @@ export function shiftReport(orders, sla) {
     .filter((x) => x.overSec > 0)
     .sort((a, b) => b.overSec - a.overSec);
 
-  const onTimeCount = done.filter((o) => o.acceptedAt && o.readyAt).length - late.length;
+  const onTimeCount = cooked.filter((o) => o.acceptedAt && o.readyAt).length - late.length;
 
   // ---- service curve in quarter-hours -----------------------------------
   // Split the curve by kind: a manager wants to see that the pizza rush lands
@@ -1099,12 +1140,25 @@ export function shiftReport(orders, sla) {
       p90TotalSec: percentile(totalTimes, 90),
       worstTotalSec: totalTimes.length ? Math.round(Math.max(...totalTimes)) : 0,
     },
+    // Cooking, and only cooking: this clock starts at accept. Read it beside
+    // `accepts` below, never instead of it.
     onTime: {
-      pct: done.length ? Math.round((onTimeCount / Math.max(1, onTimeCount + late.length)) * 100) : null,
+      pct: cooked.length ? Math.round((onTimeCount / Math.max(1, onTimeCount + late.length)) * 100) : null,
       count: onTimeCount,
       lateCount: late.length,
     },
+    // The half the figure above cannot see: how long tickets sat before the
+    // kitchen picked them up.
+    accepts: {
+      count: queueWaits.length,
+      warnCount: acceptWarn,
+      lateCount: acceptLate,
+      pct: queueWaits.length
+        ? Math.round(((queueWaits.length - acceptLate) / queueWaits.length) * 100)
+        : null,
+    },
     late,
+    unattended,
     curve,
     peak,
     mix,

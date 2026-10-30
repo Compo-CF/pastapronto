@@ -5144,4 +5144,176 @@ test('an added item keeps its name all the way to the prep guide', () => {
   }
   assert.ok(!menu.findAnywhere('cw_selftest_sauce'), 'the catalog was left dirty');
 });
+
+// ------------------------------------------- the two clocks, and the forgotten
+
+/** A delivered ticket with the three gaps set exactly, in seconds. */
+function ticket(n, { accept, cookRatio, runner }) {
+  let o = make();
+  o.ticketNo = n;
+  const base = Date.now() - 3 * 3600 * 1000 + n * 60000;
+  o.submittedAt = new Date(base).toISOString();
+  o = order.applyTransition(o, 'accept', { sla, now: new Date(base + accept * 1000) });
+  const cook = o.cookEstimateSec * cookRatio;
+  const up = base + (accept + cook) * 1000;
+  o = order.applyTransition(o, 'ready', { sla, now: new Date(up) });
+  o = order.applyTransition(o, 'deliver', { sla, now: new Date(up + runner * 1000) });
+  return o;
+}
+
+test('a ticket nobody was watching leaves the timings instead of skewing them', () => {
+  // The night this came from closed with one pizza left sitting in cooking for
+  // 44 minutes against a 9:30 estimate, bumped to ready and delivered in the
+  // same action when somebody cleared the rail. It became the worst ticket of
+  // the service, pulled the cook average up by three quarters of a minute, and
+  // was the only thing standing between the kitchen and 100% on time - none of
+  // which happened in the room.
+  const normal = ticket(1, { accept: 30, cookRatio: 1.0, runner: 60 });
+  const forgotten = ticket(2, { accept: 30, cookRatio: 5, runner: 1 });
+  const r = order.shiftReport([normal, forgotten], config.sla);
+
+  assert.strictEqual(r.unattended.length, 1, 'the forgotten ticket is not reported');
+  assert.strictEqual(r.unattended[0].ticketNo, 2);
+  assert.strictEqual(r.onTime.lateCount, 0,
+    'a ticket nobody watched is not the kitchen running late');
+  assert.strictEqual(r.onTime.count, 1, 'and the ticket that WAS cooked still counts');
+  assert.strictEqual(r.onTime.pct, 100);
+  // Every timing that includes a cook must be the normal ticket's alone.
+  assert.strictEqual(r.timings.avgCookSec, Math.round(normal.cookEstimateSec));
+  assert.strictEqual(r.timings.worstTotalSec, 30 + normal.cookEstimateSec + 60);
+  assert.strictEqual(r.timings.avgRunnerSec, 60, 'the one-second bump is not a runner time');
+
+  // The accept clock ran before any of it and was real on both.
+  assert.strictEqual(r.timings.avgQueueSec, 30, 'the accept wait keeps every ticket');
+  assert.strictEqual(r.accepts.count, 2);
+});
+
+test('the gap between ready and delivered is NOT what makes a ticket unattended', () => {
+  // The obvious rule - "ready and delivered a second apart means one bump" -
+  // is wrong, and the real data is what says so: six of fifty tickets had that
+  // gap and five of them were ordinary service, because expo marks both when
+  // the runner is already standing at the pass. Only the cook clock separated
+  // the abandoned one. A guard, so nobody re-derives the tempting version.
+  const quick = ticket(1, { accept: 20, cookRatio: 0.9, runner: 1 });
+  const r = order.shiftReport([quick], config.sla);
+  assert.deepStrictEqual(r.unattended, [],
+    'a fast hand-off was mistaken for a rail nobody was watching');
+  assert.strictEqual(r.timings.avgRunnerSec, 1, 'and it still counts as the runner time it was');
+});
+
+test('the close-out reports the wait before pickup, not only the cook', () => {
+  // "On time" starts its clock at accept, so it cannot see a ticket that sat.
+  // A room can read 100% on time with every ticket in it past the allowance -
+  // which is what it did read, at 98%, on a night when 27 of 50 tickets were
+  // picked up late. Two clocks, two numbers.
+  const fast = ticket(1, { accept: 10, cookRatio: 1.0, runner: 30 });
+  const slow = ticket(2, { accept: sla.acceptLateSec + 60, cookRatio: 1.0, runner: 30 });
+  const warn = ticket(3, { accept: sla.acceptWarnSec + 5, cookRatio: 1.0, runner: 30 });
+  const r = order.shiftReport([fast, slow, warn], config.sla);
+
+  assert.strictEqual(r.onTime.pct, 100, 'all three were cooked inside the estimate');
+  assert.strictEqual(r.accepts.lateCount, 1, 'one sat past the late allowance');
+  assert.strictEqual(r.accepts.warnCount, 1, 'one sat past the warning but not the allowance');
+  assert.strictEqual(r.accepts.count, 3);
+  assert.strictEqual(r.accepts.pct, 67, 'two of three picked up inside the allowance');
+
+  // The two must be able to disagree - that disagreement is the whole point.
+  assert.notStrictEqual(r.onTime.pct, r.accepts.pct,
+    'if these can never differ, one of them is not measuring what it claims');
+
+  // And both have to reach paper. This is the fixture that makes that
+  // checkable: the two figures differ, so a sheet that prints the cook number
+  // in both rows is missing one of them rather than quietly agreeing. Reading
+  // the built PDF rather than the source, because the source can hold the
+  // right field name in the wrong row.
+  const runs = pdfTextRuns(buildReportPdf(r, '2026-09-11', { orgName: 'Test Club' }));
+  const said = (s) => runs.some((x) => x.text === String(s));
+  assert.ok(said(r.onTime.pct + '%'), 'the printed sheet drops the cook figure');
+  assert.ok(said(r.accepts.pct + '%'), 'the printed sheet never shows the wait before pickup');
+
+  // The screen builds its tiles against the DOM and cannot be imported here,
+  // so that half is a source guard - scoped to the tile builder, and matching
+  // the expression that is actually PRINTED rather than the field name, which
+  // also appears in the null check a line above and would cover for a tile
+  // quietly showing the cook figure twice.
+  const src = readFileSync(fileURLToPath(new URL('../app/report.js', import.meta.url)), 'utf8');
+  const from = src.indexOf('function statTiles');
+  const to = src.indexOf(String.fromCharCode(10) + 'function ', from + 1);
+  const tiles = src.slice(from, to === -1 ? undefined : to);
+  assert.ok(tiles.includes("r.accepts.pct + '%'"),
+    'no tile prints the share of tickets picked up on time');
+  assert.ok(tiles.includes("r.onTime.pct + '%'"), 'no tile prints the cook figure');
+  assert.ok(/Cooked on time/.test(tiles) && /Accepted on time/.test(tiles),
+    'the two clocks are not named apart, so one still reads as the whole story');
+});
+
+test('the abandon threshold is one number, read where it is written', () => {
+  // cookAbandonFactor lives in config.sla and is read by shiftReport. If it
+  // ever goes missing the comparison becomes `> NaN`, which is false for every
+  // ticket - so nothing would be flagged and nothing would throw.
+  assert.strictEqual(typeof config.sla.cookAbandonFactor, 'number');
+  assert.ok(config.sla.cookAbandonFactor > config.sla.cookLateFactor,
+    'a ticket has to be late before it can be abandoned, or "late" is unreachable');
+
+  const src = readFileSync(fileURLToPath(new URL('../app/order.js', import.meta.url)), 'utf8');
+  assert.ok(src.includes('sla.cookAbandonFactor'),
+    'shiftReport is not reading the threshold from the sla it was handed');
+
+  // And it must actually bite: a report built with the factor raised has to
+  // behave differently, or the knob is decorative.
+  const forgotten = ticket(1, { accept: 20, cookRatio: 5, runner: 1 });
+  const withIt = order.shiftReport([forgotten], config.sla);
+  const without = order.shiftReport([forgotten], { ...config.sla, cookAbandonFactor: 99 });
+  assert.strictEqual(withIt.unattended.length, 1);
+  assert.strictEqual(without.unattended.length, 0, 'the threshold changed nothing');
+  assert.strictEqual(without.onTime.lateCount, 1,
+    'without the threshold it goes back to being counted as a late cook');
+});
+
+test('the close-out says where every charge came from', () => {
+  // memberRollup has always known this - its own comment says chargeBasis is
+  // there "so close-out can say so rather than making a manager guess which
+  // nights are which" - and nothing displayed it, so a party of one somebody
+  // answered for read exactly like a party of one nobody did.
+  const codeOf = (f) => readFileSync(fileURLToPath(new URL('../app/' + f, import.meta.url)), 'utf8')
+    .split(String.fromCharCode(10))
+    .filter((l) => {
+      const s = l.trim();
+      return s && !s.startsWith('//') && !s.startsWith('*') && !s.startsWith('/*');
+    }).join(String.fromCharCode(10));
+
+  // Three separate places, so three assertions, each scoped to the function it
+  // protects. Two earlier versions of this were too loose to mean anything:
+  // one joined the column and the export with an `||`, so deleting the column
+  // passed on the strength of the export; the next searched the whole file, so
+  // deleting the table's cell passed on the strength of the export's identical
+  // expression a few hundred lines below. Both found by mutating, not reading.
+  const fn = (src, name) => {
+    const from = src.indexOf('function ' + name);
+    assert.notStrictEqual(from, -1, name + '() is gone, so its guard cannot mean anything');
+    const to = src.indexOf(String.fromCharCode(10) + 'function ', from + 1);
+    return src.slice(from, to === -1 ? undefined : to);
+  };
+
+  const screen = codeOf('report.js');
+  const table = fn(screen, 'membersToCharge');
+  assert.ok(/<th[^>]*>Basis<\/th>/.test(table),
+    'the member table has no Basis column header');
+  assert.ok(/chargeBasis === 'declared'/.test(table),
+    'the member table never reads the value into a cell');
+  // The CSV is the file that actually gets posted against, so it carries it too.
+  const csv = fn(screen, 'toCsv');
+  assert.ok(/'Basis'/.test(csv), 'the export has no Basis column');
+  assert.ok(/chargeBasis === 'declared'/.test(csv), 'the export never fills it in');
+
+  const paper = codeOf('report-pdf.js');
+  assert.ok(paper.includes('chargeBasis'), 'the printed sheet drops the basis');
+
+  // And the value itself has to survive the roll-up as one of its two values.
+  const rolled = order.memberRollup([(() => {
+    const o = make(); o.memberNumber = '1234'; return o;
+  })()]);
+  assert.ok(['declared', 'legacy-headcount'].includes(rolled[0].chargeBasis),
+    'chargeBasis is not one of the two things it can be');
+});
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');
