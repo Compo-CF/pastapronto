@@ -133,6 +133,24 @@ const CATALOG = menu.catalog();
     return n + ' ' + one + (n === 1 ? '' : 's');
   }
 
+  /**
+   * Something somebody typed, on whichever card is in front of the runner.
+   *
+   * One function rather than the same markup written out on each card, which
+   * is how this came to be missing in the first place: the chit drew notes,
+   * the Coming Up card drew notes, and the Ready card - the one a runner
+   * actually acts on - drew the ingredients and nothing else. Twenty-two
+   * notes came through on the first service and the pass saw none of them.
+   * "Togo" changes what happens to the plate, and the plate was the one place
+   * it never appeared.
+   */
+  function noteRow(text, label) {
+    if (!text) return '';
+    return '<div class="expo-note">'
+      + (label ? '<b>' + escapeHtml(label) + '</b> ' : '')
+      + escapeHtml(text) + '</div>';
+  }
+
   function renderReadyCard(order) {
     var wait = secondsSince(order.readyAt);
     var level = waitLevel(wait);
@@ -164,10 +182,12 @@ const CATALOG = menu.catalog();
                   return html`<div class="cline-row"><dt>${r.label}</dt><dd>${r.items.join(', ')}</dd></div>`;
                 })}
               </dl>
+              ${raw(noteRow(line.notes))}
             </div>
           </div>`;
         })}
       </div>
+      ${raw(noteRow(order.notes, 'Ticket note:'))}
       <button class="rcard-go" data-act="deliver" data-id="${order.id}">Deliver to ${order.tagLabel}</button>
       ${raw(orderLib.isBuilt(order.kind)
         ? '<button class="rcard-undo" data-act="unready" data-id="' + order.id + '">Not out yet</button>'
@@ -215,10 +235,10 @@ const CATALOG = menu.catalog();
                   return html`<div class="cline-row"><dt>${r.label}</dt><dd>${r.items.join(', ')}</dd></div>`;
                 })}
               </dl>
-              ${raw(line.notes ? '<div class="ncard-note">' + escapeHtml(line.notes) + '</div>' : '')}
+              ${raw(noteRow(line.notes))}
             </div>`;
           })}
-          ${raw(order.notes ? '<div class="ncard-note">Ticket note: ' + escapeHtml(order.notes) + '</div>' : '')}
+          ${raw(noteRow(order.notes, 'Ticket note:'))}
         </div>`
       : '';
 

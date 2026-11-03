@@ -120,13 +120,30 @@
 }
 .ncard-who { display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .ncard-who svg { width: 22px; height: 22px; }
-.ncard-note {
+/*
+ * A note somebody typed, on BOTH expo cards.
+ *
+ * One class, because the markup behind it is now one function. This was
+ * .ncard-note and lived only on the Coming Up card; the Ready card - the one
+ * the runner acts on - went a whole service without drawing a note at all,
+ * and a second near-copy of this rule is how that stays easy to do again.
+ *
+ * Amber rather than the allergy red: a note changes what the runner does with
+ * the plate, but it is not the thing that sends somebody to hospital, and two
+ * reds on one card would flatten that difference.
+ */
+.expo-note {
   overflow-wrap: anywhere;
   margin-top: 6px;
+  padding: 5px 9px;
+  border-left: 3px solid #ffc542;
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 197, 66, 0.1);
   font-size: 14px;
   font-style: italic;
   color: #ffc542;
 }
+.expo-note b { font-style: normal; font-weight: 800; letter-spacing: .02em; }
 .ncard-alert {
   margin-bottom: 8px;
   padding: 6px 10px;

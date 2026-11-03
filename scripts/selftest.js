@@ -5316,4 +5316,71 @@ test('the close-out says where every charge came from', () => {
   assert.ok(['declared', 'legacy-headcount'].includes(rolled[0].chargeBasis),
     'chargeBasis is not one of the two things it can be');
 });
+
+// ----------------------------------------- what somebody typed, on every card
+
+test('every expo card that shows a plate shows the note on it', () => {
+  // Reported from the floor after the first real service: "server-entered
+  // notes were not visible on the expo side". They were being saved - 22 of
+  // them that night - and the kitchen chit had been printing them all along.
+  // The Ready card, which is the one a runner acts on, drew the glyph and the
+  // ingredient list and stopped there, and the Coming Up card only drew a
+  // note once somebody tapped the ticket open. So the cook could read "Togo"
+  // and the person carrying the plate could not.
+  //
+  // Scoped per function, because the whole bug was one card having it and its
+  // neighbour not: a file-wide search for `notes` would have passed throughout.
+  const src = readFileSync(fileURLToPath(new URL('../app/expo.js', import.meta.url)), 'utf8');
+  const fn = (name) => {
+    const from = src.indexOf('function ' + name);
+    assert.notStrictEqual(from, -1, name + '() is gone, so its guard means nothing');
+    const to = src.indexOf(String.fromCharCode(10) + '  function ', from + 1);
+    return src.slice(from, to === -1 ? undefined : to);
+  };
+
+  ['renderReadyCard', 'renderNextCard'].forEach((name) => {
+    const body = fn(name);
+    assert.ok(/noteRow\(line\.notes\)/.test(body),
+      name + ' draws a plate without the note somebody typed on it');
+    assert.ok(/noteRow\(order\.notes/.test(body),
+      name + ' drops the note written for the whole ticket');
+  });
+
+  // And one function behind both, not two copies that have to agree - two
+  // copies is exactly how one card kept its note and the other lost it.
+  assert.strictEqual((src.match(/<div class="expo-note">/g) || []).length, 1,
+    'the note markup has been written out more than once again');
+  assert.ok(!/ncard-note/.test(src), 'a card is still on the old single-card class');
+});
+
+test('the note a guest types survives the whole way to the pass', () => {
+  // End to end on the real builder rather than on a hand-made object: the
+  // field has to be the same one at every stop. A rename here is the exact
+  // shape of the bug that cost this app a service, when `pasta` became
+  // `pastas` and seven readers kept asking for the old name.
+  const draft = {
+    kind: 'pasta',
+    memberNumber: '1234',
+    guestCount: 1,
+    notes: 'Ticket level - table is in a hurry',
+    lines: [{
+      kind: 'pasta', pastas: ['penne'], sauces: ['marinara'], portion: 'regular',
+      notes: 'Togo',
+    }],
+  };
+  const built = order.buildOrder(draft, {
+    serviceDate: '2026-01-01', ticketNo: 1, cookEstimateSec: 300,
+  });
+  assert.strictEqual(built.lines[0].notes, 'Togo',
+    'the line note did not survive buildOrder');
+  assert.strictEqual(built.notes, 'Ticket level - table is in a hurry',
+    'the ticket note did not survive buildOrder');
+
+  // Both screens that plate food read that same field off that same object.
+  ['expo.js', 'kitchen.js'].forEach((f) => {
+    const screen = readFileSync(fileURLToPath(new URL('../app/' + f, import.meta.url)), 'utf8');
+    assert.ok(/line\.notes/.test(screen), f + ' never reads the line note');
+    assert.ok(/order\.notes/.test(screen), f + ' never reads the ticket note');
+  });
+});
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');
