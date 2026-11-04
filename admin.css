@@ -543,6 +543,26 @@
   cursor: pointer;
 }
 .medit-art svg { width: 100%; height: 100%; }
+
+/* The current picture, on every row, as the way in to changing it. Sized to
+   the name box beside it so the rows still line up. */
+.medit-rowart {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+}
+.medit-rowart svg { width: 100%; height: 100%; }
+.medit-rowart:hover { border-color: var(--tomato); }
+.medit-rowart.is-open { border-color: var(--tomato); background: #fdecea; }
+
+/* The grid when a row has it open. Indented under the row it belongs to, so
+   it reads as part of that row rather than as the start of the next one. */
+.medit-rowgrid { margin: 0 0 10px 46px; }
 .medit-art:hover { border-color: var(--line); background: #fdf8f0; }
 .medit-art.is-on { border-color: var(--tomato); background: #fdecea; }
 

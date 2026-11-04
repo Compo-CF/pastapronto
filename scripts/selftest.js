@@ -5647,6 +5647,56 @@ test('opening the editor and saving does not wipe the pictures', () => {
   menu.applyMenuOverrides({});
 });
 
+test('every row in the menu editor can change its own picture', () => {
+  // The add form got a picker and the rows did not, so the club could set a
+  // picture on the ten items they added and could not touch the three pastas
+  // they had renamed - Bowtie was still a tube and only a script could fix
+  // it. One control, on every row, because added and renamed are the same
+  // question and two controls asking it is how one gets fixed and one does
+  // not.
+  const src = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+  const from = src.indexOf('function menuEditorHtml');
+  assert.notStrictEqual(from, -1, 'menuEditorHtml is gone');
+  const body = src.slice(from, src.indexOf('\n  function ', from + 1));
+
+  assert.ok(/data-menuart="/.test(body), 'a row has no way to open its picture grid');
+
+  /*
+   * ...and the control has to be REACHABLE, not merely present in the file.
+   *
+   * The first version of this test asserted only that the string existed,
+   * and a mutation that changed the gate to `false && editable` sailed
+   * through it: the markup was still in the source, attached to a branch
+   * nothing could reach. So the gate itself is what is pinned here, and the
+   * gate is "is this an ingredient" - a mechanic like "No Sauce" says "always
+   * on" instead and has no picture worth changing.
+   */
+  const gate = (body.match(/var artBtn = ([^\n;]+)/) || [])[1];
+  assert.strictEqual((gate || '').trim(), 'editable',
+    'the row picture control is gated on `' + gate + '` rather than on whether '
+    + 'the item is an ingredient - if that is false it is drawn for nobody');
+  assert.ok(/data-menurowicon="/.test(body), 'the row grid has nothing to pick');
+  assert.ok(/key === 'pastas' \? 'shape' : 'icon'/.test(body),
+    'the row grid offers the same glyphs whatever the group - a pasta row is '
+    + 'being offered vegetables, or a topping row is being offered rigatoni');
+
+  // One grid at a time: seventy glyphs under every row is not a list.
+  assert.ok(/state\.menuArt === it\.id/.test(body),
+    'every row draws its own grid at once');
+
+  // The handler must drop the override when the shipped picture is chosen,
+  // the same way typing an item's original name back stops being a rename.
+  const h = src.indexOf('t.dataset.menurowicon');
+  assert.notStrictEqual(h, -1, 'nothing handles a row picture being picked');
+  const handler = src.slice(h, h + 1400);
+  assert.ok(/delete rowEntry\.icon/.test(handler),
+    'choosing the picture an item shipped with stores an override saying so, '
+    + 'which freezes it against anything the menu does later');
+  assert.ok(/original\.art/.test(handler),
+    'the handler never looks at what the item shipped with, so it cannot know '
+    + 'whether this is a change at all');
+});
+
 test('a renamed item can be given the picture its new name deserves', () => {
   // The club renamed penne to "Bowtie" and it went on drawing a tube, and
   // renamed the gluten-free fusilli to "Gluten-Free Penne" and it went on

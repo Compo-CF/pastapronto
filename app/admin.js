@@ -41,6 +41,9 @@ const CATALOG = menu.catalog();
     // The menu editor. `draft` is a working copy of the overrides; nothing
     // reaches the other screens until Save.
     menuOpen: false, menuDraft: null, menuSaving: false, menuNew: {},
+    // Which row has its picture grid open. One at a time: seventy glyphs
+    // under every row at once is not a list anybody can read.
+    menuArt: null,
     orderQuery: '',
   };
 
@@ -1024,7 +1027,40 @@ const CATALOG = menu.catalog();
         var o = draft[it.id] || {};
         var editable = menu.isEditableItem(it);
         var gone = o.retired === true;
+
+        /*
+         * The picture, on every row rather than only on the add form.
+         *
+         * Renaming used to change the word and never the drawing, so the club
+         * renamed penne to "Bowtie" and it went on drawing a tube. On the
+         * pasta step a member chooses by the picture, which makes the label
+         * and the drawing disagreeing worse here than almost anywhere.
+         *
+         * One control for added and renamed items alike: they are the same
+         * question, and two controls asking it is how one of them ends up
+         * fixed and the other does not.
+         */
+        var shownArt = o.icon || it.shape || it.icon;
+        var artOpen = state.menuArt === it.id;
+        var artBtn = editable
+          ? '<button class="medit-rowart ' + (artOpen ? 'is-open' : '') + '" type="button"'
+            + ' data-menuart="' + it.id + '" aria-expanded="' + (artOpen ? 'true' : 'false') + '"'
+            + ' title="Change the picture">' + art(shownArt || 'none') + '</button>'
+          : '';
+        var artPanel = artOpen
+          ? '<div class="medit-artgrid medit-rowgrid">'
+            + artChoices(key === 'pastas' ? 'shape' : 'icon').map(function (g) {
+              return '<button type="button" class="medit-art '
+                + (g === shownArt ? 'is-on' : '') + '"'
+                + ' data-menurowicon="' + it.id + ':' + g + '"'
+                + ' aria-pressed="' + (g === shownArt ? 'true' : 'false') + '"'
+                + ' title="' + escapeHtml(g) + '">' + art(g) + '</button>';
+            }).join('')
+            + '</div>'
+          : '';
+
         return html`<div class="medit-row ${gone ? 'is-gone' : ''}">
+          ${raw(artBtn)}
           <input class="input medit-name" type="text" maxlength="40"
             value="${o.name != null ? o.name : it.name}"
             data-menuname="${it.id}" aria-label="Name for ${it.name}">
@@ -1032,7 +1068,7 @@ const CATALOG = menu.catalog();
             ? '<button class="btn btn-ghost medit-go" type="button" data-menuretire="' + it.id + '">'
               + (gone ? 'Put back' : 'Remove') + '</button>'
             : '<span class="medit-fixed" title="This is how a guest says no, not an ingredient">always on</span>')}
-        </div>`;
+        </div>${raw(artPanel)}`;
       }).join('');
 
       /*
@@ -1224,7 +1260,7 @@ const CATALOG = menu.catalog();
   var MENU_ACTIONS = [
     'menuretire', 'menusave', 'menureset', 'menuallergen',
     'menuadd', 'menuaddgo', 'menuaddcancel', 'menuedit', 'menudrop', 'menuallergenok',
-    'menuicon',
+    'menuicon', 'menuart', 'menurowicon',
   ];
   var MENU_ACTION_SELECTOR = MENU_ACTIONS.map(function (a) {
     return '[data-' + a + ']';
@@ -1320,6 +1356,43 @@ const CATALOG = menu.catalog();
       var iconForm = (state.menuNew || {})[iconBits[0]];
       if (!iconForm) return;
       iconForm.icon = iconBits[1];
+      return renderMenuEditor();
+    }
+
+    // Open or close one row's picture grid. One at a time.
+    if (t.dataset.menuart) {
+      state.menuArt = state.menuArt === t.dataset.menuart ? null : t.dataset.menuart;
+      return renderMenuEditor();
+    }
+
+    /*
+     * Picking a picture for an item already on the list - renamed or added.
+     *
+     * Choosing the one it already shipped with REMOVES the override rather
+     * than storing it, the same way typing an item's original name back
+     * stops being a rename. An override that says "leave it exactly as it
+     * was" is a difference the club would have to keep carrying, and would
+     * freeze the item against anything the menu does later.
+     */
+    if (t.dataset.menurowicon) {
+      var cut = t.dataset.menurowicon.lastIndexOf(':');
+      var rowId = t.dataset.menurowicon.slice(0, cut);
+      var glyph = t.dataset.menurowicon.slice(cut + 1);
+      var rowDraft = state.menuDraft || (state.menuDraft = {});
+      var rowEntry = rowDraft[rowId] || (rowDraft[rowId] = {});
+
+      var hitRow = menu.editableItem(rowId);
+      var original = rowEntry.added
+        // An added item's "original" is whatever it was modelled on.
+        ? (function () {
+          var tpl = menu.findAnywhere(rowEntry.template);
+          return tpl && (tpl.shape || tpl.icon);
+        }())
+        : (hitRow && hitRow.original && hitRow.original.art);
+
+      if (glyph === original) delete rowEntry.icon; else rowEntry.icon = glyph;
+      if (!Object.keys(rowEntry).length) delete rowDraft[rowId];
+      state.menuArt = null;
       return renderMenuEditor();
     }
 
