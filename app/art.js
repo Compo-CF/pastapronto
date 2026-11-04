@@ -61,9 +61,14 @@ var ICONS = {
     '<path d="M32 20c6-6 13-6 13-6-2 6-7 8-10 8z" fill="#3f8b45"/><circle cx="25" cy="31" r="4" fill="#fff" opacity=".22"/>',
   butter:
     '<path d="M12 38l10-14h30l-10 14z" fill="#f4d27a"/><path d="M12 38h30v10H12z" fill="#e7bd52"/><path d="M42 38l10-14v10l-10 14z" fill="#d9a93c"/>',
+  // Alfredo. The club asked for this to be white and it was not - it was
+  // #f7f1e2, a beige that reads as butter next to the marinara beside it.
+  // White needs an edge to survive on a cream-coloured tile, so the outline
+  // does the work the old fill was doing badly.
   cream:
-    '<path d="M18 26h28l-3 24a5 5 0 0 1-5 4H26a5 5 0 0 1-5-4z" fill="#f7f1e2"/>' +
-    '<ellipse cx="32" cy="26" rx="14" ry="5" fill="#fffdf7"/><path d="M24 34c3 4 13 4 16 0" stroke="#e3d7bd" stroke-width="2" fill="none"/>',
+    '<path d="M18 26h28l-3 24a5 5 0 0 1-5 4H26a5 5 0 0 1-5-4z" fill="#fff" stroke="#cdc2a9" stroke-width="1.6" stroke-linejoin="round"/>' +
+    '<ellipse cx="32" cy="26" rx="14" ry="5" fill="#fff" stroke="#cdc2a9" stroke-width="1.6"/>' +
+    '<path d="M24 36c3 4 13 4 16 0" stroke="#ddd2b8" stroke-width="2" fill="none"/>',
   cheese:
     '<path d="M9 42 40 16h15v14L24 50z" fill="#f0c04a"/><path d="M9 42h15v8H9z" fill="#dda92f"/>' +
     '<g fill="#dda92f"><circle cx="33" cy="33" r="3.4"/><circle cx="44" cy="26" r="2.6"/><circle cx="24" cy="41" r="2.4"/></g>',
@@ -77,6 +82,44 @@ var ICONS = {
   spinach:
     '<path d="M34 52c-2-14 4-26 18-31-1 17-8 27-18 31z" fill="#31783a"/>' +
     '<path d="M28 53C25 40 17 31 6 28c3 15 11 23 22 25z" fill="#43924a"/>',
+  /*
+   * Arugula had no artwork and was borrowing spinach's, so on a pizza card
+   * Arugula and Basil were the same two green leaves and the only way to tell
+   * them apart was to read. A sprig of small round leaflets off one stem is
+   * the silhouette that is not either of them at a glance, which is the whole
+   * job of a glyph on a tile somebody is reading across a pass.
+   */
+  arugula:
+    '<path d="M34 55c0-15 2-27 7-37" fill="none" stroke="#2f6b35" stroke-width="2.6" stroke-linecap="round"/>' +
+    '<g fill="#5aa84e">' +
+    '<path d="M40 20c4-6 10-9 16-7-3 7-9 10-16 7z"/>' +
+    '<path d="M37 31c-5-5-12-5-17-1 5 6 12 7 17 1z"/>' +
+    '<path d="M35 39c5-5 12-7 17-3-5 6-12 8-17 3z"/>' +
+    '<path d="M34 48c-5-4-11-5-16-1 5 5 11 6 16 1z"/>' +
+    '</g>',
+  /*
+   * Summer squash. Yellow, a curved neck and a wide base - the shape is what
+   * separates it from every other yellow thing on a menu, so the neck is the
+   * part that has to survive being drawn at tile size.
+   */
+  squash:
+    // The crooked neck IS the glyph. Drawn as a thick round-capped stroke
+    // with the bulb laid over its foot, because the first attempt tried to
+    // do both in one outline and came out a pear.
+    '<path d="M33 42c-1-14 1-23 12-27" fill="none" stroke="#f0c53f" stroke-width="12" stroke-linecap="round"/>' +
+    '<ellipse cx="28" cy="43" rx="16" ry="13" fill="#f0c53f"/>' +
+    '<path d="M45 15c1-4 4-6 8-5-2 4-4 6-8 5z" fill="#79a34a"/>' +
+    '<ellipse cx="22" cy="41" rx="4" ry="7" fill="#f7da78" opacity=".7"/>',
+  /*
+   * Peperoncini. Paler and plumper than the jalapeno it sits beside, which is
+   * the comparison that matters - two green peppers at tile size are told
+   * apart by colour and by how fat they are, not by detail.
+   */
+  peperoncini:
+    '<path d="M33 17c9 1 14 9 14 18 0 11-7 19-16 19-6 0-10-4-10-9 0-4 3-7 7-7 3 0 5 2 5 5 3-3 4-7 4-11 0-7-2-12-4-15z" fill="#cfd96a"/>' +
+    '<path d="M29 13c4-2 9-2 11 1-3 3-7 3-11 2z" fill="#4f8f3f"/>' +
+    '<path d="M33 15v4" stroke="#4f8f3f" stroke-width="3.2" stroke-linecap="round"/>' +
+    '<path d="M39 26c2 6 2 13 0 18" fill="none" stroke="#b4c053" stroke-width="1.8" opacity=".8"/>',
   meat:
     '<path d="M14 34c0-11 9-18 20-18 12 0 18 8 18 16 0 9-7 18-19 18s-19-7-19-16z" fill="#9a4a2c"/>' +
     '<g fill="#7d3a20"><circle cx="26" cy="30" r="3.2"/><circle cx="38" cy="37" r="2.8"/><circle cx="33" cy="24" r="2.2"/></g>',
@@ -86,9 +129,17 @@ var ICONS = {
   sausage:
     '<path d="M14 44c-4-12 4-26 16-28 10-2 18 4 20 12" fill="none" stroke="#9b4b2b" stroke-width="13" stroke-linecap="round"/>' +
     '<path d="M22 34c4-6 10-8 16-6" stroke="#7d3a20" stroke-width="2.6" fill="none" stroke-linecap="round"/>',
+  // Two flat bars with ticks on them read as breadsticks, which is what this
+  // was. Grilled chicken is tapered, paler than beef, and the thing that says
+  // "grilled" is the char across it - so the strips narrow at one end and the
+  // marks run across the grain rather than sitting on top like crumbs.
   chicken:
-    '<g fill="#c98a4e"><rect x="12" y="24" width="40" height="9" rx="4.5"/><rect x="14" y="36" width="36" height="9" rx="4.5"/></g>' +
-    '<g stroke="#a06a33" stroke-width="2.2" stroke-linecap="round"><path d="M22 26v5M34 26v5M44 38v5M28 38v5"/></g>',
+    '<g fill="#dcad78">' +
+    '<path d="M13 20c11-4 28-3 36 2 4 2 4 7 0 9-10 5-26 5-36 1-4-2-4-10 0-12z"/>' +
+    '<path d="M17 37c10-3 24-2 31 2 3 2 3 7 0 9-8 4-22 4-31 0-3-2-3-9 0-11z"/>' +
+    '</g>' +
+    '<g stroke="#a37038" stroke-width="2.6" stroke-linecap="round" opacity=".7">' +
+    '<path d="M23 21l-2 11M34 20l-2 12M45 23l-2 10M26 38l-2 10M37 37l-2 10M46 39l-1 9"/></g>',
   shrimp:
     '<path d="M46 20c-14-4-26 4-26 16 0 8 6 13 13 13" fill="none" stroke="#eb8877" stroke-width="11" stroke-linecap="round"/>' +
     '<circle cx="46" cy="20" r="3" fill="#c9564a"/>' +
@@ -107,10 +158,20 @@ var ICONS = {
     '<path d="M32 56V20" fill="none" stroke="#6b7a3e" stroke-width="3" stroke-linecap="round"/><g fill="#7f9149"><ellipse cx="23" cy="26" rx="7" ry="4.5" transform="rotate(-28 23 26)"/><ellipse cx="41" cy="30" rx="7" ry="4.5" transform="rotate(28 41 30)"/><ellipse cx="23" cy="37" rx="6.5" ry="4.2" transform="rotate(-24 23 37)"/><ellipse cx="41" cy="41" rx="6.5" ry="4.2" transform="rotate(24 41 41)"/><ellipse cx="25" cy="47" rx="5.5" ry="3.6" transform="rotate(-20 25 47)"/></g><ellipse cx="32" cy="19" rx="5" ry="3.4" fill="#6b7a3e"/>',
   artichoke:
     '<path d="M32 56c-9 0-15-7-15-17 0-13 7-24 15-30 8 6 15 17 15 30 0 10-6 17-15 17z" fill="#7f9149"/><g fill="#94a65c" stroke="#5f7238" stroke-width="1.4"><path d="M32 24c-5 4-8 10-8 15 0 6 4 9 8 9s8-3 8-9c0-5-3-11-8-15z"/></g><g fill="none" stroke="#5f7238" stroke-width="2" stroke-linecap="round"><path d="M20 34c4 3 8 4 12 4s8-1 12-4M21 44c4 3 7 4 11 4s7-1 11-4"/></g><g stroke="#4a3a22" stroke-width="2.6" stroke-linecap="round" opacity=".55"><path d="M24 30h5M35 40h5M26 48h4"/></g><path d="M32 15v-6" fill="none" stroke="#5f7238" stroke-width="3.4" stroke-linecap="round"/>',
+  // Minced, not a whole bulb. The bulb is the thing in the larder; what goes
+  // in the pan is chopped, and the club asked for the difference. One clove
+  // kept at the left so it still reads as garlic rather than as rice.
   garlic:
-    '<path d="M32 14c8 6 14 16 14 24 0 9-6 14-14 14s-14-5-14-14c0-8 6-18 14-24z" fill="#f4efe4"/>' +
-    '<path d="M32 16v36M23 24c-2 8-2 20 2 26M41 24c2 8 2 20-2 26" stroke="#ddd3bd" stroke-width="2.2" fill="none"/>' +
-    '<path d="M32 14c0-4-2-6-4-7 4 0 6 2 8 4" fill="#a8b07a"/>',
+    '<path d="M24 13c7 6 12 14 12 21 0 8-5 13-12 13s-12-5-12-13c0-7 5-15 12-21z" fill="#f4efe4" stroke="#d9cfb8" stroke-width="1.5"/>' +
+    '<path d="M24 15v30" stroke="#ddd3bd" stroke-width="2" fill="none"/>' +
+    '<path d="M24 13c0-3-2-5-3-6 3 0 5 2 6 3" fill="#a8b07a"/>' +
+    '<g fill="#ece3cd" stroke="#d4c9af" stroke-width="1.2">' +
+    '<rect x="42" y="18" width="9" height="7" rx="2.5" transform="rotate(-14 46 21)"/>' +
+    '<rect x="46" y="31" width="8" height="6" rx="2" transform="rotate(22 50 34)"/>' +
+    '<rect x="39" y="40" width="9" height="7" rx="2.5" transform="rotate(-8 43 43)"/>' +
+    '<rect x="30" y="50" width="8" height="6" rx="2" transform="rotate(12 34 53)"/>' +
+    '<rect x="48" y="45" width="7" height="6" rx="2" transform="rotate(-20 51 48)"/>' +
+    '</g>',
   olive:
     '<ellipse cx="32" cy="34" rx="13" ry="17" fill="#3f4a2a"/><ellipse cx="32" cy="26" rx="5" ry="4" fill="#c9433a"/>',
   mushroom:
@@ -145,9 +206,19 @@ var ICONS = {
   bacon:
     '<path d="M8 22c10-6 18 6 28 0s16 4 20 0v10c-6 5-12-4-20 1s-18-6-28 0z" fill="#c0563f"/>' +
     '<path d="M8 34c10-6 18 6 28 0s16 4 20 0v9c-6 5-12-4-20 1s-18-6-28 0z" fill="#e8dcc8"/>',
+  // Diced, which is how it actually arrives on a plate here - the old single
+  // pink slab was a deli slice, and a slab and a dice are different things to
+  // a cook reading a chit at speed.
   ham:
-    '<path d="M18 22h22a10 10 0 0 1 0 20H18a6 6 0 0 1 0-20z" fill="#e79a9a"/>' +
-    '<circle cx="26" cy="32" r="3" fill="#f5d0d0"/><circle cx="36" cy="30" r="2.4" fill="#f5d0d0"/>',
+    '<g fill="#e79a9a">' +
+    '<rect x="11" y="15" width="17" height="17" rx="3.5"/>' +
+    '<rect x="34" y="19" width="16" height="16" rx="3.5"/>' +
+    '<rect x="17" y="36" width="16" height="16" rx="3.5"/>' +
+    '<rect x="38" y="39" width="14" height="14" rx="3"/>' +
+    '</g>' +
+    '<g fill="#f7cfcf">' +
+    '<circle cx="19" cy="23" r="2.6"/><circle cx="42" cy="27" r="2.4"/>' +
+    '<circle cx="25" cy="44" r="2.4"/><circle cx="45" cy="46" r="2"/></g>',
   onion:
     '<circle cx="32" cy="34" r="20" fill="#c9a8d4"/><circle cx="32" cy="34" r="14" fill="#ddc4e5"/>' +
     '<circle cx="32" cy="34" r="8" fill="#efe2f3"/><circle cx="32" cy="34" r="3" fill="#c9a8d4"/>',
@@ -439,4 +510,31 @@ function has(key) {
   return Boolean(SHAPES[key] || ICONS[key] || EXTRAS[key]);
 }
 
-export { art, artFor, has, SHAPES, ICONS, EXTRAS };
+/**
+ * The glyphs a person may choose from in the menu editor.
+ *
+ * Split by kind because the two are not interchangeable: a pasta carries
+ * `shape` and draws from SHAPES, everything else carries `icon` and draws
+ * from ICONS. Offering a club manager "rigatoni" as artwork for a topping
+ * would be offering them a wrong answer.
+ *
+ * `none` and `mark` are left out. `none` is the crossed-out circle, which on
+ * a tile reads as "we are out of this" rather than as a picture, and `mark`
+ * is chrome rather than food.
+ */
+function choices(kind) {
+  // Two glyphs sit in SHAPES because of how they are drawn rather than what
+  // they are: `pie` and `slice` are pizza. Splitting on the table alone got
+  // this wrong in both directions - it offered a pizza as a pasta shape, and
+  // it hid `pie` from the ingredient picker, which is the glyph every
+  // shipped crust wears and therefore the one an added crust needs.
+  var PIZZA = ['pie', 'slice'];
+  var keys = kind === 'shape'
+    ? Object.keys(SHAPES).filter(function (k) { return PIZZA.indexOf(k) === -1; })
+    : Object.keys(ICONS).concat(PIZZA);
+  return keys
+    .filter(function (k) { return k !== 'none' && k !== 'mark'; })
+    .sort();
+}
+
+export { art, artFor, has, choices, SHAPES, ICONS, EXTRAS };

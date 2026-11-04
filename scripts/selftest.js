@@ -19,7 +19,7 @@ import * as costing from '../app/costing.js';
 import * as stack from '../app/burgerstack.js';
 import * as seed from '../app/seed.js';
 import * as roster from './roster.js';
-import { art, has as hasArt } from '../app/art.js';
+import { art, artFor, has as hasArt, choices as artChoices } from '../app/art.js';
 import * as pdf from '../app/pdf.js';
 import { buildReportPdf } from '../app/report-pdf.js';
 import { html, raw } from '../app/ui.js';
@@ -5502,6 +5502,175 @@ test('the big-party box is not drawn on a trip that already settled the party', 
   assert.ok(declared < firstRead,
     '`known` is read before it is assigned, so it is undefined and every '
     + 'trip gets the big-party box again');
+});
+
+// ------------------------------------- artwork for items the club added
+
+test('an item the club added wears the picture they chose, not its template', () => {
+  // Maria, 3 Nov: "Update the icons so they accurately represent the
+  // corresponding ingredients." They were not wrong by accident - an added
+  // item inherited its template's artwork and there was no way for the club
+  // to say otherwise, so a Summer Squash modelled on Broccoli was drawn as
+  // broccoli for as long as it was on the menu.
+  menu.applyMenuOverrides({
+    cw_squash: {
+      added: true, group: 'toppings', template: 'broccoli',
+      name: 'Summer Squash', allergens: [], icon: 'squash',
+    },
+  });
+  const made = menu.find('toppings', 'cw_squash');
+  assert.ok(made, 'the added topping never reached the menu');
+  assert.strictEqual(made.icon, 'squash',
+    'the club picked a picture and the item still wears its template one');
+  assert.ok(hasArt(made.icon), 'the chosen picture has no artwork behind it');
+  menu.applyMenuOverrides({});
+});
+
+test('the chosen picture goes in the field that group actually draws from', () => {
+  // The silent one. A pasta carries `shape`; everything else carries `icon`;
+  // artFor() reads shape FIRST. Writing `icon` onto an added pasta therefore
+  // stores the choice, keeps drawing the template's shape, and says nothing -
+  // the manager sees their pick highlighted in the editor and the wrong
+  // shape on every tile in the room.
+  menu.applyMenuOverrides({
+    cw_bucatini: {
+      added: true, group: 'pastas', template: 'spaghetti',
+      name: 'Bucatini', allergens: ['gluten'], icon: 'tube',
+    },
+    cw_pepperoncini: {
+      added: true, group: 'pizzaToppings', template: 'pz_pepper',
+      name: 'Peperoncini', allergens: [], icon: 'peperoncini',
+    },
+  });
+
+  const pasta = menu.find('pastas', 'cw_bucatini');
+  assert.strictEqual(pasta.shape, 'tube',
+    'an added pasta took the picture on `icon`, which artFor() never reaches');
+
+  const topping = menu.find('pizzaToppings', 'cw_pepperoncini');
+  assert.strictEqual(topping.icon, 'peperoncini', 'the added topping lost its picture');
+
+  // Whatever the field, the thing every screen calls must return the choice.
+  assert.strictEqual(artFor(pasta), art('tube'), 'the pasta tile draws the wrong shape');
+  assert.strictEqual(artFor(topping), art('peperoncini'), 'the topping tile draws the wrong glyph');
+  menu.applyMenuOverrides({});
+});
+
+test('an item added before pictures could be chosen still looks like itself', () => {
+  // Everything already in the club's menu has no `icon` key at all. Absent
+  // has to keep meaning "whatever the template wears" - if it started
+  // meaning "no picture", every item they have already added would turn into
+  // the crossed-out circle, which on a tile reads as sold out.
+  menu.applyMenuOverrides({
+    cw_old: {
+      added: true, group: 'toppings', template: 'broccoli',
+      name: 'Rapini', allergens: [],
+    },
+  });
+  const made = menu.find('toppings', 'cw_old');
+  const tpl = menu.find('toppings', 'broccoli');
+  assert.strictEqual(made.icon, tpl.icon,
+    'an item with no picture of its own stopped inheriting its template one');
+  assert.ok(hasArt(made.icon), 'it fell through to the crossed-out circle');
+  menu.applyMenuOverrides({});
+});
+
+test('a picture the app does not have is refused before it reaches a tile', () => {
+  // config/menu is writable by any signed-in manager and the rule on it only
+  // checks that it is a map of a sane size - a rule cannot know glyph names.
+  // So the check lives here, and an unknown key has to be caught rather than
+  // drawn as the crossed-out circle in front of a member.
+  const bad = menu.overrideProblems({
+    cw_x: {
+      added: true, group: 'toppings', template: 'broccoli',
+      name: 'Nduja', allergens: [], icon: 'no_such_glyph',
+    },
+  });
+  assert.ok(bad.some((m) => /picture/i.test(m)),
+    'an unknown picture key passed validation: ' + JSON.stringify(bad));
+
+  const good = menu.overrideProblems({
+    cw_y: {
+      added: true, group: 'toppings', template: 'broccoli',
+      name: 'Nduja', allergens: [], icon: 'squash',
+    },
+  });
+  assert.ok(!good.some((m) => /picture/i.test(m)),
+    'a real picture key was refused: ' + JSON.stringify(good));
+
+  // And absent is not an error, because that is every item added so far.
+  const none = menu.overrideProblems({
+    cw_z: {
+      added: true, group: 'toppings', template: 'broccoli',
+      name: 'Nduja', allergens: [],
+    },
+  });
+  assert.ok(!none.some((m) => /picture/i.test(m)),
+    'leaving the picture alone was treated as an error: ' + JSON.stringify(none));
+});
+
+test('the picture picker offers shapes to pastas and ingredients to everything else', () => {
+  const shapes = artChoices('shape');
+  const icons = artChoices('icon');
+
+  assert.ok(shapes.includes('tube') && shapes.includes('strands'),
+    'the pasta picker is not offering pasta shapes');
+  assert.ok(!shapes.includes('squash'),
+    'the pasta picker is offering a vegetable as a pasta shape');
+
+  // `pie` and `slice` live in the SHAPES table but they are pizza. Splitting
+  // the picker on the table alone put a whole pizza in the list of pasta
+  // shapes, and kept `pie` out of the ingredient list - where it is the one
+  // glyph an added crust needs, because every crust that ships wears it.
+  assert.ok(!shapes.includes('pie') && !shapes.includes('slice'),
+    'the pasta picker is offering a pizza as a pasta shape');
+  assert.ok(icons.includes('pie'),
+    'an added pizza crust cannot pick the glyph every shipped crust uses');
+  assert.strictEqual(menu.find('pizzaCrusts', 'classic').icon, 'pie',
+    'the shipped crust stopped using `pie`, so this guard is now about nothing');
+  assert.ok(icons.includes('squash') && icons.includes('arugula')
+    && icons.includes('peperoncini'),
+    'the ingredient picker is missing the glyphs drawn for the club');
+  assert.ok(!icons.includes('tube'),
+    'the ingredient picker is offering rigatoni as a picture for a topping');
+
+  // The two that must never be offered: `none` is the crossed-out circle,
+  // which reads as sold out, and `mark` is chrome rather than food.
+  [shapes, icons].forEach((list) => {
+    assert.ok(!list.includes('none'), 'the crossed-out circle is on offer as a picture');
+    assert.ok(!list.includes('mark'), 'chrome is on offer as a picture');
+  });
+
+  // Every key offered must actually draw, or the picker is a list of traps.
+  shapes.concat(icons).forEach((k) => {
+    assert.ok(hasArt(k), k + ' is offered in the picker but has no artwork');
+  });
+});
+
+test('the glyphs the club asked for exist and are not each other', () => {
+  // Arugula was drawing spinach's leaves, so on a pizza card Arugula and
+  // Basil were the same picture and the only way to tell them apart was to
+  // read the label - which is the opposite of what a glyph is for.
+  ['squash', 'peperoncini', 'arugula'].forEach((k) => {
+    assert.ok(hasArt(k), k + ' was asked for by the club and does not exist');
+  });
+
+  const arugula = menu.find('pizzaToppings', 'pz_arugula');
+  assert.strictEqual(arugula.icon, 'arugula', 'arugula is borrowing somebody else again');
+  assert.notStrictEqual(art('arugula'), art('spinach'),
+    'arugula and spinach draw the same picture');
+  assert.notStrictEqual(art('arugula'), art('herb'),
+    'arugula and basil draw the same picture');
+  assert.notStrictEqual(art('peperoncini'), art('jalapeno'),
+    'peperoncini and jalapeno draw the same picture');
+
+  // The club asked for alfredo to be white. Both alfredos share one glyph.
+  assert.ok(/fill="#fff"/.test(art('cream')), 'the alfredo glyph is not white');
+  ['alfredo', 'pz_alfredo'].forEach((id) => {
+    const item = menu.findAnywhere(id);
+    assert.ok(item, id + ' is gone from the menu');
+    assert.strictEqual(item.icon, 'cream', id + ' stopped using the white sauce glyph');
+  });
 });
 
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

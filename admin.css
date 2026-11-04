@@ -515,6 +515,37 @@
 }
 .medit-ask.is-unanswered .medit-chip { border-color: #e0b3a8; }
 
+/* Picking the artwork for an item the club is adding.
+   Capped in height and scrolled rather than wrapped to full length: there are
+   seventy-odd glyphs, and a grid that tall pushes the Add button off the
+   screen, which makes the form look broken rather than long. */
+.medit-artgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 6px;
+  max-height: 168px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  flex: 1 1 100%;
+}
+.medit-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.medit-art svg { width: 100%; height: 100%; }
+.medit-art:hover { border-color: var(--line); background: #fdf8f0; }
+.medit-art.is-on { border-color: var(--tomato); background: #fdecea; }
+
 /* --------------------------------------- finding a ticket, and how long it took */
 
 .orow-search { display: flex; align-items: center; gap: 10px; margin-top: 12px; }

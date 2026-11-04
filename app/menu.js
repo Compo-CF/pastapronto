@@ -16,6 +16,13 @@
  * member number through the club's own system, so the app never quotes money.
  */
 
+// The only import this file has, and it earns it: an added item may now carry
+// its own artwork, and an artwork key with no glyph behind it draws the
+// crossed-out circle - which on a tile reads as "we are out of this". The
+// check belongs beside the thing that builds the item, not in the editor
+// alone, because the document this reads is writable from more than one place.
+import { has as hasArt } from './art.js';
+
 const ALLERGENS = [
   { id: 'gluten', name: 'Gluten / Wheat', es: 'Gluten / Trigo', code: 'WH' },
   { id: 'dairy', name: 'Dairy', es: 'Lácteos', code: 'DA' },
@@ -265,7 +272,7 @@ const PIZZA_TOPPINGS = [
   { id: 'pz_strawberry', name: 'Strawberries', es: 'Fresas',             icon: 'strawberry', addSec: 0, allergens: [], kid: true, postBake: true, dessert: true },
   { id: 'pz_powdered_sugar', name: 'Powdered Sugar', es: 'Azúcar Glas',  icon: 'sugar',     addSec: 0,  allergens: [], kid: true, postBake: true, dessert: true },
   { id: 'pz_basil',     name: 'Basil', es: 'Albahaca',                    icon: 'herb',      addSec: 0,  allergens: [], kid: true, postBake: true },
-  { id: 'pz_arugula',   name: 'Arugula', es: 'Arúgula',                  icon: 'spinach',   addSec: 0,  allergens: [], kid: false, postBake: true },
+  { id: 'pz_arugula',   name: 'Arugula', es: 'Arúgula',                  icon: 'arugula',   addSec: 0,  allergens: [], kid: false, postBake: true },
   { id: 'pz_chili',     name: 'Red Pepper Flakes', es: 'Hojuelas de Chile',        icon: 'flakes',     addSec: 0,  allergens: [], spicy: true, kid: true, postBake: true },
   { id: 'fin_salt',     name: 'Flake Salt', es: 'Sal en Escamas',               icon: 'salt',      addSec: 0,  allergens: [], kid: true, postBake: true },
   { id: 'fin_oregano',  name: 'Oregano', es: 'Orégano',                  icon: 'oregano',      addSec: 0,  allergens: [], kid: true, postBake: true },
@@ -764,6 +771,22 @@ function buildAddedItem(id, o) {
   const allergens = o.allergens.filter((a) => ALLERGENS.some((x) => x.id === a));
   const item = { ...tpl, id, name, allergens, added: true, addedFrom: tpl.id };
 
+  /*
+   * Artwork the club chose, when they chose any. Without this every added
+   * item wore whatever its template wore, so the club's Summer Squash was a
+   * head of broccoli and their Arugula was somebody else's spinach - which is
+   * exactly the note that came back off the first service.
+   *
+   * Which FIELD it goes in matters and is easy to get silently wrong: a pasta
+   * carries `shape`, everything else carries `icon`, and artFor() reads shape
+   * first. Writing `icon` onto a pasta would store the choice and keep
+   * drawing the template's shape, with nothing anywhere saying so.
+   */
+  if (typeof o.icon === 'string' && hasArt(o.icon)) {
+    if ('shape' in tpl) item.shape = o.icon;
+    else item.icon = o.icon;
+  }
+
   if (typeof o.es === 'string' && o.es.trim()) item.es = o.es.trim().slice(0, 40);
   else delete item.es;
   if (o.retired === true) item.retired = true; else delete item.retired;
@@ -920,6 +943,13 @@ export function overrideProblems(map) {
         + ' or the ones it contains.');
     } else if (o.allergens.some((a) => !ALLERGENS.some((x) => x.id === a))) {
       out.push(label + ' lists something that is not on the allergen list.');
+    }
+
+    // Absent is fine and means "use the template's". A key that names nothing
+    // is not: it would draw the crossed-out circle, which a guest reads as
+    // sold out rather than as a missing picture.
+    if (o.icon != null && !(typeof o.icon === 'string' && hasArt(o.icon))) {
+      out.push(label + ' asks for a picture the app does not have.');
     }
   });
 

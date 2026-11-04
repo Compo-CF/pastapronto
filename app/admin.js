@@ -14,7 +14,7 @@ import * as order from './order.js';
 import * as costing from './costing.js';
 import * as db from './db.js';
 import * as seed from './seed.js';
-import { art } from './art.js';
+import { art, choices as artChoices } from './art.js';
 import { activeBrand, mastheadHtml, pageTitle } from './brand.js';
 import * as QR from './qr.js';
 import {
@@ -912,6 +912,28 @@ const CATALOG = menu.catalog();
     }).join('');
 
     /*
+     * The picture, which the club could not choose until now.
+     *
+     * Every added item wore its template's artwork, so a topping modelled on
+     * Broccoli was drawn as broccoli for good and the only way to change it
+     * was to email somebody and wait for a deploy. That is the whole of the
+     * "icons do not match the ingredients" note off the first service.
+     *
+     * Pastas pick from the shapes and everything else from the ingredient
+     * glyphs: the two tables are not interchangeable, and offering a manager
+     * "rigatoni" as the picture for a topping is offering a wrong answer.
+     */
+    var artKind = group === 'pastas' ? 'shape' : 'icon';
+    var pickedArt = f.icon || (tpl ? (tpl.shape || tpl.icon) : '');
+    var artGrid = artChoices(artKind).map(function (key) {
+      var on = key === pickedArt;
+      return '<button type="button" class="medit-art ' + (on ? 'is-on' : '') + '"'
+        + ' data-menuicon="' + group + ':' + key + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' title="' + escapeHtml(key) + '">' + art(key) + '</button>';
+    }).join('');
+
+    /*
      * The allergens arrive carried over from the template, because the
      * dangerous direction is under-declaring: somebody adding Fried Ravioli
      * modelled on Garlic Bread should start holding gluten and dairy and have
@@ -936,6 +958,10 @@ const CATALOG = menu.catalog();
             ${raw(options)}
           </select>
         </label>
+      </div>
+      <div class="medit-ask">
+        <span class="medit-asklabel">Picture</span>
+        <div class="medit-artgrid">${raw(artGrid)}</div>
       </div>
       <div class="medit-ask ${f.checked ? '' : 'is-unanswered'}">
         <span class="medit-asklabel">Contains</span>
@@ -1119,6 +1145,19 @@ const CATALOG = menu.catalog();
     document.getElementById('menuEditToggle').textContent =
       state.menuOpen ? 'Close the editor' : 'Edit the menu';
     box.innerHTML = state.menuOpen ? menuEditorHtml() : '';
+
+    /*
+     * Put the chosen picture back in view.
+     *
+     * The grid is alphabetical and scrolls, so "squash" sits well below the
+     * fold: without this, opening the editor shows a box of artichokes with
+     * the actual choice hidden, and every click re-renders to the top and
+     * loses the place the manager was just looking at. `nearest` so it does
+     * not drag the page around - only the grid it lives in.
+     */
+    box.querySelectorAll('.medit-art.is-on').forEach(function (el) {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
   }
 
   document.getElementById('menuEditToggle').addEventListener('click', function () {
@@ -1170,6 +1209,9 @@ const CATALOG = menu.catalog();
     var picked = menu.find(sel.dataset.menutpl, sel.value);
     form.allergens = ((picked && picked.allergens) || []).slice();
     form.checked = false;
+    // The artwork comes across with it, for the same reason - unless they
+    // had already picked one, which is a choice and not an inheritance.
+    if (!form.icon) form.icon = picked && (picked.shape || picked.icon);
     renderMenuEditor();
   });
 
@@ -1182,6 +1224,7 @@ const CATALOG = menu.catalog();
   var MENU_ACTIONS = [
     'menuretire', 'menusave', 'menureset', 'menuallergen',
     'menuadd', 'menuaddgo', 'menuaddcancel', 'menuedit', 'menudrop', 'menuallergenok',
+    'menuicon',
   ];
   var MENU_ACTION_SELECTOR = MENU_ACTIONS.map(function (a) {
     return '[data-' + a + ']';
@@ -1233,6 +1276,9 @@ const CATALOG = menu.catalog();
         name: name,
         allergens: form.allergens.slice(),
       };
+      // Only when they chose one. Absent means "whatever the template wears",
+      // which is what every item added before this existed still means.
+      if (form.icon) d[id].icon = form.icon;
       delete state.menuNew[g];
       return renderMenuEditor();
     }
@@ -1245,6 +1291,7 @@ const CATALOG = menu.catalog();
       state.menuNew[was.group] = {
         name: was.name,
         template: was.template,
+        icon: was.icon,
         allergens: (was.allergens || []).slice(),
         // Already answered once, by a person, so it is not asked again.
         checked: true,
@@ -1262,6 +1309,17 @@ const CATALOG = menu.catalog();
       var okForm = (state.menuNew || {})[t.dataset.menuallergenok];
       if (!okForm) return;
       okForm.checked = true;
+      return renderMenuEditor();
+    }
+
+    // Picking the artwork. Deliberately NOT a gate the way the allergens are:
+    // a wrong picture is a wrong picture, and an unanswered allergen is a
+    // member being told the thing is safe.
+    if (t.dataset.menuicon) {
+      var iconBits = t.dataset.menuicon.split(':');
+      var iconForm = (state.menuNew || {})[iconBits[0]];
+      if (!iconForm) return;
+      iconForm.icon = iconBits[1];
       return renderMenuEditor();
     }
 
