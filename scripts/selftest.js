@@ -5647,6 +5647,35 @@ test('opening the editor and saving does not wipe the pictures', () => {
   menu.applyMenuOverrides({});
 });
 
+test('a renamed item can be given the picture its new name deserves', () => {
+  // The club renamed penne to "Bowtie" and it went on drawing a tube, and
+  // renamed the gluten-free fusilli to "Gluten-Free Penne" and it went on
+  // drawing a spiral. Renaming changed the word and never the drawing - and
+  // on the shape step a member picks by the picture, so this is the worst
+  // screen in the app for the label and the drawing to disagree on.
+  const was = menu.find('pastas', 'penne').shape;
+
+  menu.applyMenuOverrides({ penne: { name: 'Bowtie', icon: 'bowtie' } });
+  assert.strictEqual(menu.find('pastas', 'penne').shape, 'bowtie',
+    'a renamed pasta cannot be given a different shape');
+  assert.strictEqual(menu.find('pastas', 'penne').name, 'Bowtie');
+
+  // It has to survive the trip back out, or the next Save puts it back.
+  const round = menu.menuOverrides();
+  assert.strictEqual(round.penne.icon, 'bowtie',
+    'the renamed item lost its picture on the way out of the menu');
+  menu.applyMenuOverrides(round);
+  assert.strictEqual(menu.find('pastas', 'penne').shape, 'bowtie',
+    'saving reverted a renamed item picture');
+
+  // And removing the override has to put the shipped drawing back - that is
+  // what makes every other override here undoable.
+  menu.applyMenuOverrides({});
+  assert.strictEqual(menu.find('pastas', 'penne').shape, was,
+    'removing the override left the item wearing the overridden picture');
+  assert.ok(!('icon' in menu.menuOverrides()), 'an untouched menu reports a change');
+});
+
 test('the picture picker offers shapes to pastas and ingredients to everything else', () => {
   const shapes = artChoices('shape');
   const icons = artChoices('icon');

@@ -690,7 +690,17 @@ export function ownersOf(group) {
 const ORIGINAL = new Map();
 EDITABLE_GROUPS.forEach(([group]) => {
   (GROUPS[group] || []).forEach((item) => {
-    ORIGINAL.set(item.id, { name: item.name, es: item.es, retired: Boolean(item.retired) });
+    ORIGINAL.set(item.id, {
+      name: item.name,
+      es: item.es,
+      retired: Boolean(item.retired),
+      // The artwork as shipped, and WHICH field holds it - pastas carry
+      // `shape`, everything else `icon`. Recorded so that an override which
+      // changes the picture can also be removed again: reverting is how this
+      // whole function works, and it can only revert to what it remembers.
+      art: item.shape || item.icon,
+      artField: 'shape' in item ? 'shape' : 'icon',
+    });
   });
 });
 
@@ -846,6 +856,7 @@ export function applyMenuOverrides(map) {
       item.name = was.name;
       if (was.es === undefined) delete item.es; else item.es = was.es;
       if (was.retired) item.retired = true; else delete item.retired;
+      if (was.art) item[was.artField] = was.art;
 
       const o = safe[item.id];
       if (!o) return;
@@ -854,6 +865,17 @@ export function applyMenuOverrides(map) {
       // A mechanic cannot be retired: "No Sauce" is how a guest says no, not
       // something the kitchen runs out of.
       if (o.retired === true && isEditableItem(item)) item.retired = true;
+
+      /*
+       * A renamed item's picture.
+       *
+       * Renaming could change the word and never the drawing, so the club
+       * renamed penne to "Bowtie" and it went on drawing a tube, and renamed
+       * the gluten-free fusilli to "Gluten-Free Penne" and it went on drawing
+       * a spiral. On the shape step a member picks by the picture, so the
+       * label and the drawing disagreeing is worse here than almost anywhere.
+       */
+      if (typeof o.icon === 'string' && hasArt(o.icon)) item[was.artField] = o.icon;
     });
   });
 
@@ -905,6 +927,11 @@ export function menuOverrides() {
       if (item.name !== was.name) o.name = item.name;
       if (item.es !== was.es) o.es = item.es;
       if (Boolean(item.retired) !== was.retired) o.retired = Boolean(item.retired);
+      // The picture, if it is no longer the one this item shipped with. The
+      // same trap as the added items above: read it on the way in and forget
+      // it on the way out, and the next Save quietly puts it back.
+      const drawn = item.shape || item.icon;
+      if (drawn && drawn !== was.art) o.icon = drawn;
       if (Object.keys(o).length) out[item.id] = o;
     });
   });
