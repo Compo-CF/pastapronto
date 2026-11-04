@@ -5383,4 +5383,125 @@ test('the note a guest types survives the whole way to the pass', () => {
     assert.ok(/order\.notes/.test(screen), f + ' never reads the ticket note');
   });
 });
+// --------------------------------- adding, removing and switching guests
+
+/**
+ * One action or function body out of guest.js, so a guard means what it says.
+ *
+ * Scoped, because every bug in this group was one caller doing a thing and
+ * its neighbour not. A file-wide search for `partySize` or `bowls` passes
+ * whatever is broken.
+ */
+function guestBlock(src, head) {
+  const from = src.indexOf(head);
+  assert.notStrictEqual(from, -1, head + ' is gone, so its guard means nothing');
+  const to = src.indexOf('\n    },', from);
+  return src.slice(from, to === -1 ? undefined : to);
+}
+
+test('tapping the lane you are already on keeps the plates already built', () => {
+  // Reported from the floor as "the back button loses the order". It was not
+  // the back button. Back out of the build landed on the guest count, back
+  // again landed on the lane tiles, and tapping Pasta - the lane they were
+  // already in, the tap that means "yes, carry on" - ran an unconditional
+  // state.bowls = []. Four finished plates, gone, mid-service.
+  const body = guestBlock(guestSource(), 'pickKind: function');
+
+  // The reset still has to happen when the lane really does change: pizza
+  // shapes are not pasta shapes, and keeping them would be the other bug.
+  assert.ok(/state\.bowls = \[\]/.test(body),
+    'changing lane no longer throws away shapes the new lane cannot cook');
+
+  // ...and it has to sit behind a comparison with the lane already chosen.
+  const guard = body.indexOf('if (kind !== state.kind)');
+  assert.notStrictEqual(guard, -1,
+    'pickKind no longer asks whether the lane actually changed');
+  assert.ok(guard < body.indexOf('state.bowls = []'),
+    'the plates are cleared before anyone asks whether the lane changed');
+});
+
+test('a plate can be added and removed without leaving the build', () => {
+  // Maria, 3 Nov: add or remove a guest "without having to use the back
+  // button, which currently causes the previous order to be lost". The route
+  // out and back is what lost it, so the fix is to not need the route.
+  const src = guestSource();
+
+  ['addGuest', 'removeGuest'].forEach((name) => {
+    assert.ok(new RegExp(name + ': function').test(src), name + '() is not there');
+    assert.ok(new RegExp('data-act="' + name + '"').test(src),
+      name + ' exists but nothing on the strip calls it');
+  });
+  assert.ok(/data-act="gotoBowl"/.test(src), 'the strip cannot switch between plates');
+
+  // Remove is offered on the open tab only. One stray thumb across a busy
+  // pass must not be able to delete a plate somebody has already built.
+  const tabs = guestBlock(src, 'var tabs = state.bowls.map');
+  assert.ok(/canDrop = open &&/.test(tabs),
+    'Remove is drawn on tabs that are not open - it is now a one-tap delete');
+  assert.ok(/state\.bowls\.length > 1/.test(tabs),
+    'the last plate on the ticket can be removed, leaving an order of nothing');
+
+  // Adding stops where the kitchen stops.
+  assert.ok(/state\.bowls\.length < state\.boot\.limits\.maxGuests/.test(src),
+    'Add guest is offered past the number of plates one ticket can carry');
+
+  // Removing re-points the cursor before anything asks the cursor a question.
+  const drop = guestBlock(src, 'removeGuest: function');
+  assert.ok(drop.indexOf('state.activeBowl = state.bowls.length - 1')
+    < drop.indexOf('steps().length'),
+    'removeGuest asks steps() about a plate that is no longer on the ticket');
+});
+
+test('one rule decides what the membership is charged', () => {
+  // Three callers change the plate count now - the count tiles, Add and
+  // Remove - and only one of them may touch partySize, because partySize is
+  // the bill. A later round must not re-charge the account because a fifth
+  // person sat down for the pizza.
+  const src = guestSource();
+  const writes = (src.match(/state\.partySize = /g) || []).length;
+  const setter = guestBlock(src, 'function setGuestCount');
+
+  assert.ok(/if \(!state\.partyInherited\) state\.partySize = n;/.test(setter),
+    'setGuestCount no longer protects a party that was already settled');
+
+  ['guests: function', 'addGuest: function', 'removeGuest: function'].forEach((head) => {
+    const body = guestBlock(src, head);
+    assert.ok(/setGuestCount\(/.test(body),
+      head + ' changes the plate count without going through the billing rule');
+    assert.ok(!/state\.partySize = /.test(body),
+      head + ' writes the charge itself instead of leaving it to setGuestCount');
+  });
+
+  // Deliberately NOT a ceiling on how many places write partySize. Seven do,
+  // and all seven are different questions: inherit it from the membership,
+  // clear it when there is none, re-open it, take a number too big for the
+  // tiles, follow the tiles again, and wipe it when the tablet moves on. A
+  // ceiling fires on every one of those and teaches whoever hits it to raise
+  // the ceiling. What matters is narrower, and is asserted above: a caller
+  // changing how many PLATES to build does not get to move the bill.
+  assert.ok(writes > 0, 'nothing sets partySize any more, so nobody is charged');
+});
+
+test('the big-party box is not drawn on a trip that already settled the party', () => {
+  // `var known` was declared forty lines BELOW its first reader. var hoists
+  // the name and not the value, so every read above it saw undefined and the
+  // box was drawn on every trip - including the ones where the account had
+  // already said how many it was feeding and the question was settled.
+  //
+  // Positions, not presence: the broken code contained both lines too.
+  const src = guestSource();
+  const from = src.indexOf('function screenGuests');
+  assert.notStrictEqual(from, -1, 'screenGuests is gone');
+  const screen = src.slice(from, src.indexOf('\n  function ', from + 1));
+
+  const declared = screen.indexOf('var known =');
+  const firstRead = screen.indexOf('known ?');
+
+  assert.notStrictEqual(declared, -1, 'screenGuests stopped asking whether the party is known');
+  assert.notStrictEqual(firstRead, -1, 'nothing on the guest screen reads `known` any more');
+  assert.ok(declared < firstRead,
+    '`known` is read before it is assigned, so it is undefined and every '
+    + 'trip gets the big-party box again');
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');

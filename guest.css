@@ -103,6 +103,48 @@
 .bowltab[aria-current="true"] { border-color: var(--tomato); background: var(--tomato-wash); }
 .bowltab.is-done small { color: var(--basil); }
 
+/* The wrapper exists so Remove can sit ON the open tab without being inside
+   it - a button inside a button is not a thing a browser will draw. */
+.bowltab-wrap { position: relative; flex: 0 0 auto; display: flex; }
+
+/* Room on the tab for the x, so a long guest name does not run under it. */
+.bowltab.has-x { padding-right: 38px; }
+
+/* Deliberately the smallest target in the strip. It removes a plate somebody
+   has already built, it is wanted rarely, and it sits beside the tabs a thumb
+   reaches for all service - so it must never be the thing you hit on the way
+   to something else. Offered only on the tab already open. */
+.bowltab-x {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  /* Small on purpose - it deletes a plate somebody built - but not so small
+     that a thumb on a tablet across a busy pass has to try twice. */
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bowltab-x:hover { background: var(--tomato); color: #fff; }
+
+/* Adding a plate is an invitation, not a plate - dashed, so the strip reads
+   as "three guests and a way to add a fourth" rather than as four guests. */
+.bowltab-add {
+  border-style: dashed;
+  color: var(--tomato);
+  background: transparent;
+}
+.bowltab-add small { color: var(--ink-faint); }
+
 .buildsteps { display: flex; gap: 6px; margin: 0 0 18px; }
 .buildstep {
   flex: 1;

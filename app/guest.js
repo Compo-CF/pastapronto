@@ -704,6 +704,15 @@ import {
       </button>`);
     }
 
+    // Has this membership already said how many it is feeding tonight?
+    //
+    // Declared HERE, above its first reader, and not forty lines down where
+    // it used to be. `var` hoists the name but not the value, so every read
+    // above the assignment saw undefined - the big-party box was therefore
+    // drawn on every trip, including the ones where the party was already
+    // settled and the question had no business being asked again.
+    var known = state.partyInherited && state.partySize;
+
     // A private party is bigger than a ticket. The tiles stop at the number
     // of plates one order can carry, because that is what they mean on a
     // later trip - so a party over that gets a box of its own, and only on
@@ -744,7 +753,6 @@ import {
     // the table, so that two memberships sharing a table do not both answer
     // for all of it. Later trips: plates for this round only - the charge was
     // settled on the first trip and is not asked about again.
-    var known = state.partyInherited && state.partySize;
     var party = known
       ? html`<div class="notice notice-ok">
           ${t('guest.party.inherited', { n: state.partySize })}
@@ -800,13 +808,35 @@ import {
     var bowl = currentBowl();
     var step = steps()[state.buildStep];
 
+    // The strip the server works the table from: every plate on this ticket,
+    // which one is open, and - without leaving the build - one more or one
+    // fewer. Remove rides on the open tab only, so taking a plate off is
+    // select-then-remove and never one stray thumb.
     var tabs = state.bowls.map(function (b, i) {
-      return html`<button class="bowltab ${bowlComplete(b) ? 'is-done' : ''}" type="button"
-        data-act="gotoBowl" data-id="${i}" aria-current="${i === state.activeBowl ? 'true' : 'false'}">
-        ${labelOf(b, i)}
-        <small>${bowlComplete(b) ? t('guest.tabs.ready') : t('guest.tabs.building')}</small>
-      </button>`;
+      var open = i === state.activeBowl;
+      var canDrop = open && state.bowls.length > 1;
+      return html`<div class="bowltab-wrap">
+        <button class="bowltab ${bowlComplete(b) ? 'is-done' : ''} ${canDrop ? 'has-x' : ''}"
+          type="button" data-act="gotoBowl" data-id="${i}"
+          aria-current="${open ? 'true' : 'false'}">
+          ${labelOf(b, i)}
+          <small>${bowlComplete(b) ? t('guest.tabs.ready') : t('guest.tabs.building')}</small>
+        </button>
+        ${raw(canDrop
+          ? '<button class="bowltab-x" type="button" data-act="removeGuest" data-id="' + i
+            + '" aria-label="' + escapeHtml(t('guest.tabs.remove')) + '">&times;</button>'
+          : '')}
+      </div>`;
     });
+
+    if (state.bowls.length < state.boot.limits.maxGuests) {
+      tabs.push(html`<div class="bowltab-wrap">
+        <button class="bowltab bowltab-add" type="button" data-act="addGuest">
+          + ${t('guest.tabs.add')}
+          <small>${t('guest.tabs.addSub')}</small>
+        </button>
+      </div>`);
+    }
 
     var stepTabs = steps().map(function (s, i) {
       var done = i < state.buildStep;
@@ -1426,15 +1456,42 @@ import {
     });
   }
 
+  /**
+   * Change how many plates this ticket carries.
+   *
+   * Two numbers move together on the first trip and must come apart on a
+   * later one. `guestCount` is plates to build; `partySize` is what the
+   * membership is charged for. The charge is settled on the first trip and
+   * does not move because a fifth person sat down for the pizza round.
+   *
+   * One function, because three callers now change this number - the count
+   * tiles, Add guest and Remove - and three copies of a billing rule is how
+   * two of them end up disagreeing about who pays.
+   */
+  function setGuestCount(n) {
+    state.guestCount = n;
+    state.guestCountTouched = true;
+    if (!state.partyInherited) state.partySize = n;
+  }
+
   // --------------------------------------------------------------------- actions
 
   var actions = {
     pickKind: function (el) {
-      state.kind = el.dataset.id;
+      var kind = el.dataset.id;
       // Changing lane invalidates anything already built - the shapes differ.
-      state.bowls = [];
-      state.activeBowl = 0;
-      state.buildStep = 0;
+      //
+      // Picking the lane it is ALREADY on does not, and used to. That is the
+      // whole of "the back button loses the order": a server with four bowls
+      // built tapped Back to add a fifth guest, landed here, tapped Pasta
+      // again to carry on, and the four went in the bin. Nothing about that
+      // tap said "start over" - it said "yes, still pasta".
+      if (kind !== state.kind) {
+        state.kind = kind;
+        state.bowls = [];
+        state.activeBowl = 0;
+        state.buildStep = 0;
+      }
       state.screen = 'guests';
       render();
     },
@@ -1531,14 +1588,12 @@ import {
       }
     },
 
+    // On the first trip this tile IS the party answer, so it sets the number
+    // that will be charged. On a later trip it only says how many plates to
+    // build - the charge was settled and must not move because two of four
+    // came back for pizza. setGuestCount() is where that rule lives.
     guests: function (el) {
-      state.guestCount = Number(el.dataset.id);
-      state.guestCountTouched = true;
-      // On the first trip this tile IS the party answer, so it sets the number
-      // that will be charged. On a later trip it only says how many plates to
-      // build - the charge was settled and must not move because two of four
-      // came back for pizza.
-      if (!state.partyInherited) state.partySize = state.guestCount;
+      setGuestCount(Number(el.dataset.id));
       render({ keepScroll: true });
     },
 
@@ -1687,6 +1742,47 @@ import {
       // than the one being left.
       state.activeBowl = Number(el.dataset.id);
       state.buildStep = 0;
+      render();
+    },
+
+    /**
+     * One more plate, without leaving the build.
+     *
+     * The fifth guest who sits down after the server has started typing used
+     * to mean walking back out to the count tiles. The way back in went past
+     * the lane tiles, and that is where four finished bowls went missing.
+     */
+    addGuest: function () {
+      if (state.bowls.length >= state.boot.limits.maxGuests) return;
+      state.bowls.push(newBowl(state.bowls.length));
+      setGuestCount(state.bowls.length);
+      // Land on the new plate: adding one and then hunting for it is two
+      // jobs, and the second one is the server's to do mid-service.
+      state.activeBowl = state.bowls.length - 1;
+      state.buildStep = 0;
+      render();
+    },
+
+    /**
+     * Take a plate off the ticket.
+     *
+     * Only ever offered on the plate already open, so removing one is select
+     * then remove rather than a single tap next to the tab a thumb was
+     * reaching for. An order is not worth losing to a mis-tap across a busy
+     * pass, and this is the same two-tap shape the undo on the runner's card
+     * uses for the same reason.
+     */
+    removeGuest: function (el) {
+      if (state.bowls.length <= 1) return;
+      state.bowls.splice(Number(el.dataset.id), 1);
+      setGuestCount(state.bowls.length);
+      // Clamp the cursor BEFORE asking for the step list: steps() reads the
+      // active bowl to decide whether this plate has a dressing step, so an
+      // index pointing past the end answers for a bowl that is not there.
+      if (state.activeBowl >= state.bowls.length) {
+        state.activeBowl = state.bowls.length - 1;
+      }
+      state.buildStep = Math.min(state.buildStep, steps().length - 1);
       render();
     },
 
