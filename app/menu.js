@@ -877,6 +877,25 @@ export function menuOverrides() {
         };
         if (item.es) entry.es = item.es;
         if (item.retired) entry.retired = true;
+
+        /*
+         * The artwork, when it is not simply the template's.
+         *
+         * Without this the round trip LOST it, and lost it silently: the
+         * editor opens on menuOverrides(), so opening the editor and pressing
+         * Save wiped every picture the club had chosen and put them all back
+         * on their templates. The feature erased itself the first time
+         * anybody used the screen it lives on.
+         *
+         * Derived by comparing with the template rather than stored, so it
+         * stays ABSENT for an item that is happy with the template's - and
+         * absent is exactly what makes such an item keep following it.
+         */
+        const tpl = findAnywhere(item.addedFrom);
+        const drawn = item.shape || item.icon;
+        const tplDrawn = tpl && (tpl.shape || tpl.icon);
+        if (drawn && drawn !== tplDrawn) entry.icon = drawn;
+
         out[item.id] = entry;
         return;
       }

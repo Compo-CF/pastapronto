@@ -5609,6 +5609,44 @@ test('a picture the app does not have is refused before it reaches a tile', () =
     'leaving the picture alone was treated as an error: ' + JSON.stringify(none));
 });
 
+test('opening the editor and saving does not wipe the pictures', () => {
+  // The feature erased itself. The editor opens on menuOverrides(), which
+  // rebuilt an added item from its name, group, template and allergens and
+  // forgot the picture - so the club would have set ten icons, opened the
+  // screen again, pressed Save, and put all ten back on their templates.
+  //
+  // Caught by a round trip, not by reading: applyMenuOverrides() read the
+  // field correctly the whole time. It was the way back out that dropped it.
+  const live = {
+    cw_sq: {
+      added: true, group: 'toppings', template: 'parmesan',
+      name: 'Summer Squash', allergens: [], icon: 'squash',
+    },
+    cw_old: {
+      added: true, group: 'toppings', template: 'parmesan',
+      name: 'Rapini', allergens: [],
+    },
+  };
+
+  menu.applyMenuOverrides(live);
+  const round = menu.menuOverrides();
+
+  assert.strictEqual(round.cw_sq.icon, 'squash',
+    'the chosen picture did not survive the trip back out of the menu');
+  assert.ok(!('icon' in round.cw_old),
+    'an item happy with its template was given an explicit picture, which '
+    + 'freezes it against a later template change');
+
+  // And the whole way round again, which is what Save actually does.
+  menu.applyMenuOverrides(round);
+  assert.strictEqual(menu.findAnywhere('cw_sq').icon, 'squash',
+    'saving the menu reverted the picture to the template\'s');
+  assert.strictEqual(menu.findAnywhere('cw_old').icon,
+    menu.find('toppings', 'parmesan').icon,
+    'an inheriting item stopped following its template across a save');
+  menu.applyMenuOverrides({});
+});
+
 test('the picture picker offers shapes to pastas and ingredients to everything else', () => {
   const shapes = artChoices('shape');
   const icons = artChoices('icon');
