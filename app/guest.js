@@ -480,6 +480,11 @@ import {
     var blocked = soldOut || clash.length > 0 || !!ruledOut;
     // Never silently hide a choice. A child who wants shrimp should see that
     // shrimp exists and is sold out, not wonder where it went.
+    // Three reasons, three colours. The app already promises one of them:
+    // red means allergy. A menu rule that says "just butter" is not an
+    // allergy, and if it borrows the allergy colour then the one red that
+    // should stop a server stops meaning anything.
+    var warnKind = soldOut ? 'soldout' : (clash.length ? 'allergy' : 'rule');
     var reason = soldOut
       ? t('guest.label.soldout')
       : (clash.length ? 'has ' + clash.map(allergenName).join(', ') : ruledOut);
@@ -497,7 +502,7 @@ import {
       <span class="tile-art">${raw(art(entry.shape || entry.icon || 'none'))}</span>
       <span class="tile-label">${entry.es && t.isEs ? entry.es : entry.name}</span>
       ${raw(meta.length && !blocked ? '<span class="tile-meta">' + escapeHtml(meta.join(' \u00b7 ')) + '</span>' : '')}
-      ${raw(reason ? '<span class="tile-warn" id="clash-' + entry.id + '">' + escapeHtml(reason) + '</span>' : '')}
+      ${raw(reason ? '<span class="tile-warn is-' + warnKind + '" id="clash-' + entry.id + '">' + escapeHtml(reason) + '</span>' : '')}
     </button>`;
   }
 

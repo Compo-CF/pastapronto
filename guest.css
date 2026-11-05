@@ -161,8 +161,42 @@
 .buildstep[aria-current="true"] { color: var(--tomato); border-bottom-color: var(--tomato); }
 
 .moretoggle { margin-top: 14px; }
-.tile-warn { position: absolute; bottom: 6px; left: 6px; right: 6px; font-size: 11px; font-weight: 800; color: var(--tomato-dark); text-transform: uppercase; letter-spacing: .04em; }
-.tile.is-blocked { opacity: .5; }
+/* A blocked tile used to fade as a whole, and `opacity` fades every child
+   with it - so the one line saying WHY went translucent along with the
+   picture. Maria's team read straight past it mid-service, which is the
+   correct way to read a pale word on a pale tile.
+   Now the tile recedes and the reason does not: the art and the name fade,
+   the band underneath stays at full strength.
+   TWO rules fade this tile: this one and shared.css's `.tile:disabled`, which
+   every blocked tile also matches. They tie on specificity - `.tile.is-blocked`
+   and `.tile:disabled` are both one class plus one more - so this wins only
+   because guest.css is loaded second. That is a thin thread to hang a fix on,
+   which is why the test resolves the whole cascade instead of reading either
+   rule on its own. */
+.tile.is-blocked { opacity: 1; padding-bottom: 34px; }
+.tile.is-blocked .tile-art,
+.tile.is-blocked .tile-label { opacity: .45; }
+
+.tile-warn {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 6px 8px;
+  /* 24px tile radius less the 3px border the band sits inside of. */
+  border-radius: 0 0 21px 21px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #fff;
+}
+/* Three reasons, three colours, and the split is the point: the app promises
+   that red means allergy. "Just butter" is a menu rule, not an allergy, so it
+   gets amber - the same amber the expo screen uses for a server's note.
+   Each of these clears 4.5:1 against white at this size; --warn (#c77700) did
+   not, which is why the rule band is not simply var(--warn). */
+.tile-warn.is-rule { background: #9c5800; }
+.tile-warn.is-allergy { background: var(--tomato-dark); }
+.tile-warn.is-soldout { background: var(--ink-soft); }
 
 /* --------------------------------------------------------------- sent screen */
 

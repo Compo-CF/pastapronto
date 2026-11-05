@@ -5790,4 +5790,230 @@ test('the glyphs the club asked for exist and are not each other', () => {
   });
 });
 
+// --------------------------------- why a tile cannot be tapped
+
+/**
+ * Maria, 2026-11-04: "Make it louder warning when choosing butter", and then,
+ * 28 minutes later: "Butter sauce is something completely different than
+ * cooking with butter.  Please keep it exclusive."  So the RULE stays and the
+ * NOTICE gets louder - the opposite of what the first note alone suggested.
+ *
+ * The reason it was quiet was never the words. `.tile-warn` was already bold,
+ * uppercase and red; the tile around it sat at `opacity: .5`, and opacity
+ * fades every child with it, the explanation included.
+ *
+ * These tests resolve the cascade rather than grep for a line, because the
+ * defect is a CASCADE defect: TWO rules faded that tile, in two files
+ * (`shared.css` `.tile:disabled`, `guest.css` `.tile.is-blocked`), and fixing
+ * either one alone leaves the other still fading it. A test that greps for
+ * the fix would pass with half the fix in place. This one does not.
+ */
+
+/** Declarations one stylesheet applies, in source order, at-rules skipped. */
+function cssRules(src) {
+  const out = [];
+  const clean = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  clean.split('}').forEach((chunk) => {
+    const at = chunk.indexOf('{');
+    if (at === -1) return;
+    const sel = chunk.slice(0, at).trim();
+    if (!sel || sel.includes('@')) return;
+    const decls = {};
+    chunk.slice(at + 1).split(';').forEach((d) => {
+      const c = d.indexOf(':');
+      if (c === -1) return;
+      decls[d.slice(0, c).trim()] = d.slice(c + 1).trim();
+    });
+    sel.split(',').forEach((one) => out.push({ sel: one.trim(), decls, order: out.length }));
+  });
+  return out;
+}
+
+/** Classes and pseudo-classes count the same; no ids are used in this app. */
+function specificity(sel) {
+  return (sel.match(/\.[\w-]+|:[\w-]+(\([^)]*\))?|\[[^\]]*\]/g) || []).length;
+}
+
+function matchesCompound(compound, node) {
+  const tokens = compound.match(/\.[\w-]+|:[\w-]+(?:\([^)]*\))?|\[[^\]]*\]|[\w-]+/g) || [];
+  return tokens.every((tok) => {
+    if (tok.startsWith('.')) return node.classes.includes(tok.slice(1));
+    if (tok.startsWith(':')) return node.states.includes(tok.slice(1));
+    if (tok.startsWith('[')) return false;
+    return node.tag === tok;
+  });
+}
+
+/**
+ * `path` is ancestor-first and the LAST entry is the element being styled.
+ * Only the descendant combinator is supported, which is all this app uses.
+ */
+function matchesSelector(sel, path) {
+  const parts = sel.split(/\s+/).filter(Boolean);
+  if (parts.some((x) => x === '>' || x === '+' || x === '~')) return false;
+  if (!matchesCompound(parts[parts.length - 1], path[path.length - 1])) return false;
+  let i = path.length - 2;
+  for (let q = parts.length - 2; q >= 0; q -= 1) {
+    while (i >= 0 && !matchesCompound(parts[q], path[i])) i -= 1;
+    if (i < 0) return false;
+    i -= 1;
+  }
+  return true;
+}
+
+/** The winning value for one property, the way a browser would pick it. */
+function resolveProp(sheets, path, prop) {
+  let best = null;
+  sheets.forEach((name, sheetIndex) => {
+    const src = readFileSync(fileURLToPath(new URL('../' + name + '.css', import.meta.url)), 'utf8');
+    cssRules(src).forEach((rule) => {
+      if (!(prop in rule.decls)) return;
+      if (!matchesSelector(rule.sel, path)) return;
+      const rank = [specificity(rule.sel), sheetIndex, rule.order];
+      const wins = !best || rank[0] > best.rank[0]
+        || (rank[0] === best.rank[0]
+          && (rank[1] > best.rank[1] || (rank[1] === best.rank[1] && rank[2] > best.rank[2])));
+      if (wins) best = { value: rule.decls[prop], rank, from: name + '.css  ' + rule.sel };
+    });
+  });
+  return best;
+}
+
+// index.html loads shared.css first, then guest.css - the order the cascade sees.
+const GUEST_SHEETS = ['shared', 'guest'];
+const styled = (classes, states) => ({ tag: 'button', classes, states: states || [] });
+const BLOCKED_TILE = styled(['tile', 'is-blocked'], ['disabled']);
+
+test('a choice the menu rules out still says so at full strength', () => {
+  // Every blocked tile is rendered `disabled` too, so BOTH fades land on this
+  // one element. Delete either half of the fix and the survivor wins here.
+  const got = resolveProp(GUEST_SHEETS, [BLOCKED_TILE], 'opacity');
+  assert.ok(got, 'nothing sets opacity on a blocked tile at all - did the rule move?');
+  assert.strictEqual(
+    got.value, '1',
+    'a blocked tile resolves to opacity ' + got.value + ' (from ' + got.from + '). '
+    + 'Opacity fades every child, so this fades the one line explaining WHY the '
+    + 'tile cannot be tapped - exactly what the club could not read mid-service. '
+    + 'Fade the picture and the name instead.',
+  );
+});
+
+test('the tile recedes but the reason does not', () => {
+  const band = [BLOCKED_TILE, styled(['tile-warn', 'is-rule'])];
+  const art = [BLOCKED_TILE, styled(['tile-art'])];
+  const label = [BLOCKED_TILE, styled(['tile-label'])];
+
+  const bandOpacity = resolveProp(GUEST_SHEETS, band, 'opacity');
+  assert.ok(
+    !bandOpacity || bandOpacity.value === '1',
+    'the reason band is faded by ' + (bandOpacity || {}).from,
+  );
+
+  [['picture', art], ['name', label]].forEach((pair) => {
+    const got = resolveProp(GUEST_SHEETS, pair[1], 'opacity');
+    assert.ok(got, 'the ' + pair[0] + ' on a blocked tile is not dimmed at all, so the '
+      + 'tile no longer reads as unavailable - it reads as a tile wearing a band');
+    assert.ok(Number(got.value) < 1, 'the ' + pair[0] + ' resolves to opacity ' + got.value);
+  });
+});
+
+test('an ordinary disabled control is still dimmed', () => {
+  // The cheap way to pass the test above is to delete shared.css's fade, which
+  // would un-dim every disabled tile on every other screen. This catches that.
+  const got = resolveProp(['shared'], [styled(['tile'], ['disabled'])], 'opacity');
+  assert.ok(
+    got && Number(got.value) < 1,
+    'shared.css no longer fades a disabled tile, so nothing on any screen looks '
+    + 'unavailable any more',
+  );
+});
+
+/** WCAG relative luminance, for white text sitting on one of these bands. */
+function luminance(hex) {
+  const ch = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+function bandColour(kind) {
+  const path = [BLOCKED_TILE, styled(['tile-warn', 'is-' + kind])];
+  const got = resolveProp(GUEST_SHEETS, path, 'background');
+  assert.ok(got, 'no band colour for a "' + kind + '" reason, so it draws as white '
+    + 'text on nothing');
+  const token = got.value.match(/var\(\s*(--[\w-]+)/);
+  if (!token) return got.value;
+  const shared = readFileSync(fileURLToPath(new URL('../shared.css', import.meta.url)), 'utf8');
+  const def = shared.match(new RegExp(token[1] + '\\s*:\\s*(#[0-9a-fA-F]{6})'));
+  assert.ok(def, token[1] + ' is not defined as a plain hex, so this check cannot read it');
+  return def[1];
+}
+
+test('every reason a tile gives is readable at a glance', () => {
+  // White text at 11px is not "large text", so 4.5:1 is the bar. --warn
+  // (#c77700) measures 4.4, which is why the rule band is its own colour
+  // rather than the token the rest of the app warns with.
+  ['rule', 'allergy', 'soldout'].forEach((kind) => {
+    const ratio = 1.05 / (luminance(bandColour(kind)) + 0.05);
+    assert.ok(
+      ratio >= 4.5,
+      'the "' + kind + '" band is ' + ratio.toFixed(2) + ':1 against its white text',
+    );
+  });
+});
+
+test('a menu rule does not borrow the colour reserved for allergies', () => {
+  // Promised to the club in writing on 2026-11-04: allergy red means allergy.
+  // "Just butter" is a menu rule. If it shouts in the same red, the one red
+  // that should stop a server stops meaning anything.
+  assert.notStrictEqual(
+    bandColour('rule'), bandColour('allergy'),
+    'a sauce ruled out by the menu now looks exactly like an allergy warning',
+  );
+});
+
+test('every reason the screen computes is a reason the stylesheet colours', () => {
+  // The screen decides the kind; the stylesheet colours it. Those live in
+  // different files, so this is the join that breaks quietly: add a fourth
+  // reason in guest.js and it draws white-on-nothing until someone notices.
+  const src = guestSource();
+  const expr = src.match(/var warnKind\s*=\s*([^;]+);/);
+  assert.ok(expr, 'guest.js no longer decides what KIND of reason it is showing, so '
+    + 'every blocked tile now draws the same colour');
+
+  const kinds = [...expr[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort();
+  assert.deepStrictEqual(
+    kinds, ['allergy', 'rule', 'soldout'],
+    'guest.js classifies ' + JSON.stringify(kinds) + ' - the stylesheet colours '
+    + 'rule, allergy and soldout',
+  );
+
+  // WHICH condition yields which kind, not merely that all three appear.
+  // Swap these two and an allergen clash turns amber while a menu rule shouts
+  // in allergy red - the exact promise made to the club, inverted, with every
+  // other assertion here still green.
+  assert.match(expr[1], /soldOut\s*\?\s*'soldout'/,
+    'a sold-out tile no longer reports itself as sold out');
+  assert.match(expr[1], /clash[^?]*\?\s*'allergy'/,
+    'an allergen clash is no longer classified as an allergy, so it loses the '
+    + 'one colour this app reserves for allergies');
+
+  // Deliberately NOT "does the stylesheet have an .is-rule rule" - that passes
+  // with the markup gutted. Rebuild the class the screen actually emits and
+  // check THAT reaches a colour. Drop the interpolation from the span and
+  // every rule above still stands while the band paints on nothing.
+  const span = src.match(/'<span class="([^>]*?)" id=/);
+  assert.ok(span, 'the reason is no longer rendered as a .tile-warn span');
+
+  kinds.forEach((kind) => {
+    const classes = span[1]
+      .replace(/'\s*\+\s*warnKind\s*\+\s*'/g, kind)
+      .split(/\s+/).filter(Boolean);
+    const got = resolveProp(GUEST_SHEETS, [BLOCKED_TILE, styled(classes)], 'background');
+    assert.ok(got, 'a "' + kind + '" reason renders as class="' + classes.join(' ')
+      + '", which no rule gives a background - so it draws white text on nothing');
+  });
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', with failures' : '') + '\n');
