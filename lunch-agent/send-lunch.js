@@ -77,7 +77,7 @@ export function buildMessage(tonight, dir = MENU_DIR) {
   } else if (e.none) {
     lines = [`Cooper lunch ${when}: nothing listed on the menu.`];
   } else {
-    lines = [`Cooper lunch ${when}`, ...e.main.map((x) => `• ${x}`)];
+    lines = [`Cooper lunch ${when}`, ...e.main.map((x) => `- ${x}`)];
     if (e.veg) lines.push(`Veg: ${e.veg}`);
     if (e.note) lines.push(e.note);
   }
