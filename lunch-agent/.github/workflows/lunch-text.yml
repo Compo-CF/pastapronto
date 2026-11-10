@@ -1,0 +1,37 @@
+name: Cooper lunch text
+
+on:
+  # 00:30 UTC = 6:30 PM CST (Nov to Mar) / 7:30 PM CDT (Mar to Nov).
+  # GitHub may start scheduled runs a few minutes late.
+  schedule:
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+    inputs:
+      tonight:
+        description: 'Pretend tonight is YYYY-MM-DD (blank = real today)'
+        required: false
+      dry_run:
+        description: 'Print only, do not send'
+        type: boolean
+        default: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node test.js
+      - name: Send tomorrow's menu
+        env:
+          TONIGHT: ${{ inputs.tonight }}
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
+          TWILIO_TO: ${{ secrets.TWILIO_TO }}
+        run: node send-lunch.js ${{ inputs.dry_run && '--dry-run' || '' }}

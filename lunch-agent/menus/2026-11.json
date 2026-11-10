@@ -1,0 +1,29 @@
+{
+  "school": "The John Cooper School",
+  "month": "2026-11",
+  "source": "Lunch Menu November 2026 (PDF)",
+  "updated": "2026-11-10",
+  "days": {
+    "2026-11-02": { "main": ["Meat Lasagna (Beef)", "Salad with Vinaigrette", "Garlic Bread"], "veg": "Friends Salad (Quinoa, Cucumber, Feta, Tomato)" },
+    "2026-11-03": { "main": ["Grilled Chicken Fajita Bowl", "Cilantro-Lime Rice", "Black Bean and Corn"], "veg": "Chile Relleno Spring Rolls" },
+    "2026-11-04": { "main": ["Beef Stroganoff with Egg Noodles", "Corn Maque Choux", "Fresh Baked Rolls"], "veg": "Modern Greek Salad Bowl" },
+    "2026-11-05": { "main": ["General Tso's Chicken", "Vegetable Fried Rice", "Egg Rolls (VEG)"], "veg": "Kimchi-Crispy Tofu Fried Rice" },
+    "2026-11-06": { "main": ["Pizza Day!", "Caesar Salad"], "veg": "Cauliflower Crust Roasted Veg Pizza" },
+    "2026-11-09": { "main": ["Chicken Tenders", "Mashed Potatoes and Gravy", "Steamed Broccoli"], "veg": "Asian Lo Mein Noodles with Vegetables" },
+    "2026-11-10": { "main": ["Slow-Cooked Beef Soft Tacos", "Spanish Rice / Refried Beans"], "veg": "Beet Tostada with Avocado Crema and Salsa Macha" },
+    "2026-11-11": { "main": ["Turkey Pot Pie", "Fresh Baked Rolls", "Side Salad"], "veg": "Buffalo Cauliflower Salad Bowl with Green Tahini and Avocado" },
+    "2026-11-12": { "main": ["Penne Pasta Alfredo with Grilled Chicken", "Italian Chopped Salad", "Garlic Bread"], "veg": "Thai Green Curry Coconut Soup with Edamame Dumplings" },
+    "2026-11-13": { "main": ["Grilled Chicken Flatbread Caesar", "Homemade Chips"], "veg": "Spinach and Mushroom Frittata" },
+    "2026-11-16": { "main": ["Spaghetti and Meatballs", "Garlic Bread Sticks"], "veg": "Rigatoni with Pomodoro Sauce and Basil" },
+    "2026-11-17": { "main": ["Texas Toast Grilled Cheese Sandwich", "Homemade Potato Chips", "Tomato Basil Soup"], "veg": "Citrus Couscous Salad" },
+    "2026-11-18": { "main": ["BBQ Beef Brisket", "Mac and Cheese", "Steamed Broccoli"], "veg": "Mezza Platter: Hummus, Tabouleh, Spanakopita, Tzatziki Sauce and Olives" },
+    "2026-11-19": { "main": ["Pizza Day!", "Greek Salad"], "veg": "Cauliflower Crust 3 Cheese Mushroom and Spinach Pizza" },
+    "2026-11-20": { "note": "Early Release" },
+    "2026-11-23": { "closed": "School Closed" },
+    "2026-11-24": { "closed": "School Closed" },
+    "2026-11-25": { "closed": "School Closed" },
+    "2026-11-26": { "closed": "School Closed" },
+    "2026-11-27": { "closed": "School Closed" },
+    "2026-11-30": { "main": ["Cheese Tortellini with Rosa Sauce", "Garlic Bread", "Fall Green Salad"], "veg": "Savory Yogurt Bowl with Beets, Carrots, Arugula and Pistachio" }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "cooper-lunch-text",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Texts tomorrow's John Cooper School lunch menu the night before.",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "send": "node send-lunch.js",
+    "preview": "node send-lunch.js --dry-run",
+    "test": "node test.js"
+  }
+}
