@@ -176,6 +176,48 @@ export function normalizeMemberNumber(raw) {
 // Name the thing the guest is looking at: "Pizza 2", not "Bowl 2".
 const LINE_LABEL = { pasta: 'Bowl ', pizza: 'Pizza ', burger: 'Burger ' };
 
+/**
+ * Tonight's ticket by the number printed on it - delivered ones included.
+ *
+ * Maria McGinity, 2026-11-06: "Without paper tickets, multiple orders on one
+ * tray caused confusion and delays while we waited for a manager to look up
+ * each order's destination."
+ *
+ * The expo rail already prints the table on every card, but a ticket leaves
+ * the rail the moment it is marked delivered - and on 5 Nov the pass pressed
+ * ready and delivered within fifteen seconds of each other on 19 of 57
+ * tickets. So by the time the tray reached the floor there was nothing on
+ * screen that knew where it was going, and the only remaining copy of that
+ * fact was a manager. This is how a runner asks instead.
+ *
+ * Returns null rather than throwing: a half-typed number is the normal state
+ * of the box this feeds, not an error.
+ */
+export function byTicketNo(orders, ticketNo) {
+  // No guard on `n`. One was here, rejecting anything not a positive integer,
+  // and mutation testing showed removing it changed no answer this function
+  // can be asked: '', '  ', 'abc' and null all become NaN or 0, and no ticket
+  // is numbered either. A branch that cannot be made to matter is a branch
+  // nobody can test, which is how this codebase has been bitten before.
+  //
+  // The comparison is EXACT, deliberately. Prefix matching would let a runner
+  // typing "3" be told about table 34, which is a worse answer than none.
+  const n = Number(ticketNo);
+  return (orders || []).find((o) => Number(o.ticketNo) === n) || null;
+}
+
+/**
+ * Does this seat carry a name a runner could call out at the table?
+ *
+ * Blank is not a name. Neither is the placeholder the app suggests, in either
+ * language - a ticket reading "Guest 2" tells the pass exactly as much as a
+ * blank one, which is the whole problem it looks like it solved.
+ */
+export function isNamedSeat(label) {
+  const s = String(label == null ? '' : label).trim();
+  return s.length > 0 && !/^(guests?|invitad[oa]s?)\s*\d*$/i.test(s);
+}
+
 export function validateDraft(draft, cfg, unavailable = []) {
   const errors = [];
   if (!normalizeMemberNumber(draft.memberNumber)) {
@@ -201,6 +243,26 @@ export function validateDraft(draft, cfg, unavailable = []) {
   const kinds = [...new Set(lines.map(menu.kindOf))];
   if (kinds.length > 1) {
     errors.push('Send each kind as a separate order - they cook at different stations.');
+  }
+
+  // Maria McGinity, 2026-11-06: "Most members did not choose to specify who the
+  // order was for resulting in auctioning off food table side." On 5 Nov, 14 of
+  // the 22 multi-seat tickets arrived with every seat unnamed, so a runner
+  // reached the table holding plates nobody could claim.
+  //
+  // One seat needs no name - there is only one person it can belong to. Two or
+  // more do. "Guest 2" is not a name: it is the placeholder this exists to
+  // stop, whether the app suggested it or a server typed it to get past here.
+  if (lines.length > 1) {
+    const anonymous = lines
+      .map((line, i) => (isNamedSeat(line.guestLabel)
+        ? null
+        : LINE_LABEL[menu.kindOf(line)] + (i + 1)))
+      .filter(Boolean);
+    if (anonymous.length) {
+      errors.push('Say who each one is for (' + anonymous.join(', ')
+        + ') - a runner cannot tell identical plates apart without a name.');
+    }
   }
   lines.forEach((line, i) => {
     // Name the thing the guest is looking at: "Pizza 2", not "Bowl 2".

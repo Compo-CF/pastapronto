@@ -39,6 +39,10 @@ const CATALOG = menu.catalog();
     // Which Coming Up ticket is open. One at a time: this column is narrow and
     // two open tickets push the rest of the night off the bottom of it.
     open: null,
+    // What a runner has typed into the ticket-number box. Not remembered
+    // across loads: it answers one question, and the answer stops mattering
+    // the moment the tray is down.
+    find: '',
   };
 
   var el = {
@@ -48,6 +52,8 @@ const CATALOG = menu.catalog();
     readyCount: document.getElementById('readyCount'),
     nextCount: document.getElementById('nextCount'),
     clock: document.getElementById('clock'),
+    findTicket: document.getElementById('findTicket'),
+    findResult: document.getElementById('findResult'),
     conn: document.getElementById('conn'),
     soundToggle: document.getElementById('soundToggle'),
     soundIcon: document.getElementById('soundIcon'),
@@ -268,7 +274,57 @@ const CATALOG = menu.catalog();
     </div>`;
   }
 
+  /** Wall-clock time a ticket went out, for the one line that reports it. */
+  function runAt(iso) {
+    var d = iso ? new Date(iso) : null;
+    if (!d || Number.isNaN(d.getTime())) return 'an unrecorded time';
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  /**
+   * Answer "where did #14 go?" from the orders already on this device.
+   *
+   * Deliberately searches EVERY ticket tonight, not the filtered rail: a
+   * runner asking has usually already failed to find it, which is precisely
+   * because it has been delivered, or belongs to the other pass. Filtering
+   * here would reproduce the problem this exists to solve.
+   */
+  function renderFind() {
+    var digits = String(state.find || '').replace(/[^0-9]/g, '');
+    if (!digits) {
+      el.findResult.hidden = true;
+      el.findResult.innerHTML = '';
+      return;
+    }
+
+    // orderLib, not order: this module is aliased because every render
+    // function here has a parameter called `order` that shadows it.
+    var found = orderLib.byTicketNo(state.orders, digits);
+    el.findResult.hidden = false;
+
+    if (!found) {
+      el.findResult.innerHTML = html`<div class="expo-find-miss">
+        No ticket <b>#${digits}</b> tonight.
+      </div>`;
+      return;
+    }
+
+    var where = found.tagLabel || 'no table recorded';
+    var who = found.memberName || ('Member ' + found.memberNumber);
+    var stage = found.status === 'delivered'
+      ? 'Run at ' + runAt(found.deliveredAt)
+      : (STAGE_LABEL[found.status] || found.status);
+
+    el.findResult.innerHTML = html`<div class="expo-find-hit">
+      <span class="expo-find-no">#${found.ticketNo}</span>
+      <span class="expo-find-where">${where}</span>
+      <span class="expo-find-who">${who} &middot; ${dishCount(found)}</span>
+      <span class="expo-find-stage">${stage}</span>
+    </div>`;
+  }
+
   function render() {
+    renderFind();
     var ready = readyOrders();
     var next = cookingOrders();
     // The number is food. The label beside it says so, and the title spells
@@ -388,6 +444,13 @@ const CATALOG = menu.catalog();
     }
     el.laneFilter.value = state.lane;
   }
+
+  // Repaint on every keystroke: a runner types two digits and wants the
+  // answer, not a Search button to find afterwards.
+  el.findTicket.addEventListener('input', function () {
+    state.find = el.findTicket.value;
+    renderFind();
+  });
 
   el.laneFilter.addEventListener('change', function () {
     state.lane = el.laneFilter.value;

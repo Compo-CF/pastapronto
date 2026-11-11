@@ -185,3 +185,61 @@
   font-weight: 700;
 }
 .rcard-undo:hover { color: #fff; text-decoration: underline; }
+
+/* ------------------------------------------- "where did #14 go?" */
+
+/* Maria McGinity, 2026-11-06: "we waited for a manager to look up each
+   order's destination." The rail prints the table on every card, but a
+   delivered ticket has left the rail - and on 5 Nov the pass marked ready
+   and delivered within fifteen seconds on 19 of 57 tickets, so the tray hit
+   the floor with nothing on screen that still knew where it went.
+
+   Sits under the header, full width, dark like the rest of the board. Hidden
+   until someone types, because a runner board with a permanent empty answer
+   on it is a runner board with less room for food. */
+/* Specificity, not hope: kitchen.css styles this box through `.kselect
+   .select`, which is two classes, so a bare `.kfind` loses every property the
+   two of them both set. Matched here so the weight actually lands. */
+.kselect .kfind {
+  width: 108px;
+  font-family: var(--mono);
+  font-weight: 800;
+  text-align: center;
+}
+
+.expo-find {
+  margin: 0 16px;
+  border: 1px solid var(--kline);
+  border-radius: 12px;
+  background: var(--kchit);
+  padding: 10px 16px;
+}
+.expo-find[hidden] { display: none; }
+
+.expo-find-hit {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+/* Same scale as a chit number, so the eye lands on it the same way. */
+.expo-find-no {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+/* The answer to the question actually being asked. Biggest words here. */
+.expo-find-where { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.expo-find-who { font-size: 15px; font-weight: 650; color: var(--kmuted); }
+/* Pushed to the end: useful, but never the thing being looked for. */
+.expo-find-stage {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--kwarn);
+}
+
+/* A miss is a real answer too - it means stop looking on this pad. */
+.expo-find-miss { font-size: 18px; font-weight: 700; color: var(--kmuted); }

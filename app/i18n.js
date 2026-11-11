@@ -126,7 +126,12 @@ const STRINGS = {
     'common.change': 'Change',
 
     'guest.where.at': 'You are at',
-    'guest.where.unknown': 'Scan the QR code at your table to start',
+    // Maria McGinity, 2026-11-06: the club is dropping per-table QR codes -
+    // "it wasn't a good look for a luxury club" - for one code that lands
+    // here, where the member types the table their server gave them. Telling
+    // them to go and scan something is the one instruction that cannot work
+    // on this screen: they only reach it because there was nothing to scan.
+    'guest.where.unknown': 'Type your table number - your server will tell you which one.',
     'guest.where.badtag': 'That table code is not one of ours - a server can sort it out.',
     'guest.where.ask': 'Which table?',
     'guest.where.ph': 'Table number',
@@ -214,6 +219,13 @@ const STRINGS = {
     'guest.step.who': 'Who is this for?',
     'guest.who.label': 'Who is this {unit} for?',
     'guest.who.notes': 'Notes for the kitchen',
+    // Said on the review screen, where a name is still one tap away, rather
+    // than as a refusal on a finished order. A plate nobody is named for is
+    // a plate the runner auctions at the table.
+    'guest.who.needed': 'Add a name',
+    // Phrased to survive any count. "{n} still needs one" reads wrong the
+    // moment n is 2, and this notice is mostly seen at 2 and 3.
+    'guest.who.why': 'Name every seat before sending. Still missing: {n}. Without names the runner cannot tell the plates apart at the table.',
     'guest.step.who.sub': 'So the runner knows whose plate it is.',
     'guest.sauce.one': 'Pick one, or tap two to mix them.',
     'guest.sauce.chosen': '{names} - tap Next when you are happy.',
@@ -258,6 +270,12 @@ const STRINGS = {
     'guest.closed.title': 'The kitchen is not taking orders yet.',
     'guest.closed.sub': 'Your server will let you know when it opens. This page will update on its own - no need to refresh.',
     'guest.offline': 'We cannot reach the kitchen right now - ask your server.',
+    // Deliberately NOT the closed wording. On 5 Nov members on the patio were
+    // told the kitchen had shut while it was cooking, because a dead listener
+    // and a closed kitchen read the same here. This says what is actually
+    // wrong and what to do instead, and never blames the kitchen.
+    'guest.offline.title': 'We cannot reach the kitchen from this spot.',
+    'guest.offline.sub': 'The signal here is too weak to send your order. Your server can take it for you. This page keeps trying on its own - no need to refresh.',
 
     'kitchen.lane.queued': 'Sent',
     'kitchen.lane.building': 'Building',
@@ -336,7 +354,7 @@ const STRINGS = {
     'common.change': 'Cambiar',
 
     'guest.where.at': 'Está en',
-    'guest.where.unknown': 'Escanee el código QR de su mesa para comenzar',
+    'guest.where.unknown': 'Escriba el número de su mesa; su mesero le dirá cuál es.',
     'guest.where.badtag': 'Ese código de mesa no es nuestro - un mesero puede ayudarle.',
     'guest.where.ask': '¿Qué mesa?',
     'guest.where.ph': 'Número de mesa',
@@ -420,6 +438,8 @@ const STRINGS = {
     'guest.step.who': '¿Para quién es?',
     'guest.who.label': '¿Para quién es este plato?',
     'guest.who.notes': 'Notas para la cocina',
+    'guest.who.needed': 'Agregar un nombre',
+    'guest.who.why': 'Escriba un nombre para cada puesto antes de enviar. Faltan: {n}. Sin nombres, el mesero no puede distinguir los platos en la mesa.',
     'guest.step.who.sub': 'Para que el mesero sepa de quién es el plato.',
     'guest.sauce.one': 'Elija una, o toque dos para combinarlas.',
     'guest.sauce.chosen': '{names} - toque Siguiente cuando esté listo.',
@@ -465,6 +485,8 @@ const STRINGS = {
     'guest.closed.title': 'La cocina aún no acepta pedidos.',
     'guest.closed.sub': 'Su mesero le avisará cuando abra. Esta página se actualizará sola; no hace falta recargar.',
     'guest.offline': 'No podemos comunicarnos con la cocina - pregunte a su mesero.',
+    'guest.offline.title': 'No podemos comunicarnos con la cocina desde aquí.',
+    'guest.offline.sub': 'La señal en este lugar es muy débil para enviar su pedido. Su mesero puede tomarlo por usted. Esta página seguirá intentándolo sola; no hace falta recargar.',
 
     'kitchen.lane.queued': 'Enviadas',
     'kitchen.lane.building': 'Armando',

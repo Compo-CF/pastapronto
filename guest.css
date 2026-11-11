@@ -414,3 +414,37 @@
   from { opacity: .75; transform: translateY(2px); }
   to   { opacity: 1; transform: none; }
 }
+
+/* ----------------------------------------- a seat nobody is named for */
+
+/* On 5 Nov, 14 of the 22 multi-seat tickets reached the pass with every seat
+   still called "Guest 2", and the runner auctioned the plates at the table.
+   So an unnamed seat stops looking like a name and starts looking like a gap.
+
+   Amber, NOT the tomato a named seat uses: on these screens red means allergy,
+   and a missing name is not one. Same amber as the menu-rule band. */
+.bowl-who.is-unnamed {
+  color: #9c5800;
+  font-style: italic;
+}
+
+/* Sits under the placeholder, not beside the Change button, so the fix is
+   where the problem is being pointed at. 44px tall like every other tap
+   target in here - a server is hitting this mid-service with a thumb. */
+.bowl-name {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 2px 0 4px;
+  padding: 0 12px;
+  border: 2px solid #9c5800;
+  border-radius: 999px;
+  background: var(--semolina-wash);
+  color: #7a5000;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  cursor: pointer;
+}

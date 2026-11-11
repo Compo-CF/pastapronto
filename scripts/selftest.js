@@ -3932,13 +3932,268 @@ test('the kitchen closes itself when the service date rolls', () => {
 
   assert.ok(body.includes('data.openFor === serviceDate()'),
     'an open stamped for another date must not read as open');
-  assert.ok(body.includes('cb(false)'),
+  // The gate, not the spelling. This used to pin the literal `cb(false)`, so
+  // adding a second argument that says WHY broke a test of behaviour that had
+  // not changed. What matters is that the error path hands the screen a hard
+  // false - whatever else it hands it alongside.
+  const errBranch = body.slice(body.indexOf('(err) =>'));
+  assert.match(errBranch, /cb\(\s*false\b/,
     'an unreachable service document must read as closed, not open');
 
   // And closing must clear the stamp rather than leave a stale one behind.
   const setter = src.slice(src.indexOf('export async function setServiceOpen'));
   assert.ok(setter.slice(0, setter.indexOf('\n}')).includes('openFor: open === true ? serviceDate() : null'),
     'closing must clear openFor');
+});
+
+/**
+ * Maria McGinity, 2026-11-06: "Most members did not choose to specify who the
+ * order was for resulting in auctioning off food table side."
+ *
+ * Measured against the two live services: on 29 Oct 9 of 21 multi-seat tickets
+ * had no seat named at all, on 5 Nov 14 of 22 - it got worse, not better. A
+ * runner holding three identical bowls and three "Guest N" labels is doing an
+ * auction, which is what the club is trying to stop happening in their dining
+ * room.
+ *
+ * These call the real validator rather than reading its source, because
+ * order.js is pure and can simply be run.
+ */
+test('a table of one needs no name, a table of three does', () => {
+  const seat = (guestLabel) => ({
+    guestLabel, kind: 'pasta', pastas: ['penne'], sauces: ['marinara'],
+    proteins: [], toppings: [], sides: [], portion: 'regular', spice: 'mild',
+  });
+  const draft = (lines) => ({ memberNumber: '1794', guestCount: lines.length, lines });
+  const nameErrors = (lines) => order.validateDraft(draft(lines), config)
+    .filter((e) => /Say who/.test(e));
+
+  assert.deepStrictEqual(
+    nameErrors([seat('')]), [],
+    'a single bowl has exactly one person it can belong to - do not make a '
+    + 'server type a name to tell themselves something they already know',
+  );
+  assert.deepStrictEqual(nameErrors([seat('Ada'), seat('Ben')]), [],
+    'two named seats are the thing we want and must sail through');
+
+  assert.strictEqual(nameErrors([seat(''), seat('')]).length, 1,
+    'two blank seats must be refused');
+  assert.match(
+    nameErrors([seat('Ada'), seat('')])[0], /Bowl 2/,
+    'the refusal must name WHICH seat, or the server has to hunt for it',
+  );
+  assert.strictEqual(
+    nameErrors([seat('Guest 1'), seat('Guest 2')]).length, 1,
+    'typing the placeholder in by hand is not naming the seat',
+  );
+});
+
+/**
+ * Maria McGinity, 2026-11-06: "Without paper tickets, multiple orders on one
+ * tray caused confusion and delays while we waited for a manager to look up
+ * each order's destination."
+ */
+test('a runner can find where a ticket went without a manager', () => {
+  // #34 sits BEFORE #3 on purpose. A lookup that matched loosely would hand a
+  // runner typing "3" the table for 34, because it comes first - and a
+  // confidently wrong table is worse than no answer at all.
+  const tix = [
+    { ticketNo: 14, tagLabel: 'Table 54', status: 'delivered', kind: 'pasta' },
+    { ticketNo: 34, tagLabel: 'Table 70', status: 'ready', kind: 'pizza' },
+    { ticketNo: 15, tagLabel: 'Table 30', status: 'ready', kind: 'pizza' },
+    { ticketNo: 3, tagLabel: 'Bar 2', status: 'cooking', kind: 'pasta' },
+  ];
+
+  assert.strictEqual(order.byTicketNo(tix, 14).tagLabel, 'Table 54',
+    'a delivered ticket is exactly the one a runner is asking about');
+  assert.strictEqual(order.byTicketNo(tix, '3').tagLabel, 'Bar 2',
+    'the box hands over a string, not a number');
+  assert.strictEqual(order.byTicketNo(tix, 99), null, 'a number nobody holds is a miss');
+
+  // A half-typed number is the normal state of a box being typed into. It
+  // must not throw and must not guess.
+  [null, undefined, '', '  ', 'abc', 0, -4, 1.5].forEach((v) => {
+    assert.strictEqual(order.byTicketNo(tix, v), null,
+      JSON.stringify(v) + ' must be a quiet miss, not a throw or a wrong ticket');
+  });
+  assert.strictEqual(order.byTicketNo(null, 14), null, 'no orders yet is a miss, not a crash');
+});
+
+test('the ticket lookup searches the whole night, not the filtered rail', () => {
+  // The runner asking has usually already failed to find it on their own pad -
+  // because it is delivered, or belongs to the other pass. Searching the
+  // filtered rail would reproduce the exact problem this exists to solve.
+  const src = readFileSync(fileURLToPath(new URL('../app/expo.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('function renderFind'));
+  const body = fn.slice(0, fn.indexOf('\n  function '));
+
+  assert.match(body, /byTicketNo\(state\.orders\b/,
+    'the lookup must read every order tonight, not readyOrders() or a lane filter');
+  assert.ok(
+    !/readyOrders\(|cookingOrders\(|state\.lane/.test(body),
+    'the lookup must not be narrowed by the rail or the pass filter',
+  );
+  assert.match(body, /findResult\.hidden = true/,
+    'an empty box must leave the board alone');
+  assert.ok(
+    /el\.findTicket\.addEventListener\('input'/.test(src),
+    'it must answer as the runner types, not behind a Search button',
+  );
+  assert.ok(
+    /<div class="expo-find" id="findResult"/.test(
+      readFileSync(fileURLToPath(new URL('../expo.html', import.meta.url)), 'utf8'),
+    ),
+    'the result band must exist in the page, or nothing can be shown in it',
+  );
+});
+
+test('the placeholder is not a name, in either language', () => {
+  [['Ada', true], ['Jr.', true], ['2', true], ['Guesty', true]].forEach(([v, want]) => {
+    assert.strictEqual(order.isNamedSeat(v), want, JSON.stringify(v) + ' is a name');
+  });
+  ['', '   ', 'Guest', 'guest 2', 'GUESTS', 'Invitado 3', 'invitada', null, undefined]
+    .forEach((v) => {
+      assert.strictEqual(order.isNamedSeat(v), false,
+        JSON.stringify(v) + ' must not count as naming the seat');
+    });
+});
+
+test('the review screen asks for the name before Send refuses it', () => {
+  // Refusing a finished order at Send is how you make service slower, which is
+  // the other half of what the club complained about. The ask belongs on the
+  // screen where the fix is one tap away.
+  const src = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  const review = src.slice(src.indexOf('function screenReview'));
+  const body = review.slice(0, review.indexOf('\n  function '));
+
+  // TWO places on this screen ask the question - the marker on each card and
+  // the summary above Send - and both must ask the validator rather than
+  // inventing their own idea of a name. Counting the uses is what catches one
+  // of them quietly drifting to `!b.guestLabel`, which calls "Guest 2" named.
+  const uses = body.match(/order\.isNamedSeat\(/g) || [];
+  assert.strictEqual(
+    uses.length, 2,
+    'both the per-seat marker and the summary notice must use the shared rule, '
+    + 'got ' + uses.length + ' use(s) of order.isNamedSeat',
+  );
+
+  const namelessExpr = body.slice(body.indexOf('var nameless'), body.indexOf('var nameRow'));
+  assert.ok(
+    !/\bfalse\b/.test(namelessExpr),
+    'the warning must not be switched off by a constant - that leaves Send as '
+    + 'the only place a server finds out, which is the slow path we are fixing',
+  );
+  assert.match(namelessExpr, /state\.bowls\.length > 1/,
+    'and must only ask when there is more than one seat to confuse');
+  assert.match(namelessExpr, /!order\.isNamedSeat\(b\.guestLabel\)/,
+    'the summary must count seats by the shared rule');
+
+  assert.match(body, /guest\.who\.why/, 'the review screen must say why');
+  assert.ok(
+    /raw\(nameRow\)/.test(src),
+    'the notice must actually be rendered, not merely computed',
+  );
+});
+
+/**
+ * A stalled read used to come back as `[]` - the same answer an empty service
+ * date gives. Two callers believed it. The close-out report drew a night with
+ * no orders in it, and resetDay() deleted the nothing it was handed and zeroed
+ * the ticket counter anyway, which hands #1 to the next guest while ticket #1
+ * is still on the pass.
+ */
+test('a read that stalls says so instead of inventing an empty day', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('function firstSnapshot'));
+  const body = fn.slice(0, fn.indexOf('\n}'));
+
+  assert.ok(
+    !/finish\(resolve,\s*\[\]\)/.test(body),
+    'a timeout that resolves to [] cannot be told apart from a genuinely empty '
+    + 'day, and the callers cannot both be right about which it was',
+  );
+  assert.match(
+    body, /setTimeout\(\s*\(\)\s*=>\s*finish\(reject,/,
+    'the timeout must raise so the caller knows it never got an answer',
+  );
+  assert.match(src, /class StalledRead extends Error/,
+    'a stall needs its own error type, or callers cannot tell it from a denial');
+});
+
+test('clearing the day cannot run on a read that never answered', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('export async function resetDay'));
+  const body = fn.slice(0, fn.indexOf('\n}'));
+
+  const readAt = body.indexOf('await getDay(');
+  const zeroAt = body.indexOf('lastTicket: 0');
+  assert.ok(readAt > -1, 'resetDay must read the day before it deletes it');
+  assert.ok(
+    zeroAt > readAt,
+    'the ticket counter may only be zeroed AFTER the day has actually been read',
+  );
+  assert.ok(
+    !/catch/.test(body),
+    'resetDay must let a stalled read throw. Swallowing it deletes nothing, '
+    + 'resets the counter anyway, and reissues live ticket numbers.',
+  );
+});
+
+/**
+ * Maria McGinity, 2026-11-06: "some members received responses stating the
+ * kitchen was closed or not taking orders at this time" - while the kitchen
+ * was open and cooking. A failed listener and a shut kitchen both arrived at
+ * the screen as the same `false`, so the screen could only say one of them.
+ *
+ * The gate must NOT loosen. Anything that is not a confirmed open still
+ * refuses the order. Only the wording is allowed to differ.
+ */
+test('a member we cannot reach is not told the kitchen is closed', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('export function watchServiceOpen'));
+  const body = fn.slice(0, fn.indexOf('\n}'));
+  const errBranch = body.slice(body.indexOf('(err) =>'));
+
+  assert.match(
+    errBranch, /cb\(\s*false\s*,\s*SERVICE_UNREACHABLE\s*\)/,
+    'the error path must still refuse the order AND name the reason',
+  );
+  assert.ok(
+    !/cb\(\s*true/.test(errBranch),
+    'a listener that failed must never report the kitchen as open',
+  );
+
+  // Three states that collapse into two leave the screen unable to branch.
+  const states = ['SERVICE_OPEN', 'SERVICE_CLOSED', 'SERVICE_UNREACHABLE']
+    .map((n) => (src.match(new RegExp('export const ' + n + " = '([a-z]+)'")) || [])[1]);
+  assert.strictEqual(
+    new Set(states).size, 3,
+    'the three service states must be distinct values, got ' + JSON.stringify(states),
+  );
+
+  const guest = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  assert.match(
+    guest, /why === db\.SERVICE_UNREACHABLE/,
+    'the guest screen must read the reason, not just the boolean',
+  );
+  assert.match(
+    guest, /state\.offline\s*\?\s*'guest\.offline\.title'\s*:\s*'guest\.closed\.title'/,
+    'the notice must choose its words by which refusal this is',
+  );
+
+  // The point of the whole change: the two must not say the same thing, and
+  // the unreachable one must not accuse the kitchen of being shut.
+  assert.notStrictEqual(
+    STRINGS.en['guest.offline.title'], STRINGS.en['guest.closed.title'],
+    'if both refusals read the same, the member learns nothing new',
+  );
+  ['en', 'es'].forEach((lang) => {
+    const words = STRINGS[lang]['guest.offline.title'] + ' ' + STRINGS[lang]['guest.offline.sub'];
+    assert.ok(
+      !/closed|cerrad|not taking|no acepta/i.test(words),
+      'the ' + lang + ' unreachable message must not claim the kitchen is closed: ' + words,
+    );
+  });
 });
 
 test('the guest screen will not send into a closed kitchen', () => {

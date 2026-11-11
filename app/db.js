@@ -488,21 +488,34 @@ export async function setParty(memberNumber, partySize, date) {
  * the state this exists to prevent.
  *
  * A missing or unreachable document reads as CLOSED. A guest who cannot be told
- * whether the kitchen is ready should not be able to send food to it.
+ * whether the kitchen is ready should not be able to send food to it. That part
+ * is deliberate and must not change.
  *
- * @param {(open: boolean) => void} cb
+ * What it may NOT do is tell the guest the kitchen is closed when the truth is
+ * that we could not reach it. On 5 Nov members on the patio were shown "the
+ * kitchen is not taking orders" while the kitchen was open and cooking, because
+ * a failed listener and a closed kitchen arrived here as the same `false`. So
+ * the gate still shuts on anything that is not a confirmed open, and the second
+ * argument says WHY, for the one screen that has to word it to a member.
+ *
+ * @param {(open: boolean, state: 'open'|'closed'|'unreachable') => void} cb
  * @returns {() => void} unsubscribe
  */
+export const SERVICE_OPEN = 'open';
+export const SERVICE_CLOSED = 'closed';
+export const SERVICE_UNREACHABLE = 'unreachable';
+
 export function watchServiceOpen(cb, { onError } = {}) {
   return onSnapshot(
     serviceRef,
     (snap) => {
       const data = snap.exists() ? snap.data() : null;
-      cb(Boolean(data && data.open === true && data.openFor === serviceDate()));
+      const open = Boolean(data && data.open === true && data.openFor === serviceDate());
+      cb(open, open ? SERVICE_OPEN : SERVICE_CLOSED);
     },
     (err) => {
       console.error('[db] watchServiceOpen failed:', err.code, err.message);
-      cb(false);
+      cb(false, SERVICE_UNREACHABLE);
       if (onError) onError(err);
     },
   );
@@ -1071,16 +1084,33 @@ export async function getOrder(orderId) {
   return snap.exists() ? toOrder(snap) : null;
 }
 
+/** The error a stalled read raises, so a caller can tell it from a real answer. */
+export class StalledRead extends Error {
+  constructor(ms) {
+    super('The database did not answer within ' + Math.round(ms / 1000) + ' seconds.');
+    this.name = 'StalledRead';
+    this.code = 'stalled';
+  }
+}
+
 /**
  * One read of a query, from the first snapshot a listener delivers.
  *
  * Uses a listener rather than getDocs(). Observed on a live project: getDocs()
  * stalled indefinitely while the identical query delivered 13 documents
  * through onSnapshot in 3ms. Listeners are the transport that reliably works,
- * so everything reads through them, and a timeout means a stall degrades to an
- * empty result instead of a hang.
+ * so everything reads through them, and a timeout stops the caller hanging.
+ *
+ * A timeout RAISES. It used to resolve to `[]` - the same answer a genuinely
+ * empty day gives - and no caller could tell the two apart. Two did not:
+ * the close-out report drew a night with no orders in it, and resetDay()
+ * deleted the nothing it was handed and then zeroed the ticket counter anyway,
+ * so the next order reissued #1 underneath a live ticket. A silent fallback
+ * shaped exactly like success is how both of those happen quietly. Now a
+ * stall says so, and each caller decides what to do about it.
  *
  * @returns {Promise<object[]>} the snapshot's docs
+ * @throws {StalledRead} when no snapshot arrives inside timeoutMs
  */
 function firstSnapshot(q, { timeoutMs = 8000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -1098,7 +1128,7 @@ function firstSnapshot(q, { timeoutMs = 8000 } = {}) {
       fn(value);
     };
 
-    timer = setTimeout(() => finish(resolve, []), timeoutMs);
+    timer = setTimeout(() => finish(reject, new StalledRead(timeoutMs)), timeoutMs);
 
     unsub = onSnapshot(
       q,
@@ -1186,7 +1216,15 @@ export async function seedOrders(built) {
   return written;
 }
 
-/** Delete today's orders and reset ticket numbering. Manager screen only. */
+/**
+ * Delete today's orders and reset ticket numbering. Manager screen only.
+ *
+ * The read on the next line MUST be allowed to throw. Zeroing the counter is
+ * only safe once we know what we deleted; if the read quietly returned an
+ * empty list on a stall, this would delete nothing, reset the counter anyway,
+ * and hand #1 to the next guest while ticket #1 was still on the pass. Do not
+ * wrap this in a fallback that invents an empty day.
+ */
 export async function resetDay() {
   await ready();
   const date = serviceDate();

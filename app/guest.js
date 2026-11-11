@@ -287,6 +287,10 @@ import {
     partySize: null,
     partyInherited: false,
     kitchenOpen: true,
+    // True only when the service listener ERRORED, which is a different thing
+    // from a kitchen that is closed and must be worded differently. Starts
+    // false so the first paint never accuses the wifi before it has tried.
+    offline: false,
     // Who plates the salad. Starts at the configured resting state and is
     // corrected by Firestore a moment later, so the first paint never shows a
     // salad step the club is not running.
@@ -650,8 +654,12 @@ import {
     // Say it here, on the first screen, rather than letting someone build
     // four bowls and meet the refusal at Send. The rules would stop the
     // order either way; this stops the wasted effort.
+    // Two different refusals wearing one notice is how the club ended up
+    // telling members the kitchen was shut while it was cooking. A member we
+    // cannot reach gets told that, and told what to do about it.
     var shut = state.kitchenOpen ? '' : html`<div class="notice notice-bad">
-      <strong>${t('guest.closed.title')}</strong><br>${t('guest.closed.sub')}
+      <strong>${t(state.offline ? 'guest.offline.title' : 'guest.closed.title')}</strong><br>
+      ${t(state.offline ? 'guest.offline.sub' : 'guest.closed.sub')}
     </div>`;
 
     return html`
@@ -1100,10 +1108,17 @@ import {
         ? html`<span class="bowl-art is-stack">${raw(burgerStackSvg(bowl, { height: 190 }))}</span>`
         : html`<span class="bowl-art">${raw(art(glyph))}</span>`;
 
+      // A seat still wearing its placeholder is the one the runner cannot
+      // hand to anybody. Say so here, where it can still be fixed in a tap,
+      // rather than refusing the whole order at Send.
+      var unnamed = state.bowls.length > 1 && !order.isNamedSeat(bowl.guestLabel);
+
       return html`<div class="bowl">
         ${raw(artCell)}
         <div class="grow">
-          <div class="bowl-who">${labelOf(bowl, i)}</div>
+          <div class="bowl-who ${unnamed ? 'is-unnamed' : ''}">${labelOf(bowl, i)}</div>
+          ${raw(unnamed ? '<button class="bowl-name" type="button" data-act="editBowl" data-id="'
+            + i + '">' + escapeHtml(t('guest.who.needed')) + '</button>' : '')}
           <div class="bowl-dish">${dishText(bowl)}</div>
           <div class="bowl-extras">${extras.filter(Boolean).join(' · ')}</div>
         </div>
@@ -1131,6 +1146,16 @@ import {
       });
     });
 
+    // Named before Send, not refused after it. Submitting with a nameless seat
+    // is already blocked in validateDraft; a server should meet that here,
+    // while the fix is one tap away, not as a toast on a finished order.
+    var nameless = state.bowls.length > 1
+      ? state.bowls.filter(function (b) { return !order.isNamedSeat(b.guestLabel); }).length
+      : 0;
+    var nameRow = nameless
+      ? html`<div class="notice notice-warn">${t('guest.who.why', { n: nameless })}</div>`
+      : '';
+
     var allergenRow = allergens.length
       ? html`<div class="notice ${state.avoid.length ? 'notice-warn' : ''}" style="${state.avoid.length ? '' : 'background:#f4ece0;color:#6b6058'}">
           This order contains: ${allergens.map(allergenName).join(', ')}
@@ -1153,6 +1178,7 @@ import {
       </div>
       <div class="stack">
         ${bowls}
+        ${raw(nameRow)}
         ${raw(allergenRow)}
         <div class="card stack">
           <div class="summary-line"><span>${lane().many[0].toUpperCase() + lane().many.slice(1)}</span><span>${state.bowls.length}</span></div>
@@ -2192,11 +2218,16 @@ import {
     //
     // The clock rule stays in the AND: config can still shut the whole thing
     // outside service hours without anyone touching a switch.
-    db.watchServiceOpen(function (open) {
+    db.watchServiceOpen(function (open, why) {
       var next = open && isOpen();
-      if (next === state.kitchenOpen) return;
+      // `why` is 'unreachable' when the listener itself failed - a member at
+      // the far end of the patio, not a kitchen that has shut. The gate is the
+      // same either way; only what we say to them changes.
+      var unreachable = why === db.SERVICE_UNREACHABLE;
+      if (next === state.kitchenOpen && unreachable === state.offline) return;
       state.kitchenOpen = next;
-      if (!next) toast(t('guest.closed'), true);
+      state.offline = unreachable;
+      if (!next) toast(t(unreachable ? 'guest.offline' : 'guest.closed'), true);
       render({ keepScroll: true });
     });
   }

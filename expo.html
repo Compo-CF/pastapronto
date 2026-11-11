@@ -37,11 +37,22 @@
     </select>
   </label>
 
+  <!-- Where did ticket #14 go? Asked by a runner holding a tray, answered
+       without walking to a manager. A delivered ticket has left the rail by
+       then, so the rail itself cannot answer it. -->
+  <label class="kselect">
+    <span class="sr-only">Find a ticket by its number</span>
+    <input id="findTicket" class="select kfind" type="search" inputmode="numeric"
+      maxlength="4" placeholder="Ticket #" autocomplete="off">
+  </label>
+
   <button class="kbtn" id="soundToggle" type="button" aria-pressed="false"
     title="Alert sounds" aria-label="Alert sounds"><span id="soundIcon">&#128263;</span><span class="kbtn-label">Sound</span></button>
   <div class="kclock tabnum" id="clock">--:--</div>
   <span class="conn" id="conn">connecting</span>
 </header>
+
+<div class="expo-find" id="findResult" hidden></div>
 
 <main class="expo-main">
   <section class="expo-ready">
