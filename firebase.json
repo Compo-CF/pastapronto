@@ -31,7 +31,11 @@
       ],
       "headers": [
         {
-          "source": "**/*.@(js|css|html)",
+          "source": "/",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "**/*.@(js|css|html)",
           "headers": [
             {
               "key": "Cache-Control",
@@ -69,7 +73,11 @@
       ],
       "headers": [
         {
-          "source": "**/*.@(js|css|html)",
+          "source": "/",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "**/*.@(js|css|html)",
           "headers": [
             {
               "key": "Cache-Control",

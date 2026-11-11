@@ -4096,6 +4096,45 @@ test('the review screen asks for the name before Send refuses it', () => {
 });
 
 /**
+ * The bare "/" must not be cached, and this is not a theoretical worry.
+ *
+ * Measured against the live site on 2026-11-11: "/index.html" came back with
+ * Cache-Control: no-cache, and "/" came back with max-age=3600. The glob below
+ * matches a FILENAME, and the root has none, so it fell through to Firebase's
+ * default - an hour of yesterday's app on every device that launched from a QR
+ * code or a home-screen icon, which is all of them. A deploy and a "close and
+ * reopen before service" both did nothing inside that hour.
+ *
+ * The one code the club is about to print points at exactly this URL.
+ */
+test('the address every QR code points at is never cached', () => {
+  const cfg = JSON.parse(readFileSync(
+    fileURLToPath(new URL('../firebase.json', import.meta.url)), 'utf8',
+  ));
+  const sites = Array.isArray(cfg.hosting) ? cfg.hosting : [cfg.hosting];
+  assert.ok(sites.length, 'no hosting targets configured');
+
+  sites.forEach((site, i) => {
+    const headers = site.headers || [];
+    const root = headers.find((h) => h.source === '/');
+    assert.ok(
+      root,
+      'hosting target ' + i + ' has no rule for "/". The **/*.html glob does '
+      + 'not match the bare root, so it inherits Firebase\'s default cache.',
+    );
+    const cc = (root.headers || []).find((h) => h.key === 'Cache-Control');
+    assert.ok(cc && /no-cache|no-store|max-age=0/.test(cc.value),
+      'hosting target ' + i + ' caches "/" as ' + (cc && cc.value));
+
+    // And the rule that covers the named files must still be there.
+    assert.ok(
+      headers.some((h) => /\*\*\/\*\.@\(js\|css\|html\)/.test(h.source || '')),
+      'the js/css/html no-cache rule went missing',
+    );
+  });
+});
+
+/**
  * Maria McGinity, 2026-11-06: "Can we get a QR code to scan that will take the
  * member to the ordering page instead of scanning unique codes specific to a
  * table. The server will then tell the member what table they are at."
