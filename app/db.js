@@ -72,7 +72,54 @@ const auth = getAuth(app);
  * with nothing on it. Degrading to a weaker cache costs offline queueing and
  * nothing else; it is always the better trade than not booting.
  */
+/**
+ * Does this screen want to survive being closed while offline?
+ *
+ * Opt-IN, and the default is the one that cannot stall. A screen added later
+ * and never considered gets the memory cache, which is the safe way round:
+ * the cost of missing persistence is a narrow edge case, and the cost of
+ * joining the cross-tab lease by accident is a frozen pass mid-service.
+ *
+ * Declared the same way the brand is, on <html>, so the page says what it is
+ * rather than this file keeping a list of paths that will drift.
+ */
+function wantsOfflineCache() {
+  if (typeof document === 'undefined') return false;
+  const root = document.documentElement;
+  return Boolean(root && root.dataset && root.dataset.cache === 'persistent');
+}
+
 function openFirestore() {
+  // Maria McGinity, 2026-11-06: "For BOH screens you still can't switch tabs
+  // without freezing the app."
+  //
+  // Kitchen, expo, admin and report run as SEPARATE TABS on one iPad. A
+  // persistent cache makes every same-origin tab share one IndexedDB store
+  // behind a lease: one tab is primary, the rest proxy through it. Measured in
+  // a browser against the live site - the `owner` store holds `ownerId` and
+  // `leaseTimestampMs`, `clientMetadata` tracks `inForeground`, and switching
+  // tabs left the lease VACANT for roughly 1.5-2 seconds before the new tab
+  // claimed it. On a desktop that is invisible. iPadOS SUSPENDS a backgrounded
+  // tab, so the old primary stops refreshing the lease and stops answering,
+  // and the newly-fronted tab waits out the full timeout proxying through a
+  // primary that is no longer there. That is the freeze.
+  //
+  // None of those screens needs the cache. They live on club wifi, they are
+  // always online, and every one of them reads through a live listener that
+  // already keeps its last orders on screen and flips the badge to "offline"
+  // when the connection drops. So they get a memory cache and never join the
+  // lease at all - there is nothing to hand over, so nothing to wait for.
+  //
+  // What that costs, stated plainly: pending writes still queue in memory and
+  // still flush on reconnect, but they no longer survive the page being
+  // RELOADED while offline. A cook who marks a ticket ready with the wifi down
+  // and then reloads loses that press. Against a pass that freezes on every
+  // tab switch, that is the better trade - but it is a real one.
+  //
+  // The guest screen keeps persistence: a member's phone on the far end of the
+  // patio is the one client that genuinely benefits, and it runs one tab.
+  if (!wantsOfflineCache()) return initializeFirestore(app, {});
+
   const canPersist = typeof indexedDB !== 'undefined' && indexedDB !== null;
   const canShareTabs = typeof navigator !== 'undefined' && 'locks' in navigator;
 

@@ -4096,6 +4096,119 @@ test('the review screen asks for the name before Send refuses it', () => {
 });
 
 /**
+ * Maria McGinity, 2026-11-06: "Can we get a QR code to scan that will take the
+ * member to the ordering page instead of scanning unique codes specific to a
+ * table. The server will then tell the member what table they are at."
+ *
+ * The feature is an ABSENCE: the code carries no `?t=`, so guest.js drops the
+ * member on the table screen. A single character creeping back into that URL
+ * turns one code for the room into a code that sends the whole club to one
+ * table, which is the kind of thing nobody notices until the food moves.
+ */
+test('the one code for every table carries no table', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('function oneCodeUrl'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+
+  assert.ok(!/[?&]t=/.test(body),
+    'the one code must not pin a table, or every member lands at the same one');
+  assert.match(body, /state\.base/, 'it must use the same base address as the tents');
+
+  // And the screen it lands on must still be the one that asks.
+  const guest = readFileSync(fileURLToPath(new URL('../app/guest.js', import.meta.url)), 'utf8');
+  assert.match(guest, /if \(!tag\) return screenWhere\(\);/,
+    'a visit with no table must land on the "which table?" screen');
+
+  // The copy there must stop telling them to scan something.
+  ['en', 'es'].forEach((lang) => {
+    assert.ok(
+      !/scan|escane/i.test(STRINGS[lang]['guest.where.unknown']),
+      'the ' + lang + ' table-screen hint still tells members to scan a code, '
+      + 'which is the one instruction that cannot work on the screen they '
+      + 'reach BECAUSE there was nothing to scan',
+    );
+  });
+});
+
+test('a server can print the one code', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/admin.js', import.meta.url)), 'utf8');
+  const page = readFileSync(fileURLToPath(new URL('../admin.html', import.meta.url)), 'utf8');
+  const css = readFileSync(fileURLToPath(new URL('../admin.css', import.meta.url)), 'utf8');
+
+  assert.match(page, /id="serverCards"/, 'there must be somewhere to render the sheet');
+  assert.match(page, /id="printOneBtn"/, 'and a button that prints it');
+  assert.match(src, /printOneBtn'\)\.addEventListener/, 'the button must be wired');
+
+  // Two print jobs share one page. Printing the server cards must not also
+  // spend a sheet of card on 60 table tents the club has stopped using.
+  assert.match(css, /body\.print-server \.tents \{ display: none; \}/,
+    'printing server cards must hide the tents');
+  assert.match(css, /body\.print-server \.scards \{/,
+    'and must reveal the cards');
+  assert.match(src, /classList\.add\('print-server'\)/, 'the class must be set before printing');
+  assert.match(src, /afterprint[\s\S]{0,120}remove\('print-server'\)/,
+    'and cleared afterwards, or the screen is left in a printer-only state');
+});
+
+/**
+ * Maria McGinity, 2026-11-06: "For BOH screens you still can't switch tabs
+ * without freezing the app."
+ *
+ * Kitchen, expo, admin and report run as separate tabs on one iPad. A
+ * persistent Firestore cache makes every same-origin tab share one IndexedDB
+ * store behind a lease, with one primary and the rest proxying through it.
+ * Measured against the live site: switching tabs left the lease vacant for
+ * ~1.5-2s. iPadOS suspends the backgrounded tab, so the old primary stops
+ * refreshing the lease and the new one waits out the full timeout.
+ *
+ * So back of house does not join the lease. The opt-in direction is the point:
+ * a screen nobody thought about gets the cache that cannot stall.
+ */
+test('only the guest screen opts into the shared offline cache', () => {
+  const page = (n) => readFileSync(fileURLToPath(new URL('../' + n, import.meta.url)), 'utf8');
+  const optsIn = (n) => /<html[^>]*\sdata-cache="persistent"/.test(page(n));
+
+  assert.ok(
+    optsIn('index.html'),
+    'the member screen must keep offline storage - a phone on the far end of '
+    + 'the patio is the one client it actually helps',
+  );
+
+  ['kitchen.html', 'expo.html', 'admin.html', 'report.html'].forEach((n) => {
+    assert.ok(
+      !optsIn(n),
+      n + ' must NOT opt into the persistent cache: these run several tabs on '
+      + 'one iPad, and sharing one IndexedDB store between them behind a lease '
+      + 'is what froze the pass on a tab switch',
+    );
+  });
+});
+
+test('a screen that says nothing gets the cache that cannot stall', () => {
+  const src = readFileSync(fileURLToPath(new URL('../app/db.js', import.meta.url)), 'utf8');
+  const fn = src.slice(src.indexOf('function openFirestore'));
+  const body = fn.slice(0, fn.indexOf('\n}'));
+
+  const bail = body.indexOf('if (!wantsOfflineCache()) return initializeFirestore(app, {});');
+  const persist = body.indexOf('persistentLocalCache(');
+  assert.ok(bail > -1, 'openFirestore must check whether this screen asked for offline storage');
+  assert.ok(
+    persist === -1 || bail < persist,
+    'the memory-cache path must come FIRST. Reached after persistentLocalCache '
+    + 'has already been built, the tab has already joined the lease.',
+  );
+
+  // Opt-in, not opt-out: the default must be the safe one.
+  const predicate = src.slice(src.indexOf('function wantsOfflineCache'));
+  assert.match(
+    predicate.slice(0, predicate.indexOf('\n}')),
+    /dataset\.cache === 'persistent'/,
+    'the screen must ASK for persistence by name, so a page nobody considered '
+    + 'does not silently join the lease',
+  );
+});
+
+/**
  * A stalled read used to come back as `[]` - the same answer an empty service
  * date gives. Two callers believed it. The close-out report drew a night with
  * no orders in it, and resetDay() deleted the nothing it was handed and zeroed

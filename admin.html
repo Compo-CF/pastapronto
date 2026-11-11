@@ -130,6 +130,28 @@
         <span class="muted" id="qrMeta"></span>
       </div>
     </div>
+    <!-- One code for the whole room. The club is dropping per-table tents
+         ("not a good look for a luxury club"), so this code carries no table
+         in it: a member who scans it is asked which table they are at, and
+         the server tells them the number. -->
+    <div class="card stack">
+      <div>
+        <strong>One code for every table</strong>
+        <p class="muted" style="margin:4px 0 0;font-size:14px">
+          This code has no table printed into it. A member who scans it is asked
+          which table they are at &mdash; tell them the number. Print these for
+          the servers to carry, or stand one at the host desk.</p>
+      </div>
+      <div class="row" style="flex-wrap:wrap;align-items:center;gap:18px">
+        <div id="oneQr" class="onecode-qr"></div>
+        <div class="grow">
+          <div class="qrcard-url" id="oneUrl"></div>
+          <button class="btn btn-primary" id="printOneBtn" type="button"
+            style="margin-top:12px">Print server cards</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card stack">
       <div>
         <strong>Extra locations</strong>
@@ -158,6 +180,7 @@
   <!-- Outside the panels on purpose: the tents print from the QR panel's
        button, and a hidden panel would take them off the page with it. -->
   <section class="tents" id="tents"></section>
+  <section class="scards" id="serverCards"></section>
 
   <section class="no-print panel" id="panel-cost" role="tabpanel" aria-labelledby="tab-cost" tabindex="0" hidden>
     <div class="costsum" id="costSummary"></div>

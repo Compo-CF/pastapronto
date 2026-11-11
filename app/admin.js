@@ -51,6 +51,9 @@ const CATALOG = menu.catalog();
     statgrid: document.getElementById('statgrid'),
     qrgrid: document.getElementById('qrgrid'),
     tents: document.getElementById('tents'),
+    oneQr: document.getElementById('oneQr'),
+    oneUrl: document.getElementById('oneUrl'),
+    serverCards: document.getElementById('serverCards'),
     menuRef: document.getElementById('menuRef'),
     baseUrl: document.getElementById('baseUrl'),
     baseHint: document.getElementById('baseHint'),
@@ -117,7 +120,55 @@ const CATALOG = menu.catalog();
     return state.base.replace(/\/+$/, '') + '/?t=' + tag.id;
   }
 
+  /**
+   * The base address with NO table in it.
+   *
+   * That absence is the whole feature: guest.js lands a visit with no `?t=`
+   * on the "which table are you at?" screen, where the member types the number
+   * their server gives them. One code for the room, no laminated tent per
+   * table, and renumbering a table no longer strands a printed card.
+   */
+  function oneCodeUrl() {
+    return state.base.replace(/\/+$/, '') + '/';
+  }
+
+  /**
+   * The single code, plus a sheet of identical cards for the servers.
+   *
+   * Nine to a sheet rather than one big poster: these are meant to live in an
+   * apron pocket and stand at the host desk, and a server holding one is how a
+   * member gets the code at a table that no longer has a tent on it.
+   */
+  function renderOneCode() {
+    var url = oneCodeUrl();
+    el.oneUrl.textContent = url;
+
+    var svg;
+    try {
+      svg = QR.toSvg(url, { quiet: 3, label: 'QR code for ordering' });
+    } catch (err) {
+      el.oneQr.innerHTML = '<p class="muted">' + escapeHtml(err.message) + '</p>';
+      el.serverCards.innerHTML = '';
+      return;
+    }
+    el.oneQr.innerHTML = svg;
+
+    var brand = activeBrand();
+    var one = html`<div class="scard">
+      <div class="scard-top">${brand.venueName || brand.wordmark}</div>
+      <div class="scard-title">Order from your phone</div>
+      ${raw(svg)}
+      <div class="scard-how">Scan, then enter your table number and your member number.</div>
+      <div class="scard-url">${url}</div>
+    </div>`;
+
+    var sheet = '';
+    for (var i = 0; i < 9; i += 1) sheet += one;
+    el.serverCards.innerHTML = sheet;
+  }
+
   function renderQrs() {
+    renderOneCode();
     var versions = [];
     el.qrgrid.innerHTML = allTags().map(function (tag) {
       var url = tagUrl(tag);
@@ -816,6 +867,17 @@ const CATALOG = menu.catalog();
 
   document.getElementById('printBtn').addEventListener('click', function () {
     window.print();
+  });
+
+  // Two print jobs, one sheet of paper each. The class decides which section
+  // the print stylesheet reveals; it is cleared on afterprint so the screen
+  // never sits in a state that only makes sense to a printer.
+  document.getElementById('printOneBtn').addEventListener('click', function () {
+    document.body.classList.add('print-server');
+    window.print();
+  });
+  window.addEventListener('afterprint', function () {
+    document.body.classList.remove('print-server');
   });
 
   document.getElementById('seedBtn').addEventListener('click', async function () {

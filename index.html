@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="en" data-brand="carltonwoods">
+<!-- data-cache="persistent": this is the only screen that opts in. A member's
+     phone on the far end of the patio is the one client offline storage
+     actually helps, and it runs a single tab. The back-of-house screens run
+     several tabs on one iPad and deliberately do NOT opt in - sharing one
+     IndexedDB cache between them behind a lease is what froze the pass on a
+     tab switch. -->
+<html lang="en" data-brand="carltonwoods" data-cache="persistent">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">

@@ -215,8 +215,45 @@
    stand it on the table. */
 
 .tents { display: none; }
+.scards { display: none; }
+
+/* The one code, shown on screen beside its address. Sized so a manager can
+   check it scans from the screen before committing paper to it. */
+.onecode-qr { width: 150px; flex: 0 0 150px; }
+.onecode-qr svg { width: 100%; height: auto; display: block; }
 
 @media print {
+  /* TWO print jobs share this page. Tents are the default, because that is
+     what the Print button above has always produced. `print-server` swaps in
+     the server cards instead - one sheet, nine identical codes, for the
+     aprons and the host desk now that the tables have no tents. */
+  .scards { display: none; }
+  body.print-server .tents { display: none; }
+  body.print-server .scards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6mm;
+  }
+  .scard {
+    border: 1px dashed #bbb;
+    border-radius: 3mm;
+    padding: 5mm 4mm;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2mm;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .scard svg { width: 36mm; height: 36mm; }
+  .scard-top {
+    font-size: 8pt; font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: #666;
+  }
+  .scard-title { font-size: 13pt; font-weight: 800; line-height: 1.1; }
+  .scard-how { font-size: 8.5pt; line-height: 1.25; color: #333; }
+  .scard-url { font-size: 7pt; color: #777; word-break: break-all; }
   @page { margin: 12mm; }
   .no-print, .appbar, .toast { display: none !important; }
   body { background: #fff; }
